@@ -330,3 +330,51 @@ def test_concurrent_uploads_of_one_template_get_separate_version_files(tmp_path)
     [t.join() for t in threads]
     assert not errors and sorted(i.version for i in infos) == [2, 3, 4, 5, 6, 7]
     assert len({i.path for i in infos}) == 6 and all(i.path.exists() for i in infos)
+
+
+# ============================================================================ на сайте нет технической информации
+def _wait_job(c, job_id, timeout=60.0):
+    end = time.time() + timeout
+    while time.time() < end:
+        snap = c.get(f"/api/jobs/{job_id}").json()
+        if snap["status"] in ("done", "error", "cancelled"):
+            return snap
+        time.sleep(0.05)
+    raise AssertionError("задача не завершилась")
+
+
+def test_check_errors_are_shown_without_technical_details(tmp_settings, monkeypatch):
+    """Посетитель видит понятный текст; название исключения и программы — только в журнале сервера."""
+    from dekanat.ocr.engine import OcrUnavailable
+    from dekanat.web.app import OCR_DOWN_TEXT
+
+    app = create_app(tmp_settings)
+    c = TestClient(app)
+    for exc, expected in ((RuntimeError("KeyError в extract"), "Не удалось проверить документ"), (OcrUnavailable("Tesseract не найден: tesseract.exe"), OCR_DOWN_TEXT)):
+        def boom(*_a, exc=exc, **_k):
+            raise exc
+        monkeypatch.setattr(app.state.svc, "analyze", boom)
+        job = c.post("/api/jobs", data={"question": "Сколько дней рассматривается заявление?"}).json()
+        snap = _wait_job(c, job["id"])
+        assert snap["status"] == "error" and expected in snap["error"]
+        for leaked in ("RuntimeError", "KeyError", "Tesseract", "tesseract.exe", "журнал"):
+            assert leaked not in snap["error"]
+        if isinstance(exc, OcrUnavailable):
+            r = c.post("/api/analyze", data={"question": "?"})
+            assert r.status_code == 503 and r.json()["detail"] == OCR_DOWN_TEXT
+
+
+def test_reading_stage_labels_use_plain_words():
+    """Этап «чтение текста» не показывает внутренние названия вариантов обработки (clahe, binary, page+deskew…)."""
+    from dekanat.pipeline import _ocr_hint
+
+    assert _ocr_hint("page+deskew · clahe") == "выравниваю освещение"
+    assert _ocr_hint("deskew · binary") == "повышаю контраст"
+    assert _ocr_hint("page · clean") == "нахожу лист"
+    assert _ocr_hint("straight · clean") == ""
+    assert _ocr_hint("проверяю поворот страницы") == "проверяю поворот страницы"
+    assert _ocr_hint("rotate 90") == ""
+    for geo in ("page", "page+deskew", "deskew", "straight"):
+        for variant in ("clean", "binary", "deglare", "clahe"):
+            hint = _ocr_hint(f"{geo} · {variant}")
+            assert not any(word in hint for word in ("page", "deskew", "straight", "clean", "binary", "deglare", "clahe"))

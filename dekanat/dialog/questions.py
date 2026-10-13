@@ -122,6 +122,8 @@ def parse_course(text: str) -> ParseResult:
     course = next(iter(found))
     if "магистр" in n and course > 2:
         return ambiguous(f"Вы написали про магистратуру и {course} курс — в магистратуре обычно 1–2 курс. Уточните, пожалуйста, курс.")
+    if _HEDGE.search(n) or "половин" in n:  # «вроде второй», «пятый с половиной» — не записываем догадку
+        return ambiguous(f"Уточните, пожалуйста: вы учитесь на {course} курсе? Напишите номер курса цифрой.")
     return ok(str(course))
 
 
@@ -154,6 +156,8 @@ def parse_form(text: str) -> ParseResult:
     if mixed:
         kinds.append("очно-заочная")
     if len(kinds) == 1:
+        if _HEDGE.search(n):  # «очная вроде», «наверное заочная» — переспрашиваем, а не записываем догадку
+            return ambiguous(f"Уточните, пожалуйста: у вас {kinds[0]} форма обучения? Ответьте одним словом: очная, заочная или очно-заочная.")
         return ok(kinds[0])
     if len(kinds) > 1:
         return ambiguous("Вы назвали несколько форм обучения. Какая у вас сейчас: очная, заочная или очно-заочная?")

@@ -151,7 +151,8 @@ def test_unfilled_fields_are_reported_not_invented(app, template):
     assert set(j["unfilled"]) == {"паспортные данные", "целевое направление"} and "паспортные данные" in j["reply"]["text"]
     doc = Document(io.BytesIO(c.get(j["download"]["url"]).content))
     text = "\n".join(p.text for p in doc.paragraphs) + "\n".join(c_.text for t in doc.tables for r in t.rows for c_ in r.cells)
-    assert "{{ passport_data }}" in text and "{{ target_specialty }}" in text
+    # данных нет — в документе строка для заполнения от руки, а не метка шаблона и не выдуманное значение
+    assert "{{" not in text and text.count("________") >= 2
 
 
 def test_double_click_on_generate_does_not_create_duplicates(app, template):

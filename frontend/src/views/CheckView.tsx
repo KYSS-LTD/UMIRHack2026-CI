@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../api";
 import { ClauseDrawer } from "../components/ClauseDrawer";
+import { ChatBar } from "../components/desk/ChatBar";
 import { Composer, type ComposerHandle } from "../components/desk/Composer";
 import type { DeskDoc, Highlight } from "../components/desk/highlight";
 import { PaperViewer } from "../components/desk/PaperViewer";
 import { Thread } from "../components/desk/Thread";
 import { Tray } from "../components/desk/Tray";
 import { useAssistant } from "../hooks/useAssistant";
-import { type RunInput, type Turn, useDesk } from "../hooks/useDesk";
+import { cardOwners, type RunInput, type Turn, useDesk } from "../hooks/useDesk";
 import { useFetch } from "../hooks/useFetch";
 import { useHistory } from "../hooks/useHistory";
 import { useObjectUrl } from "../hooks/useObjectUrl";
@@ -18,8 +19,9 @@ import { fileFromClipboard, isPdf, validateFile } from "../lib/files";
 import { fieldBoxes } from "../lib/format";
 import { STAGES, stageIndex } from "../lib/stages";
 import { suggestionsFor } from "../lib/suggestions";
-import { AUTO_TYPE, type Box, type DocTypeSummary, type FieldResult, GENERIC_TYPE, type Health, type PartResult, type SampleItem, type Source } from "../types";
+import { AUTO_TYPE, type Box, type DialogState, type DocTypeSummary, type FieldResult, GENERIC_TYPE, type Health, type PartResult, type SampleItem, type Source } from "../types";
 import { ConfirmDialog } from "../ui/Dialog";
+import { Icon } from "../ui/Icon";
 import { Portal } from "../ui/Portal";
 import { useToast } from "../ui/Toasts";
 
@@ -52,6 +54,9 @@ export function CheckView({ types, health, onOpenClause }: Props) {
   const [drawer, setDrawer] = useState<{ ref: string; quote: string } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [forgetting, setForgetting] = useState(false);
+  const [sweeping, setSweeping] = useState(false);
+  const [away, setAway] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const { turns, busy } = desk;
   const maxMb = health?.max_upload_mb ?? 25;
@@ -60,8 +65,9 @@ export function CheckView({ types, health, onOpenClause }: Props) {
   // реплика анкеты документа не показывает: стол остаётся на последней проверке
   const lastCheck = useMemo(() => [...turns].reverse().find((t) => !t.chat) ?? null, [turns]);
   const deskTurn = activeTurn && !activeTurn.chat ? activeTurn : lastCheck;
-  // карточку можно исправить у последней проверки файла: это документ сессии на сервере
-  const editableId = assistant.ready ? ([...turns].reverse().find((t) => !t.chat && t.phase === "done" && !!t.file && !!t.result?.doc_type.id)?.id ?? null) : null;
+  // документ сессии на сервере — последний проверенный файл; править можно его карточку (она у первого ответа по этому файлу)
+  const sessionDocTurn = assistant.ready ? ([...turns].reverse().find((t) => !t.chat && t.phase === "done" && !!t.file && !!t.result?.doc_type.id) ?? null) : null;
+  const editableId = sessionDocTurn ? (cardOwners(turns).get(sessionDocTurn.id) ?? sessionDocTurn.id) : null;
   const quiz = isQuizState(assistant.dialog?.state);
 
   // ход проверки виден в верхней панели и в заголовке вкладки
@@ -230,6 +236,12 @@ export function CheckView({ types, health, onOpenClause }: Props) {
     await assistant.load();
   }, [reset, toast, assistant]);
 
+  const offerToContinue = useCallback(
+    (state: DialogState) =>
+      desk.note({ text: "Анкета не завершена — можно продолжить с того же места или начать заново.", state, kind: "info", question: null, options: ["продолжить", "заново"], progress: null }),
+    [desk],
+  );
+
   // анкета, начатая до перезагрузки страницы, продолжается с того же места; готовый документ можно скачать снова
   const restored = useRef(false);
   useEffect(() => {
@@ -238,16 +250,34 @@ export function CheckView({ types, health, onOpenClause }: Props) {
     restored.current = true;
     const { state } = info.dialog;
     if (isQuizState(state)) {
-      desk.note({ text: "Анкета не завершена — можно продолжить с того же места или начать заново.", state, kind: "info", question: null, options: ["продолжить", "заново"], progress: null });
+      offerToContinue(state);
     } else if (state === "completed" && info.downloads.length) {
       desk.note({ text: "Документ из этой сессии ещё можно скачать.", state, kind: "done", question: null, options: [], progress: null }, info.downloads[info.downloads.length - 1]);
     }
-  }, [assistant.info, desk]);
+  }, [assistant.info, desk, offerToContinue]);
+
+  /**
+   * «Очистить чат»: реплики «сметаются» с ленты, стол пустеет. Данные на сервере не удаляются (для этого — «Удалить мои данные»);
+   * незаконченную анкету сразу предлагается продолжить, как после перезагрузки страницы.
+   */
+  const clearChat = useCallback(() => {
+    if (sweeping) return;
+    if (!turns.length) return reset();
+    setSweeping(true);
+    setTimeout(() => {
+      reset();
+      setSweeping(false);
+      setAway(false);
+      const state = assistant.dialog?.state;
+      if (state && isQuizState(state)) offerToContinue(state);
+      composer.current?.focusQuestion();
+    }, 420);
+  }, [sweeping, turns.length, reset, assistant.dialog?.state, offerToContinue]);
 
   useBus<SampleItem>("sample", (s) => void loadSample(s));
   useBus<string>("say", (text) => say(text));
   useBus("forget", () => setForgetting(true));
-  useBus("new-desk", reset);
+  useBus("new-desk", clearChat);
   useBus("pick-file", () => composer.current?.pickFile());
   useBus("focus-question", () => composer.current?.focusQuestion());
 
@@ -370,7 +400,15 @@ export function CheckView({ types, health, onOpenClause }: Props) {
   return (
     <div className="desk">
       <section className="desk-chat" aria-label="Диалог">
-        <div className="chat-scroll">
+        {turns.length > 0 && <ChatBar count={turns.filter((t) => !t.botOnly).length} busy={busy} quiz={quiz} onClear={clearChat} />}
+        <div
+          className="chat-scroll"
+          ref={scrollRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            setAway(el.scrollHeight - el.scrollTop - el.clientHeight > 260);
+          }}
+        >
           <Thread
             turns={turns}
             activeId={activeTurn?.id ?? null}
@@ -413,8 +451,14 @@ export function CheckView({ types, health, onOpenClause }: Props) {
             onCorrect={correct}
             session={assistant.ready}
             onForget={() => setForgetting(true)}
+            sweeping={sweeping}
           />
         </div>
+        {away && turns.length > 0 && (
+          <button type="button" className="to-latest" aria-label="К последнему сообщению" title="К последнему сообщению" onClick={() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })}>
+            <Icon name="chevronDown" size={18} />
+          </button>
+        )}
         <Composer
           ref={composer}
           file={file}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { answerToText } from "../../lib/followups";
-import { VERDICT_META } from "../../lib/format";
+import { verdictMeta } from "../../lib/format";
 import type { Answer, Box, PagePreview, Source } from "../../types";
 import { Icon } from "../../ui/Icon";
 import { Reveal } from "../../ui/Reveal";
@@ -20,13 +20,16 @@ interface Props {
 }
 
 export function VerdictCard({ answer, warnings, images, resolveBoxes, onFocusSource, onClause }: Props) {
-  const meta = VERDICT_META[answer.verdict] ?? VERDICT_META.no_answer;
+  const meta = verdictMeta(answer.verdict, answer.intent);
   const toast = useToast();
   const [openClause, setOpenClause] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const copy = async () => {
     const text = answerToText(meta.title, answer.text, [...answer.sources].map((s) => s.label));
     try {
       await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
       toast.show("Ответ скопирован", "ok");
     } catch {
       toast.show("Не удалось скопировать: разрешите доступ к буферу обмена", "error");
@@ -66,7 +69,7 @@ export function VerdictCard({ answer, warnings, images, resolveBoxes, onFocusSou
           <p className="eyebrow">Заключение</p>
           <h2 id="verdict-title">{meta.title}</h2>
         </div>
-        <Stamp verdict={answer.verdict} />
+        <Stamp verdict={answer.verdict} label={meta.stamp} />
       </header>
 
       <p className="verdict-text" data-testid="answer-text">
@@ -74,8 +77,8 @@ export function VerdictCard({ answer, warnings, images, resolveBoxes, onFocusSou
       </p>
 
       <div className="v-actions">
-        <button type="button" className="link" onClick={() => void copy()}>
-          <Icon name="copy" size={14} /> Копировать ответ
+        <button type="button" className={`link copy-answer ${copied ? "done" : ""}`} onClick={() => void copy()}>
+          <Icon name={copied ? "check" : "copy"} size={14} key={copied ? "ok" : "copy"} /> {copied ? "Скопировано" : "Копировать ответ"}
         </button>
       </div>
 

@@ -1,11 +1,10 @@
 import { useMemo } from "react";
 import type { Turn } from "../../hooks/useDesk";
 import { followUps } from "../../lib/followups";
-import { fieldBoxes, VERDICT_META } from "../../lib/format";
+import { fieldBoxes, verdictMeta } from "../../lib/format";
 import type { Box, DocTypeSummary, FieldResult, PartResult, Source } from "../../types";
 import { Icon } from "../../ui/Icon";
 import { Avatar } from "./Avatar";
-import { Details } from "./Details";
 import { FieldsCard } from "./FieldsCard";
 import type { Highlight } from "./highlight";
 import { TypeRail } from "./TypeRail";
@@ -28,13 +27,16 @@ interface Props {
   /** карточку можно исправить: это документ текущей сессии */
   editable?: boolean;
   onCorrect?: (unit: string, value: string) => Promise<boolean>;
+  /** false — уточняющий вопрос по уже показанному документу: только ответ, карточка документа — в первом ответе */
+  docCard?: boolean;
+  onShowCard?: () => void;
 }
 
 /** Ответ секретаря. Активный — раскрыт целиком, прежние — свёрнуты в строку (плавно, без прыжков). */
 export function AnswerTurn(p: Props) {
   const { turn } = p;
   const result = turn.result!;
-  const meta = VERDICT_META[result.answer.verdict];
+  const meta = verdictMeta(result.answer.verdict, result.answer.intent);
   const next = useMemo(() => followUps(result, turn.question, p.rules), [result, turn.question, p.rules]);
 
   const resolveBoxes = useMemo(
@@ -80,9 +82,22 @@ export function AnswerTurn(p: Props) {
                 </div>
               </div>
             )}
-            <TypeRail info={result.doc_type} types={p.types} busy={p.busy} hasFile={!!turn.file} onChoose={p.onChooseType} />
-            <FieldsCard fields={result.fields} activeId={p.activeField} onHover={p.onFieldHover} onSelect={p.onFieldSelect} onCorrect={p.editable ? p.onCorrect : undefined} />
-            <Details result={result} fileName={turn.fileName.replace(/\.[^.]+$/, "")} />
+            {p.docCard === false ? (
+              <p className="card-ref">
+                <Icon name="layers" size={13} />
+                <span>Карточка документа — в первом ответе по этому файлу.</span>
+                {p.onShowCard && (
+                  <button type="button" className="link" onClick={p.onShowCard}>
+                    Показать
+                  </button>
+                )}
+              </p>
+            ) : (
+              <>
+                <TypeRail info={result.doc_type} types={p.types} busy={p.busy} hasFile={!!turn.file} onChoose={p.onChooseType} />
+                <FieldsCard fields={result.fields} activeId={p.activeField} onHover={p.onFieldHover} onSelect={p.onFieldSelect} onCorrect={p.editable ? p.onCorrect : undefined} />
+              </>
+            )}
           </div>
         </div>
       </div>

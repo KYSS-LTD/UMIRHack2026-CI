@@ -39,6 +39,7 @@ const PATHS = {
   image: ["M3 5h18v14H3z", circle(8.5, 10, 1.5), "M21 16l-5-5-8 8"],
   inbox: ["M3 13l3-8h12l3 8v6H3z", "M3 13h5l1 3h6l1-3h5"],
   key: [circle(15, 9, 4), "M12.2 11.8L4 20M7 17l2 2M9.5 14.5l2 2"],
+  broom: ["M20.5 3.5l-7.2 7.2", "M14.8 12.6l-3.4-3.4c-2.6 1.7-5.6 2.4-8.1 2.6 1.1 4.3 4.7 7.9 9 9 .2-2.5.9-5.5 2.5-8.2z", "M7 13.6l3.4 3.4M5.2 16l2.8 2.8"],
 } as const;
 
 export type IconName = keyof typeof PATHS;

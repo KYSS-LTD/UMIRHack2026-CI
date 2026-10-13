@@ -36,7 +36,7 @@
 
 @layer thread {
   /* сетки без явных колонок раздувались по содержимому и обрезали карточки на узких экранах */
-  .thread, .exchange, .answer .bot-bubble, .process .bot-bubble, .fold-inner, .verdict, .fields, .typerail, .hist, .err, .details, .followups { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+  .thread, .exchange, .answer .bot-bubble, .process .bot-bubble, .fold-inner, .verdict, .fields, .typerail, .hist, .err, .followups { grid-template-columns: minmax(0, 1fr); min-width: 0; }
   .verdict-head { flex-wrap: wrap; }
 
   .v-actions { display: flex; }

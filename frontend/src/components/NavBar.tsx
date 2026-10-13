@@ -3,8 +3,7 @@ import { useNavScroll } from "../hooks/useNavScroll";
 import type { Theme } from "../hooks/useTheme";
 import { useActivity } from "../lib/activity";
 import { emit } from "../lib/bus";
-import { pct, plural } from "../lib/format";
-import type { Health } from "../types";
+import { pct } from "../lib/format";
 import { Icon, type IconName } from "../ui/Icon";
 import { Logo } from "../ui/Logo";
 
@@ -16,39 +15,19 @@ const TABS: { id: Route; title: string; icon: IconName }[] = [
   { id: "types", title: "Типы документов", icon: "layers" },
 ];
 
-const THEMES: { id: Theme; label: string; icon: IconName }[] = [
-  { id: "system", label: "Как в системе", icon: "system" },
-  { id: "light", label: "Светлая", icon: "sun" },
-  { id: "dark", label: "Тёмная", icon: "moon" },
+const THEMES: { id: Theme; label: string; short: string; icon: IconName }[] = [
+  { id: "system", label: "Как в системе", short: "Авто", icon: "system" },
+  { id: "light", label: "Светлая", short: "Светлая", icon: "sun" },
+  { id: "dark", label: "Тёмная", short: "Тёмная", icon: "moon" },
 ];
 
 interface Props {
   route: Route;
   onRoute: (r: Route) => void;
-  health: Health | null;
   theme: Theme;
   onThemeSet: (t: Theme) => void;
   onPalette: () => void;
   onHelp: () => void;
-}
-
-/** Короткие факты о системе для меню: распознавание, Положение, типы документов. */
-export function systemFacts(health: Health | null): string[] {
-  const facts: string[] = [];
-  if (health) {
-    const ocr = health.ocr;
-    if (ocr?.available === false) facts.push("OCR недоступен");
-    else {
-      const v = String(ocr?.version ?? "").match(/\d+(?:\.\d+){0,2}/)?.[0];
-      facts.push(`Tesseract${v ? ` ${v}` : ""} · ${Array.isArray(ocr?.languages) ? ocr.languages.filter((l: string) => l !== "osd").join("+") : "rus"}`);
-    }
-    const n = health.regulation?.clauses ?? 0;
-    facts.push(`Положение: ${n} ${plural(n, ["пункт", "пункта", "пунктов"])}`);
-    const t = health.doc_types?.length ?? 0;
-    facts.push(`${t} ${plural(t, ["тип документа", "типа документов", "типов документов"])}`);
-  }
-  facts.push("Без внешних API");
-  return facts;
 }
 
 function ThemeSwitch({ theme, onSet }: { theme: Theme; onSet: (t: Theme) => void }) {
@@ -59,24 +38,18 @@ function ThemeSwitch({ theme, onSet }: { theme: Theme; onSet: (t: Theme) => void
       {THEMES.map((t) => (
         <button key={t.id} type="button" role="radio" aria-checked={t.id === theme} aria-label={`Тема: ${t.label}`} title={t.label} className={t.id === theme ? "on" : ""} onClick={() => onSet(t.id)}>
           <Icon name={t.icon} size={15} />
-          <span>{t.label === "Как в системе" ? "Авто" : t.label}</span>
+          <span>{t.short}</span>
         </button>
       ))}
     </div>
   );
 }
 
-/**
- * Одно меню вместо россыпи кнопок: тема, состояние системы, горячие клавиши, удаление данных и вход для сотрудников.
- * Точка на кнопке меню показывает состояние системы с первого взгляда.
- */
-function Menu({ health, theme, onThemeSet, onHelp, onForget }: { health: Health | null; theme: Theme; onThemeSet: (t: Theme) => void; onHelp: () => void; onForget: () => void }) {
+/** Одно меню вместо россыпи кнопок: тема, горячие клавиши, удаление данных и вход для сотрудников. */
+function Menu({ theme, onThemeSet, onHelp, onForget }: { theme: Theme; onThemeSet: (t: Theme) => void; onHelp: () => void; onForget: () => void }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const panelId = useId();
-  const ok = health?.ocr?.available !== false;
-  const state = !health ? "wait" : ok ? "ok" : "bad";
-  const llm = health?.llm?.backend && health.llm.backend !== "none" ? String(health.llm.backend) : "не используется";
 
   useEffect(() => {
     if (!open) return;
@@ -90,41 +63,18 @@ function Menu({ health, theme, onThemeSet, onHelp, onForget }: { health: Health 
   const act = (fn: () => void) => () => (setOpen(false), fn());
 
   return (
-    <div className={`nav-menu ${state}`} ref={root}>
-      <button
-        type="button"
-        className="menu-btn"
-        aria-expanded={open}
-        aria-controls={panelId}
-        aria-label={`Меню: ${state === "wait" ? "проверяю систему" : ok ? "система готова" : "OCR недоступен"}`}
-        title="Меню"
-        onClick={() => setOpen((o) => !o)}
-      >
+    <div className="nav-menu" ref={root}>
+      <button type="button" className="menu-btn" aria-expanded={open} aria-controls={panelId} aria-label="Меню" title="Меню" onClick={() => setOpen((o) => !o)}>
         <span className="menu-lines" aria-hidden="true">
           <i />
           <i />
           <i />
         </span>
-        <i className="menu-dot" aria-hidden="true" />
       </button>
       <div className="menu-panel" id={panelId} role="group" aria-label="Меню" data-open={open} inert={!open}>
         <section className="menu-sec">
           <p className="eyebrow">Оформление</p>
           <ThemeSwitch theme={theme} onSet={onThemeSet} />
-        </section>
-        <section className="menu-sec">
-          <p className="eyebrow">Состояние системы</p>
-          <p className={`menu-state ${state}`}>
-            <i aria-hidden="true" />
-            {state === "wait" ? "Проверяю…" : ok ? "Готов к работе" : `OCR недоступен${health?.ocr?.reason ? `: ${String(health.ocr.reason)}` : ""}`}
-          </p>
-          <ul className="menu-facts" role="list">
-            {systemFacts(health).map((f) => (
-              <li key={f}>{f}</li>
-            ))}
-            <li>Языковая модель: {llm}</li>
-            {health?.version && <li>Версия {health.version}</li>}
-          </ul>
         </section>
         <section className="menu-sec menu-actions">
           <button type="button" onClick={act(onHelp)}>
@@ -147,7 +97,7 @@ function Menu({ health, theme, onThemeSet, onHelp, onForget }: { health: Health 
   );
 }
 
-export function NavBar({ route, onRoute, health, theme, onThemeSet, onPalette, onHelp }: Props) {
+export function NavBar({ route, onRoute, theme, onThemeSet, onPalette, onHelp }: Props) {
   const { hidden, compact } = useNavScroll();
   const activity = useActivity();
   const island = useRef<HTMLDivElement>(null);
@@ -218,7 +168,7 @@ export function NavBar({ route, onRoute, health, theme, onThemeSet, onPalette, o
             <span className="search-label">Поиск</span>
             <kbd>Ctrl K</kbd>
           </button>
-          <Menu health={health} theme={theme} onThemeSet={onThemeSet} onHelp={onHelp} onForget={forget} />
+          <Menu theme={theme} onThemeSet={onThemeSet} onHelp={onHelp} onForget={forget} />
         </div>
 
         <div className="nav-progress" data-on={activity.busy} aria-hidden="true">

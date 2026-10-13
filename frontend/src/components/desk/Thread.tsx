@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import type { Turn } from "../../hooks/useDesk";
+import { useEffect, useMemo, useRef } from "react";
+import { cardOwners, type Turn } from "../../hooks/useDesk";
 import { relativeTime, VERDICT_META } from "../../lib/format";
 import type { HistoryEntry } from "../../lib/history";
 import type { Box, Delivery, DialogInfo, DocTypeSummary, FieldResult, PartResult, Source, TemplateInfo } from "../../types";
@@ -44,6 +44,8 @@ interface Props {
   /** сессия есть: показываем, что хранится на сервере, и даём удалить */
   session: boolean;
   onForget: () => void;
+  /** идёт очистка чата: реплики уходят с ленты, затем стол пустеет */
+  sweeping?: boolean;
 }
 
 /** Что умеет секретарь — как опись в деле: римская нумерация на полях, тонкие линейки, без плашек. */
@@ -76,6 +78,13 @@ export function Thread(p: Props) {
   }, [lastId, lastPhase]);
 
   const typeTitle = (id: string) => p.types.find((t) => t.id === id)?.title ?? id;
+  const owners = useMemo(() => cardOwners(p.turns), [p.turns]);
+
+  // «Показать карточку»: раскрыть первый ответ по этому файлу и прокрутить к нему
+  const showCard = (id: string) => {
+    p.onActivate(id);
+    setTimeout(() => document.getElementById(`turn-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+  };
 
   const privacy = p.session && (
     <p className="privacy-line">
@@ -158,9 +167,9 @@ export function Thread(p: Props) {
   }
 
   return (
-    <div className="thread" role="log" aria-label="Диалог с секретарём">
-      {p.turns.map((t) => (
-        <div className="exchange" key={t.id}>
+    <div className="thread" role="log" aria-label="Диалог с секретарём" data-sweeping={p.sweeping || undefined}>
+      {p.turns.map((t, i) => (
+        <div className="exchange" key={t.id} id={`turn-${t.id}`} style={{ ["--k" as string]: Math.min(p.turns.length - 1 - i, 8) }}>
           {!t.botOnly && <UserTurn turn={t} typeTitle={typeTitle} onEdit={t.chat ? undefined : p.onEdit} />}
           {t.phase === "running" && (t.chat ? <TypingTurn /> : <ProcessTurn turn={t} onCancel={p.onCancel} />)}
           {t.phase === "done" && t.chat && t.reply && (
@@ -192,6 +201,8 @@ export function Thread(p: Props) {
               onAsk={(q) => p.onAsk(t, q)}
               editable={t.id === p.editableId && !p.busy}
               onCorrect={(unit, value) => p.onCorrect(t, unit, value)}
+              docCard={(owners.get(t.id) ?? t.id) === t.id}
+              onShowCard={() => showCard(owners.get(t.id) ?? t.id)}
             />
           )}
           {t.phase === "error" && (

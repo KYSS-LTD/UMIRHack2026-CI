@@ -28,7 +28,7 @@
   .alert { padding: var(--s-3) var(--s-4); border-radius: var(--r-md); margin: var(--s-3) 0; }
 
   /* ---------- кнопки и мелочи ---------- */
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2); padding: 9px 16px; border-radius: var(--r-pill); border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font-weight: 600; transition: background var(--t-fast), transform var(--t-base) var(--spring), box-shadow var(--t-base) var(--ease), border-color var(--t-fast); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2); text-decoration: none; padding: 9px 16px; border-radius: var(--r-pill); border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font-weight: 600; transition: background var(--t-fast), transform var(--t-base) var(--spring), box-shadow var(--t-base) var(--ease), border-color var(--t-fast); }
   .btn:hover:not(:disabled) { background: var(--surface-3); transform: translateY(-1px); box-shadow: var(--shadow-1); }
   .btn:active:not(:disabled) { transform: scale(.97); }
   .btn:disabled { opacity: .5; cursor: not-allowed; }

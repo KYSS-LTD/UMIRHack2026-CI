@@ -1,10 +1,11 @@
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { AnswerTurn } from "../components/desk/AnswerTurn";
 import { DialogTurn } from "../components/desk/DialogTurn";
 import { FieldsCard } from "../components/desk/FieldsCard";
 import { Thread } from "../components/desk/Thread";
 import { NavBar } from "../components/NavBar";
-import { trimTurns, type Turn, useDesk } from "../hooks/useDesk";
+import { cardOwners, trimTurns, type Turn, useDesk } from "../hooks/useDesk";
 import { isQuizState, markCorrected, mergeCorrection, optionText, parseReview, splitQuestion } from "../lib/dialog";
 import { suggestionsFor } from "../lib/suggestions";
 import type { AnalysisResult, DialogInfo, DialogReply, FieldResult } from "../types";
@@ -333,8 +334,59 @@ describe("useDesk questionnaire turns", () => {
 
 describe("NavBar without a separate assistant page", () => {
   it("has no «Ассистент» link: the questionnaire lives on the desk", () => {
-    render(<NavBar route="check" onRoute={noop} health={null} theme="system" onThemeSet={noop} onPalette={noop} onHelp={noop} />);
+    render(<NavBar route="check" onRoute={noop} theme="system" onThemeSet={noop} onPalette={noop} onHelp={noop} />);
     expect(screen.queryByRole("link", { name: /Ассистент/, hidden: true })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Вход для сотрудников/, hidden: true })).toHaveAttribute("href", "/admin");
+  });
+});
+
+describe("document card is shown once per file", () => {
+  const file = new File(["x"], "s.png", { type: "image/png" });
+  const check = (id: string, over: Partial<Turn> = {}): Turn => ({ ...chatTurn(reply()), id, chat: false, reply: undefined, file, fileName: "s.png", result: result(), ...over });
+
+  it("gives follow-up questions about the same file only the answer", () => {
+    const other = new File(["y"], "b.png", { type: "image/png" });
+    const turns = [
+      check("a"),
+      chatTurn(reply(), { id: "q" }),
+      check("b"),
+      check("c", { result: result({ doc_type: { ...result().doc_type, id: "academic_leave" } }) }), // тип пересчитан — новая карточка
+      check("d", { file: other }),
+      check("e"),
+      check("rules", { file: null, fileName: "" }),
+    ];
+    const owners = cardOwners(turns);
+    expect(Object.fromEntries(owners)).toEqual({ a: "a", b: "a", c: "c", d: "d", e: "a" });
+    expect(owners.has("rules")).toBe(false);
+  });
+
+  const props = {
+    turn: check("b"),
+    active: true,
+    types: [],
+    busy: false,
+    activeField: null,
+    rules: [],
+    onActivate: noop,
+    onFocusSource: noop,
+    onClause: noop,
+    onFieldHover: noop,
+    onFieldSelect: noop,
+    onChooseType: noop,
+    onAsk: noop,
+  };
+
+  it("renders the answer without repeating the card and links back to it", async () => {
+    const onShowCard = vi.fn();
+    render(<AnswerTurn {...props} docCard={false} onShowCard={onShowCard} />);
+    expect(screen.getAllByText("Не хватает даты.").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Что найдено в документе")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Показать" }));
+    expect(onShowCard).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the card on the first answer about the file", () => {
+    render(<AnswerTurn {...props} />);
+    expect(screen.getByText("Что найдено в документе")).toBeInTheDocument();
   });
 });

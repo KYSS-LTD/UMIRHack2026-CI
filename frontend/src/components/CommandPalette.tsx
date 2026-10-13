@@ -47,7 +47,7 @@ export function CommandPalette({ open, onClose, samples, onNavigate, onTheme }: 
       { id: "go-check", title: "Перейти на стол", group: "Перейти", icon: "doc", keywords: "проверка документ главная", run: go("check") },
       { id: "go-rules", title: "Открыть Положение", group: "Перейти", icon: "book", keywords: "правила пункты", run: go("rules") },
       { id: "go-types", title: "Типы документов", group: "Перейти", icon: "layers", keywords: "yaml редактор новый тип", run: go("types") },
-      { id: "new", title: "Новый вопрос: очистить стол", group: "Действия", icon: "plus", keywords: "сбросить очистить заново", run: act(() => (onNavigate("check"), emit("new-desk"))) },
+      { id: "new", title: "Очистить чат и стол", group: "Действия", icon: "broom", keywords: "сбросить очистить заново новый вопрос диалог", run: act(() => (onNavigate("check"), emit("new-desk"))) },
       { id: "pick", title: "Выбрать файл с документом", group: "Действия", icon: "inbox", keywords: "загрузить файл фото скан pdf", run: act(() => (onNavigate("check"), setTimeout(() => emit("pick-file"), 60))) },
       { id: "ask", title: "Задать вопрос", group: "Действия", icon: "question", keywords: "ввод фокус", run: act(() => (onNavigate("check"), setTimeout(() => emit("focus-question"), 60))) },
       { id: "form-transfer", title: "Анкета: заявление о переводе", group: "Действия", icon: "edit", keywords: "перевод анкета заявление docx шаблон", run: act(() => (onNavigate("check"), setTimeout(() => emit("say", "Я хочу перевестись"), 80))) },

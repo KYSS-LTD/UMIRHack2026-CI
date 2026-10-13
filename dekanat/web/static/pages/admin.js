@@ -13,6 +13,18 @@ let current = "overview";
 
 const STATUS_TITLES = { new: "новое", in_progress: "в работе", done: "обработано", rejected: "отклонено" };
 const TYPE_TITLES = { transfer: "перевод", enrollment: "зачисление", other: "другое" };
+const OBJECT_TITLES = { template: "шаблон", kb: "база знаний", admin: "учётная запись", doctype: "тип документа", ticket: "обращение", storage: "хранилище" };
+// подробности записи журнала: понятные подписи; служебное (контрольные суммы, адреса) не показывается
+const DETAIL_TITLES = { name: "название", filename: "файл", version: "версия", clauses: "пунктов", placeholders: "поля", username: "логин", status: "статус", note: "примечание",
+  created: "новый", active: "действует", sessions: "сессий", files: "файлов", tickets: "обращений", events: "событий", admin_sessions: "входов администраторов", documents: "документов" };
+const HIDDEN_DETAILS = new Set(["sha256", "ip"]);
+
+function humanDetails(details) {
+  return Object.entries(details || {}).filter(([k]) => !HIDDEN_DETAILS.has(k)).map(([k, v]) => {
+    const value = Array.isArray(v) ? v.join(", ") : typeof v === "boolean" ? (v ? "да" : "нет") : k === "status" ? (STATUS_TITLES[v] || v) : v;
+    return `${DETAIL_TITLES[k] || k}: ${value}`;
+  }).join("; ");
+}
 const ACTION_TITLES = {
   "admin.login": "вход администратора", "admin.login_failed": "неудачный вход", "admin.logout": "выход", "admin.create": "создан администратор",
   "admin.password_change": "смена пароля", "template.create": "шаблон добавлен", "template.replace": "шаблон заменён", "template.rename": "шаблон переименован",
@@ -188,15 +200,12 @@ async function viewOverview(panel) {
   grid.append(card("Популярные темы", "spark", topicsBody), card("Запросы по дням", "chart", daysBody));
   panel.appendChild(grid);
 
-  const llm = info.llm.enabled ? `включена (${info.llm.model}), ${info.llm.available ? "доступна" : "недоступна — работает режим без модели"}` : "выключена (USE_LOCAL_LLM = False)";
-  panel.appendChild(card("Состояние системы", "shield", table(["Параметр", "Значение"], [
-    ["Положение", `${info.regulation.name} — ${info.regulation.clauses} пунктов`],
-    ["Документов в базе знаний", info.kb_documents],
-    ["Шаблонов DOCX", info.templates],
+  panel.appendChild(card("Сводка", "inbox", table(["Показатель", "Значение"], [
     ["Новых обращений", info.tickets_new],
-    ["Активных сессий пользователей", info.active_sessions],
-    ["Отправка обращений", info.delivery.available ? "работает (очередь в этой панели)" : `недоступна: ${info.delivery.reason}`],
-    ["Локальная языковая модель", llm],
+    ["Шаблонов документов", info.templates],
+    ["Документов в базе знаний", info.kb_documents],
+    ["Пунктов Положения", info.regulation.clauses],
+    ["Отправка обращений из анкеты", info.delivery.available ? "работает" : "сейчас недоступна"],
   ])));
 }
 
@@ -218,8 +227,8 @@ async function viewTemplates(panel) {
     form.append("template_id", idIn.value);
     form.append("replace", repCb.checked ? "true" : "false");
     const info = await api("POST", "/api/admin/templates", form);
-    const keys = info.placeholders.map((p) => p.key).join(", ") || "плейсхолдеры не найдены";
-    showBanner($("banner"), info.placeholders.length ? "ok" : "warn", `Шаблон «${info.name}» сохранён (id ${info.template_id}, версия ${info.version}). Найдено: ${keys}.`);
+    const keys = info.placeholders.map((p) => p.key).join(", ") || "в тексте нет полей вида {{ ключ }}";
+    showBanner($("banner"), info.placeholders.length ? "ok" : "warn", `Шаблон «${info.name}» сохранён (версия ${info.version}). Поля для заполнения: ${keys}.`);
     render();
   }), "primary", "upload");
   upload.style.marginTop = "14px";
@@ -393,14 +402,14 @@ async function viewHistory(panel) {
   const log = await api("GET", "/api/admin/audit?limit=200");
   const purge = button("Удалить просроченные данные сейчас", () => guarded(async () => {
     const r = await api("POST", "/api/admin/purge");
-    showBanner($("banner"), "ok", "Удалено по сроку хранения: " + Object.entries(r).map(([k, v]) => `${k}=${v}`).join(", "));
+    showBanner($("banner"), "ok", "Удалено по сроку хранения — " + humanDetails(r) + ".");
   }), null, "trash");
   purge.style.marginTop = "14px";
   panel.appendChild(card("История изменений административных документов", "history",
     el("p", "muted", "Шаблоны, документы базы знаний, типы документов, учётные записи. Содержимое паролей и документов в журнал не попадает."),
     table(["Когда", "Кто", "Действие", "Объект", "Подробности"], log.map((l) => [
-      fmtDate(l.ts), l.actor, ACTION_TITLES[l.action] || l.action, `${l.object_type}${l.object_id ? ": " + l.object_id : ""}`,
-      Object.entries(l.details || {}).map(([k, v]) => `${k}=${Array.isArray(v) ? v.join(",") : v}`).join("; "),
+      fmtDate(l.ts), l.actor, ACTION_TITLES[l.action] || l.action, `${OBJECT_TITLES[l.object_type] || l.object_type}${l.object_id ? " «" + l.object_id + "»" : ""}`,
+      humanDetails(l.details),
     ])), purge));
 }
 

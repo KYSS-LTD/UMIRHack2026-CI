@@ -163,6 +163,7 @@ def test_name_normalisation():
 @pytest.mark.parametrize("text, status, value", [
     ("2", "ok", "2"), ("на втором курсе", "ok", "2"), ("3-й курс", "ok", "3"), ("6", "ok", "6"), ("0", "invalid", None), ("7", "invalid", None),
     ("2024", "invalid", None), ("не знаю", "invalid", None), ("с 2 на 3 курс", "ambiguous", None), ("2 курс магистратуры", "ok", "2"), ("магистратура 3 курс", "ambiguous", None),
+    ("вроде второй", "ambiguous", None), ("пятый с половиной", "ambiguous", None), ("наверное 3", "ambiguous", None),
 ])
 def test_course(text, status, value):
     r = parse_course(text)
@@ -171,7 +172,7 @@ def test_course(text, status, value):
 
 @pytest.mark.parametrize("text, status, value", [
     ("очная", "ok", "очная"), ("Очно-заочная", "ok", "очно-заочная"), ("заочно", "ok", "заочная"), ("дневная", "ok", "очная"), ("вечерняя", "ok", "очно-заочная"),
-    ("и очная и заочная", "ambiguous", None), ("не помню", "invalid", None),
+    ("и очная и заочная", "ambiguous", None), ("не помню", "invalid", None), ("очная вроде", "ambiguous", None), ("наверное заочная", "ambiguous", None),
 ])
 def test_education_form(text, status, value):
     r = parse_form(text)

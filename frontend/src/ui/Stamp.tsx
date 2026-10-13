@@ -7,9 +7,10 @@ export function stampDate(d = new Date()): string {
 }
 
 /** Круглая-прямоугольная печать деканата. Появляется «ударом»: анимация и шероховатость краски — в CSS. */
-export function Stamp({ verdict, date = stampDate() }: { verdict: Verdict; date?: string }) {
+export function Stamp({ verdict, date = stampDate(), label }: { verdict: Verdict; date?: string; label?: string }) {
+  const text = label ?? TEXT[verdict];
   return (
-    <div className={`stamp stamp-${verdict}`} role="img" aria-label={`Штамп: ${TEXT[verdict]}`}>
+    <div className={`stamp stamp-${verdict}`} role="img" aria-label={`Штамп: ${text}`}>
       <span className="stamp-ripple" aria-hidden="true" />
       {verdict === "ok" && (
         <span className="stamp-burst" aria-hidden="true">
@@ -20,7 +21,7 @@ export function Stamp({ verdict, date = stampDate() }: { verdict: Verdict; date?
       )}
       <div className="stamp-body" aria-hidden="true">
         <small>Деканат · проверка</small>
-        <strong>{TEXT[verdict]}</strong>
+        <strong>{text}</strong>
         <small>{date}</small>
       </div>
     </div>

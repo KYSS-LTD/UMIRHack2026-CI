@@ -100,12 +100,12 @@ function Shell() {
       <a className="skip" href="#main">
         К содержимому
       </a>
-      <NavBar route={hash.route} onRoute={(r) => setHash({ route: r, clause: null })} health={health.data} theme={theme.theme} onThemeSet={theme.set} onPalette={() => setPalette(true)} onHelp={() => setHelp(true)} />
+      <NavBar route={hash.route} onRoute={(r) => setHash({ route: r, clause: null })} theme={theme.theme} onThemeSet={theme.set} onPalette={() => setPalette(true)} onHelp={() => setHelp(true)} />
 
       <main id="main" tabIndex={-1} className={`route route-${hash.route}`}>
         {health.error && (
           <p className="banner bad" role="alert">
-            Нет связи с сервером: {health.error}{" "}
+            Нет связи с сервером. Проверьте подключение и повторите.{" "}
             <button type="button" className="link" onClick={() => (health.reload(), types.reload())}>
               Повторить
             </button>
@@ -113,7 +113,7 @@ function Shell() {
         )}
         {ocrDown && (
           <p className="banner bad" role="alert">
-            OCR недоступен: {String(health.data?.ocr.reason ?? "не найден Tesseract")}. Установите Tesseract с русским языком — см. README.
+            Проверка документов сейчас недоступна: не удалось запустить распознавание текста. Вопросы по Положению и анкета работают — обратитесь в деканат, если проверка нужна срочно.
           </p>
         )}
         <div className="route-body" key={hash.route}>
@@ -136,7 +136,7 @@ function Shell() {
             </div>
           ))}
         </dl>
-        <p className="hint">Сервис работает локально, без внешних API. Окончательное решение принимает сотрудник деканата. Версия {health.data?.version ?? "—"}.</p>
+        <p className="hint">Секретарь даёт предварительную оценку. Окончательное решение принимает сотрудник деканата.</p>
       </Dialog>
     </>
   );

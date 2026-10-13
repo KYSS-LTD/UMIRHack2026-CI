@@ -74,6 +74,14 @@
   @keyframes turn-in-right { from { opacity: 0; transform: translateX(26px) scale(.96); } }
   .user-bubble { max-width: 88%; padding: 10px 16px 10px; border-radius: 20px 20px 6px 20px; background: var(--btn); color: var(--btn-ink); box-shadow: var(--shadow-2); }
   .user-text { font-size: var(--fs-base); font-weight: 550; overflow-wrap: anywhere; }
+  /* время сообщения — проявляется при наведении, как пометка на полях */
+  .turn-user .bubble { position: relative; }
+  .turn-time { position: absolute; right: calc(100% + 8px); bottom: 6px; white-space: nowrap; font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; opacity: 0; transform: translateY(-3px); transition: opacity var(--t-base), transform var(--t-base) var(--ease); pointer-events: none; }
+  .turn-user:hover .turn-time, .turn-user:focus-within .turn-time { opacity: 1; transform: none; }
+
+  /* «Очистить чат»: реплики уходят влево каскадом снизу вверх, как сметённые со стола */
+  .thread[data-sweeping] .exchange { animation: sweep-out 400ms var(--ease) both; animation-delay: calc(var(--k, 0) * 28ms); }
+  @keyframes sweep-out { to { opacity: 0; transform: translateX(-36px) rotate(-1.2deg) scale(.97); filter: blur(4px); } }
   .turn-note { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 12px; opacity: .8; }
   .user-attach { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .attach-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 10px 3px 4px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--btn-ink) 16%, transparent); font-size: 12px; font-weight: 600; }
@@ -205,6 +213,10 @@
   .part .f-value { font-size: var(--fs-sm); font-weight: 550; }
   .frow.missing > .frow-main .f-title { color: var(--ink-3); }
 
+  /* уточняющий ответ по тому же файлу: вместо повторной карточки — ссылка на неё */
+  .card-ref { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 2px 4px; font-size: var(--fs-xs); color: var(--ink-3); }
+  .card-ref .link { font-size: var(--fs-xs); }
+
   /* ---------- правка карточки: значение вписывается «красными чернилами» ---------- */
   .fields-tip { margin-top: -2px; font-size: var(--fs-xs); }
   .frow-line, .part-line { position: relative; display: flex; align-items: center; gap: 2px; }
@@ -217,6 +229,11 @@
   .f-editor input { min-width: 0; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid color-mix(in srgb, var(--lamp) 60%, var(--line-strong)); background: var(--surface); color: var(--ink); font-weight: 600; }
   .f-editor input:focus { outline: none; box-shadow: 0 0 0 3px var(--lamp-soft); }
   .f-editor .icon-btn.ok { color: var(--ok); }
+  .copy-answer svg { animation: icon-pop 420ms var(--spring); }
+  .copy-answer.done { color: var(--ok); text-decoration: none; }
+  /* поле только что исправлено: строка коротко вспыхивает «красными чернилами» */
+  .frow.corrected .frow-line, .part-line:has(.f-fixed) { animation: fix-flash 1200ms var(--ease) 1; border-radius: var(--r-sm); }
+  @keyframes fix-flash { 0% { background: var(--stamp-soft); box-shadow: 0 0 0 2px color-mix(in srgb, var(--stamp) 30%, transparent); } 100% { background: transparent; box-shadow: 0 0 0 0 transparent; } }
   .f-fixed { margin-left: 8px; font-family: var(--serif); font-size: 12.5px; font-style: italic; font-weight: 500; color: var(--stamp); text-decoration: underline wavy color-mix(in srgb, var(--stamp) 45%, transparent); text-underline-offset: 3px; white-space: nowrap; animation: chip-in 420ms var(--spring) both; }
 
   /* ---------- анкета: реплики секретаря, лист сверки, готовый документ, отправка ---------- */
@@ -301,15 +318,4 @@
     .f-editor .f-title { grid-column: 1 / -1; }
   }
 
-  /* ---------- технические подробности ---------- */
-  .details { padding: 12px 16px; border-radius: var(--r-lg); border: 1px solid var(--line); background: var(--surface-2); }
-  .details summary { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 700; font-size: var(--fs-sm); color: var(--ink-2); list-style: none; }
-  .details summary::-webkit-details-marker { display: none; }
-  .details .chev { transition: transform var(--t-base) var(--ease); }
-  .details[open] .chev { transform: rotate(90deg); }
-  .details[open] summary { margin-bottom: 8px; }
-  .details dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0 0 12px; font-size: var(--fs-sm); }
-  .details dt { color: var(--ink-3); } .details dd { margin: 0; }
-  .page-info { display: contents; }
-  .ocr-text { margin: 12px 0 0; max-height: 260px; overflow: auto; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 12px; white-space: pre-wrap; }
 }

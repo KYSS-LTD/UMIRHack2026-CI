@@ -42,6 +42,13 @@ class TestCompleteness:
         assert [s.ref for s in a.sources] == ["3.4"]
         assert {m["unit"] for m in a.missing} == {"issue.date", "seal_signature.stamp"}
 
+    def test_no_answer_matches_the_example_from_the_brief(self, app):
+        a = ask(app, "study_certificate", STUDY, "Сколько стоит обучение?")
+        assert a.verdict == "no_answer" and not a.sources
+        assert a.text == "В документе и в Положении нет информации о стоимости обучения. Обратитесь в деканат."
+        other = app.analyze(None, "", "Какая погода завтра?").answer  # тема не распознана — называем сам вопрос
+        assert other.text == "В документе и в Положении нет информации по вопросу «Какая погода завтра?». Обратитесь в деканат."
+
     def test_reasons_from_different_clauses_are_listed_separately(self, app):
         a = ask(app, "study_certificate", STUDY, "Достаточно ли этой справки?", absent=["direction", "issue.date"])
         assert a.verdict == "missing" and {s.ref for s in a.sources} == {"3.2", "3.4"}
@@ -129,3 +136,28 @@ class TestFactsAndRules:
         for q in ["Сколько дней действительна справка?", "Как оформить пропуск?", "Нужна ли медицинская справка?"]:
             a = app.qa.answer(q, None, None)
             assert all(s.ref in nums for s in a.sources)
+
+
+class TestPhrasingsFromLiveTesting:
+    """Формулировки, на которых секретарь ошибался при проверке вживую."""
+
+    @pytest.mark.parametrize("question, clause", [
+        ("Какие документы нужны для перевода из другого вуза?", "7.2"),
+        ("Что нужно принести для перевода?", "7.2"),
+        ("Принимаются ли документы на английском?", "2.3"),
+        ("Кто подписывает справку о практике?", "5.3"),
+        ("Нужна ли подпись на справке о практике?", "5.3"),
+        ("Нужна ли медицинская справка при академическом отпуске?", "4.4"),
+    ])
+    def test_rule_questions(self, app, question, clause):
+        a = app.analyze(None, "", question).answer
+        assert a.verdict == "ok" and a.sources[0].ref == clause, a.text
+
+    @pytest.mark.parametrize("question", ["Можно ли подать заявление онлайн?", "Как подать заявление на академ?", "Куда отправить справку?", "Как получить справку об обучении?"])
+    def test_questions_about_the_procedure_do_not_demand_a_document(self, app, question):
+        assert not app.qa.needs_document(question)
+        assert "загрузите его фото" not in app.analyze(None, "", question).answer.text
+
+    @pytest.mark.parametrize("question", ["Хватит ли этой справки для перевода?", "Примут ли мою справку?", "Можно ли подать эту справку для перевода?", "Подойдёт ли справка?"])
+    def test_document_checks_still_need_the_document(self, app, question):
+        assert app.qa.needs_document(question)

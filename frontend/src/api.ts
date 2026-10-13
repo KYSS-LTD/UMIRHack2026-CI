@@ -35,7 +35,7 @@ async function errorMessage(res: Response): Promise<string> {
     /* тело не JSON */
   }
   if (res.status === 413) return "Файл слишком большой";
-  if (res.status >= 500) return "Сервер не смог выполнить запрос. Подробности — в журнале сервера.";
+  if (res.status >= 500) return "Не получилось выполнить запрос. Попробуйте ещё раз чуть позже.";
   return `Ошибка ${res.status}`;
 }
 
@@ -45,7 +45,7 @@ async function request<T>(url: string, init?: RequestInit, parse: "json" | "text
     res = await fetch(url, init);
   } catch (e) {
     if ((e as Error)?.name === "AbortError") throw e;
-    throw new ApiError("Нет связи с сервером. Проверьте, что он запущен.", 0);
+    throw new ApiError("Нет связи с сервером. Проверьте подключение и повторите.", 0);
   }
   if (!res.ok) throw new ApiError(await errorMessage(res), res.status);
   return (parse === "text" ? res.text() : res.json()) as Promise<T>;

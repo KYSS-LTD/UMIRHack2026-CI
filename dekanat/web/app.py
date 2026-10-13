@@ -64,6 +64,7 @@ PAGES = Path(__file__).parent / "static" / "pages"
 # страница администратора не использует встроенные скрипты и стили, поэтому ей можно задать строгую политику
 PAGE_CSP = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+OCR_DOWN_TEXT = "Распознавание текста сейчас недоступно. Попробуйте позже; вопросы по Положению работают и без документа."
 
 
 def _bootstrap_admin(auth: AdminAuth, storage: Storage) -> None:
@@ -143,7 +144,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @app.exception_handler(OcrUnavailable)
     async def _ocr_down(_, exc):  # noqa: ANN001
-        return JSONResponse({"detail": str(exc)}, status_code=503)
+        log.error("Распознавание текста недоступно: %s", exc)
+        return JSONResponse({"detail": OCR_DOWN_TEXT}, status_code=503)
 
     # ------------------------------------------------------------------ служебное
     @app.get("/api/health")
@@ -254,10 +256,14 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     jobs = JobManager(slots=2)
 
     def describe_error(exc: Exception) -> str:
-        if isinstance(exc, (UnsupportedFile, OcrUnavailable)):
+        """Текст ошибки для посетителя: без названий исключений и программ; подробности — только в журнале сервера."""
+        if isinstance(exc, UnsupportedFile):
             return str(exc)
+        if isinstance(exc, OcrUnavailable):
+            log.error("Распознавание текста недоступно: %s", exc)
+            return OCR_DOWN_TEXT
         log.exception("Ошибка при проверке документа")
-        return f"Внутренняя ошибка при проверке ({type(exc).__name__}). Подробности — в журнале сервера."
+        return "Не удалось проверить документ. Попробуйте ещё раз или загрузите другой снимок."
 
     @app.post("/api/jobs")
     async def create_job(request: Request, file: Optional[UploadFile] = File(None), question: str = Form(""), doc_type: str = Form("auto")):

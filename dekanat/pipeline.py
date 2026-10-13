@@ -51,6 +51,20 @@ UNSUPPORTED_NOTE = ("Документ не похож на справку об �
 GENERIC_ID = "generic"  # doc_type для режима «другой документ»: вопросы по тексту, без карточки полей
 
 
+# Подписи этапа «чтение текста» для посетителя: внутренние названия вариантов обработки на сайт не выводятся.
+_OCR_VARIANT_HINTS = {"binary": "повышаю контраст", "deglare": "убираю блики", "clahe": "выравниваю освещение"}
+_OCR_GEOMETRY_HINTS = {"page": "нахожу лист", "page+deskew": "нахожу и выпрямляю лист", "deskew": "выпрямляю снимок"}
+
+
+def _ocr_hint(msg: str) -> str:
+    """«page+deskew · clahe» -> «выравниваю освещение»; понятные подписи («проверяю поворот страницы») остаются как есть."""
+    geo, _, variant = msg.rpartition(" · ")
+    if not geo:
+        russian = any("а" <= ch <= "я" or ch == "ё" for ch in msg.lower())
+        return msg if russian else ""
+    return _OCR_VARIANT_HINTS.get(variant.strip()) or _OCR_GEOMETRY_HINTS.get(geo.strip(), "")
+
+
 @dataclass
 class AnalysisResult:
     doc_type: Optional[DocTypeSpec]
@@ -214,7 +228,8 @@ class Dekanat:
             counter["k"] += 1
             frac = 0.08 + 0.62 * ((page + min(0.95, counter["k"] / 5.0)) / n)
             suffix = f" (страница {page + 1} из {n})" if n > 1 else ""
-            report("ocr", f"Читаю текст{suffix}: {msg}", min(frac, 0.7))
+            hint = _ocr_hint(msg)
+            report("ocr", f"Читаю текст{suffix}" + (f": {hint}" if hint else ""), min(frac, 0.7))
 
         pages = self.runner.run(originals, step)
         with self._lock:

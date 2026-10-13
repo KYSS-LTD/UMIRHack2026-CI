@@ -246,7 +246,8 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
                 return {"doc_id": known, "duplicate": True, "unfilled": [], "reply": None}
         doc_id = uuid.uuid4().hex
         try:
-            result = fill_docx(path, data, storage.output_dir, output_name=f"{doc_id}.docx")
+            # данных нет — на месте метки строка «________» для заполнения от руки; список незаполненных полей сообщается пользователю
+            result = fill_docx(path, data, storage.output_dir, blank_unfilled=True, output_name=f"{doc_id}.docx")
         except TemplateError as exc:
             reply = machine.generation_failed(ctx, f"Не удалось сформировать документ: {exc}")
             log_events(sid, ctx, reply.events)

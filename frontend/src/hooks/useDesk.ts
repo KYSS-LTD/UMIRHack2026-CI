@@ -60,6 +60,25 @@ export function trimTurns(list: Turn[]): Turn[] {
   return out;
 }
 
+/**
+ * Карточка документа показывается один раз — у первой проверки файла (с тем же типом документа).
+ * Уточняющие вопросы по тому же файлу дают только ответ. Возвращает: id проверки → id проверки с карточкой.
+ * Проверки без файла (вопросы по Положению) в словарь не попадают.
+ */
+export function cardOwners(turns: Turn[]): Map<string, string> {
+  const first = new Map<Blob, Map<string, string>>();
+  const out = new Map<string, string>();
+  for (const t of turns) {
+    if (t.chat || t.phase !== "done" || !t.result || !t.file) continue;
+    const type = t.result.doc_type.id ?? `:${t.result.doc_type.how}`;
+    let byType = first.get(t.file);
+    if (!byType) first.set(t.file, (byType = new Map()));
+    if (!byType.has(type)) byType.set(type, t.id);
+    out.set(t.id, byType.get(type)!);
+  }
+  return out;
+}
+
 const queued = (): JobSnapshot => ({ id: "", status: "queued", stage: "queued", label: "Отправляю на сервер", fraction: 0.02, elapsed: 0 });
 const failure = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 

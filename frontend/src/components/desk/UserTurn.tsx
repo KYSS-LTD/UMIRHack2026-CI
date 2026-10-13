@@ -27,6 +27,9 @@ export function UserTurn({ turn, typeTitle, onEdit }: Props) {
           </p>
         )}
         <p className="user-text">{turn.question || (turn.file ? "Проверь документ целиком" : "")}</p>
+        <time className="turn-time" dateTime={new Date(turn.at).toISOString()}>
+          {new Date(turn.at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+        </time>
         {(turn.fileName || typeLabel) && (
           <div className="user-attach">
             {turn.fileName && (

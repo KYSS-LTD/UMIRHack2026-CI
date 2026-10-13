@@ -31,6 +31,20 @@ export const VERDICT_META: Record<Verdict, { title: string; icon: string; tone: 
   no_answer: { title: "Ответа нет", icon: "?", tone: "none" },
 };
 
+const STAMP_TEXT: Record<Verdict, string> = { ok: "В порядке", missing: "Не хватает", no_answer: "Ответа нет" };
+/** Вопросы, на которые отвечают значением или пунктом, а не проверкой комплектности документа. */
+const ANSWER_INTENTS = new Set(["fact", "rule", "document"]);
+
+/**
+ * Заголовок и надпись штампа зависят от вопроса: «Документ в порядке» говорят только о проверке комплектности.
+ * На вопрос о правилах, о значении поля или о тексте документа ответ просто найден — даже если в документе чего-то не хватает.
+ */
+export function verdictMeta(verdict: Verdict, intent?: string): { title: string; icon: string; tone: "ok" | "warn" | "none"; stamp: string } {
+  const base = VERDICT_META[verdict] ?? VERDICT_META.no_answer;
+  if (verdict === "ok" && intent && ANSWER_INTENTS.has(intent)) return { ...base, title: "Ответ найден", stamp: "Найдено" };
+  return { ...base, stamp: STAMP_TEXT[verdict] ?? STAMP_TEXT.no_answer };
+}
+
 /** Объединяет рамки в одну — чтобы приблизить снимок к нужному фрагменту. */
 export function unionBoxes(boxes: Box[]): Box | null {
   if (!boxes.length) return null;
