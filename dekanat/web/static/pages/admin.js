@@ -644,7 +644,11 @@ async function viewTickets(panel) {
   to.value = ticketFilter.to;
   const tally = el("div", "status-tally");
   const list = el("div", "items", null, { role: "listbox", "aria-label": "Обращения" });
-  left.append(filtersBox, tally, list);
+  // выбор нескольких обращений: один статус (и, если нужно, один ответ) сразу для всех выбранных
+  const picked = new Set();
+  const bulkBar = el("div", "bulk-bar hidden");
+  const bulkReply = el("input", "bulk-reply", null, { type: "text", maxlength: "2000", placeholder: "Один ответ студентам (необязательно)", "aria-label": "Ответ студентам выбранных обращений" });
+  left.append(filtersBox, tally, bulkBar, list);
 
   let meta = null;
   let firstLoad = true;
@@ -657,6 +661,50 @@ async function viewTickets(panel) {
   };
   const query = (extra = {}) => new URLSearchParams({ date_from: ticketFilter.from, date_to: ticketFilter.to, type: ticketFilter.type, status: ticketFilter.status, topic: ticketFilter.topic, limit: "50", ...extra });
   const rows = () => [...list.querySelectorAll(".ticket")];
+  const shownIds = () => rows().map((x) => Number(x.dataset.id));
+  const syncPicks = () => {
+    for (const x of rows()) {
+      const on = picked.has(Number(x.dataset.id));
+      x.classList.toggle("picked", on);
+      x.querySelector(".t-pick").checked = on;
+    }
+    drawBulk();
+  };
+  function drawBulk() {
+    const ids = shownIds();
+    clear(bulkBar);
+    bulkBar.classList.toggle("hidden", !ids.length);
+    if (!ids.length) return;
+    const all = el("input", null, null, { type: "checkbox", "aria-label": "Выбрать все обращения в списке" });
+    all.checked = ids.every((i) => picked.has(i));
+    all.indeterminate = !all.checked && ids.some((i) => picked.has(i));
+    all.addEventListener("change", () => { for (const i of ids) (all.checked ? picked.add(i) : picked.delete(i)); syncPicks(); });
+    const label = el("label", "pick-all");
+    label.append(all, document.createTextNode(picked.size ? `Выбрано: ${picked.size}` : "Выбрать все"));
+    bulkBar.appendChild(label);
+    if (!picked.size) return;
+    const actions = el("div", "bulk-actions");
+    for (const st of ["in_progress", "done", "rejected"]) actions.appendChild(button(STATUS_LABEL[st], () => applyBulk(st), "small"));
+    actions.appendChild(button("Снять выбор", () => { picked.clear(); syncPicks(); }, "link-btn"));
+    bulkBar.append(actions, bulkReply);
+  }
+  async function applyBulk(status) {
+    const ids = [...picked].filter((i) => shownIds().includes(i)); // скрытое фильтром не трогаем
+    if (!ids.length) return;
+    const reply = bulkReply.value.trim();
+    const sure = status !== "rejected" && ids.length <= 5 && !reply
+      ? true
+      : window.confirm(`Поставить статус «${STATUS_TITLES[status]}» у обращений: ${ids.length}?` + (reply ? " Все студенты получат один и тот же ответ." : ""));
+    if (!sure) return;
+    const res = await guarded(() => api("POST", "/api/admin/tickets/bulk", { ids, status, ...(reply ? { reply } : {}) }));
+    if (!res) return;
+    picked.clear();
+    bulkReply.value = "";
+    toast(res.missing.length ? `Обновлено: ${res.updated.length}, не найдено: ${res.missing.length}` : `Статус «${STATUS_TITLES[status]}»: ${res.updated.length} ${plural(res.updated.length, ["обращение", "обращения", "обращений"])}`);
+    await load();
+    refreshCounts();
+    if (openTicketId && res.updated.includes(openTicketId)) showTicket(openTicketId);
+  }
   const select = (it, id) => { openTicketId = id; for (const x of rows()) { x.classList.toggle("on", x === it); x.setAttribute("aria-selected", String(x === it)); } showTicket(id); };
 
   async function load() {
@@ -679,17 +727,22 @@ async function viewTickets(panel) {
         load();
       }, "link-btn"));
     }
+    for (const id of [...picked]) if (!res.items.some((t) => t.id === id)) picked.delete(id); // выбор живёт только среди показанного
     clear(list);
     if (!res.items.length) list.appendChild(empty("Обращений нет", ticketFilter.status || ticketFilter.from || ticketFilter.to || ticketFilter.type || ticketFilter.topic ? "По этим условиям ничего не нашлось — попробуйте убрать часть фильтров." : "Когда студент передаст обращение из анкеты, оно появится здесь."));
     res.items.forEach((t, i) => {
       const closed = t.status === "done" || t.status === "rejected";
-      const it = el("div", `item ticket${closed ? " closed" : ""}${t.id === openTicketId ? " on" : ""}`, null, { role: "option", tabindex: "0", "aria-selected": String(t.id === openTicketId) });
+      const it = el("div", `item ticket${closed ? " closed" : ""}${t.id === openTicketId ? " on" : ""}${picked.has(t.id) ? " picked" : ""}`, null, { role: "option", tabindex: "0", "aria-selected": String(t.id === openTicketId), "data-id": String(t.id) });
+      const pick = el("input", "t-pick", null, { type: "checkbox", "aria-label": `Выбрать обращение № ${t.id}` });
+      pick.checked = picked.has(t.id);
+      for (const ev of ["click", "keydown"]) pick.addEventListener(ev, (e) => e.stopPropagation()); // пробел и щелчок по флажку не открывают обращение
+      pick.addEventListener("change", () => { (pick.checked ? picked.add(t.id) : picked.delete(t.id)); it.classList.toggle("picked", pick.checked); drawBulk(); });
       it.style.animationDelay = `${Math.min(i * 35, 500)}ms`;
       // журнал входящих: номер — тема — когда — статус; тип в заголовок идёт, только если темы нет (иначе «Перевод · Перевод из другого вуза»)
       const main = el("div", "t-main");
       main.appendChild(el("h3", null, t.topic || TYPE_TITLES[t.type] || t.type));
       main.appendChild(el("p", "item-meta", [relTime(t.created_at), t.note ? "есть заметка" : ""].filter(Boolean).join(" · "), { title: fmtWhen(t.created_at) }));
-      it.append(el("span", "t-no", `№ ${t.id}`), main, el("span", `status ${t.status}`, STATUS_TITLES[t.status] || t.status));
+      it.append(pick, el("span", "t-no", `№ ${t.id}`), main, el("span", `status ${t.status}`, STATUS_TITLES[t.status] || t.status));
       it.addEventListener("click", () => select(it, t.id));
       it.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(it, t.id); return; }
@@ -707,6 +760,7 @@ async function viewTickets(panel) {
       select(rows()[res.items.indexOf(target)], target.id);
     }
     firstLoad = false;
+    drawBulk();
   }
 
   async function showTicket(id) {

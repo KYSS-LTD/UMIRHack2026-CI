@@ -12,6 +12,8 @@ import statistics
 from dataclasses import dataclass
 from typing import Optional
 
+from rapidfuzz import fuzz
+
 from ..extract.values import find_dates, parse_person
 from ..kb.index import ClauseIndex
 from ..models import Answer, Box, Clause, OcrPage, Row, Source
@@ -23,6 +25,19 @@ _ID_Q = re.compile(r"\b(номер|№|инн|кпп|огрн|бик|счёт|с
 _WHO_Q = re.compile(r"\b(кто|кого|фио|фамилия|имя|получатель|плательщик|директор|руководитель)\b")
 _NUMBER = re.compile(r"(?<![\w.])(?:(?:не\s+(?:менее|более|ранее|позднее)|около|порядка|свыше|от|до)\s+)?\d[\d\s]*(?:[.,]\d+)?(?:\s?(?:руб\w*|₽|р\.|%|шт\w*\.?|кг|г|м|км|чел\w*\.?|дн\w*|мес\w*|лет|год\w*))?", re.IGNORECASE)
 _SEP = re.compile(r"\s*[:：–—-]\s+|\s{2,}")
+
+# «Где на документе «предмет договора»?», «Покажи, где написано слово «итого»», «найди слово ИНН»: искомое место, а не смысл вопроса
+_LOCATE_VERB = r"(?:где|покаж\w+|показ\w+|найд\w+|найти|выдел\w+|подсвет\w+|отмет\w+)"
+_LOCATE_CUE = re.compile(rf"\b{_LOCATE_VERB}\b")
+_QUOTED = re.compile(r"[«“\"]([^«»“”\"]{2,120})[»”\"]")
+_BARE_PHRASE = re.compile(rf"\b{_LOCATE_VERB}\b[^?!\n]{{0,40}}?\b(?:слово|слова|фразу|словосочетание|надпись|выражение|аббревиатуру)\s+([^\n?!]{{2,80}}?)\s*[?!.]*\s*$", re.IGNORECASE)
+# вопрос о значении рядом с цитатой («какая сумма в строке «Итого»?», «покажи значение «ИНН»») — это поиск по смыслу, а не «где слово»
+_VALUE_ASK = re.compile(r"\b(?:значени\w+|сколько|как(?:ой|ая|ое|ие|им|ого|ую|ому)|чему|кто|кого|что|сумм\w+|цен\w+|стоимост\w+|номер\w*|дат\w+|срок\w*|размер\w*)\b")
+MAX_FOUND = 8
+# «Выведи весь текст документа», «распознай текст с картинки», «оттекстовка»: нужен текст целиком, а не поиск по смыслу
+_FULLTEXT_Q = re.compile(r"\b(?:весь|целиком|полностью|полный|распознанн\w+)\s+текст\b|\bоттекстовк\w*|\bтекст\w*\s+(?:документа|с\s+(?:этого\s+|данного\s+)?(?:документа|изображени\w+|снимка|фото\w*|картинк\w+|страниц\w+|скана))|\b(?:распознай|прочитай|прочти|экспортируй|транскрибируй)\b[^.?!]{0,40}\b(?:текст|документ|изображени\w+|картинк\w+|фото\w*|снимок)\b")
+_NOT_FULLTEXT = re.compile(r"\b(?:пункт\w*|подпункт\w*|абзац\w*|раздел\w*|строк\w*|последн\w+|первы\w+|только|заголов\w+|таблиц\w+|ячейк\w+|слов\w*|цифр\w+|номер\w*|дат\w+)\b")
+FULLTEXT_SHOWN = 1500
 
 
 @dataclass
@@ -145,6 +160,12 @@ class DocumentQA:
             wanted = next((it for it in items if it.number == direct.group(1)), None)
             if wanted is not None:
                 return self._item_answer(wanted, pages, 1.0, [])
+        found = self._locate(q, pages)
+        if found is not None:
+            return found
+        whole = self._whole_text(q, units)
+        if whole is not None:
+            return whole
         by_number = {f"{u.page}:{u.row}": u for u in units}
         clauses = [Clause(f"{u.page}:{u.row}", _prep(u.text), [], False) for u in units]
         # окна из двух строк: метка на одной строке, значение на следующей
@@ -352,12 +373,119 @@ class DocumentQA:
         return None
 
     @staticmethod
+    def phrase_of(question: str) -> Optional[str]:
+        """Искомая фраза из вопроса: цитата в кавычках или «слово X» после «где / покажи / найди»; иначе None."""
+        low = question.lower()
+        if not _LOCATE_CUE.search(low):
+            return None
+        quoted = _QUOTED.findall(question)
+        if quoted:
+            rest = _QUOTED.sub(" ", low)
+            if re.search(r"\bгде\b", rest) or not _VALUE_ASK.search(rest):
+                return quoted[0].strip()
+            return None
+        m = _BARE_PHRASE.search(question.strip())
+        return m.group(1).strip(" «»“”\"'.,") if m else None
+
+    @staticmethod
+    def _tok(text: str) -> str:
+        return re.sub(r"[^\w]+", "", text.lower().replace("ё", "е"))
+
+    def _locate(self, question: str, pages: list[OcrPage]) -> Optional[Answer]:
+        """«Где на документе «фраза»?» -> рамки найденных слов на снимке. Слова ищутся в порядке чтения, точно или с запасом на опечатки OCR."""
+        phrase = self.phrase_of(question)
+        if not phrase:
+            return None
+        target = [t for t in (self._tok(w) for w in phrase.split()) if t]
+        if not target:
+            return None
+        hits: list[tuple[OcrPage, list, float, int]] = []  # (страница, слова, сходство, позиция)
+        for page in pages:
+            words = [w for row in page.rows for w in row.words]
+            toks = [self._tok(w.text) for w in words]
+            n = len(target)
+            i = 0
+            while i <= len(words) - n:
+                chunk = toks[i:i + n]
+                if chunk == target:
+                    hits.append((page, words[i:i + n], 100.0, i))
+                    i += n
+                else:
+                    i += 1
+        exact = bool(hits)
+        if not hits:  # опечатки OCR: сравниваем склеенную фразу с окном слов
+            joined = "".join(target)
+            for page in pages:
+                words = [w for row in page.rows for w in row.words]
+                toks = [self._tok(w.text) for w in words]
+                n = len(target)
+                best: list[tuple[float, int, int]] = []
+                for size in {max(1, n - 1), n, n + 1}:
+                    for i in range(0, max(1, len(words) - size + 1)):
+                        chunk = "".join(toks[i:i + size])
+                        if len(chunk) < 3:
+                            continue
+                        sc = fuzz.ratio(joined, chunk)
+                        if sc >= (84 if len(joined) >= 6 else 90):
+                            best.append((sc, i, size))
+                best.sort(reverse=True)
+                taken: list[tuple[int, int]] = []
+                for sc, i, size in best:
+                    if all(i + size <= a or i >= b for a, b in taken):
+                        taken.append((i, i + size))
+                        hits.append((page, words[i:i + size], sc, i))
+        label = f"«{phrase}»"
+        if not hits:
+            return Answer("no_answer", f"Фразы {label} в распознанном тексте документа не нашлось. Проверьте написание или попробуйте часть фразы; возможно, этот фрагмент плохо читается на снимке.", "document",
+                          confidence=0.7, debug={"locate": True, "matches": 0})
+        hits.sort(key=lambda h: (-h[2], h[0].index, h[3]))
+        shown = sorted(hits[:MAX_FOUND], key=lambda h: (h[0].index, h[3]))
+        boxes: list[Box] = []
+        for page, ws, _, _ in shown:
+            boxes += self._merge(page, ws)
+        first_page, first_words, score, _ = shown[0]
+        row_text = next((r.text for r in first_page.rows if first_words[0] in r.words), "")
+        where = f" на странице {first_page.index + 1}" if len(pages) > 1 else ""
+        if len(hits) == 1:
+            text = f"{label} — найдено{where}" + (f", строка: «{clean_value(row_text)[:160]}»" if row_text else "")
+        else:
+            more = "" if len(hits) <= MAX_FOUND else f" (показаны первые {MAX_FOUND})"
+            raz = "раза" if len(hits) % 10 in (2, 3, 4) and len(hits) % 100 not in (12, 13, 14) else "раз"
+            text = f"{label} встречается {len(hits)} {raz}{more}; все места подсвечены на снимке."
+        if not exact:
+            text += " Точного совпадения нет — показано самое похожее место (другая форма слова или неточно прочитанный текст); сверьте со снимком."
+        src = Source("document", "found", "найденное место", row_text or phrase, boxes)
+        return Answer("ok", text, "document", [src], confidence=0.9 if exact else 0.55, debug={"locate": True, "matches": len(hits), "exact": exact})
+
+    @staticmethod
+    def wants_whole_text(question: str) -> bool:
+        """«Выведи весь текст документа», «распознай текст с картинки»: нужен текст целиком, а не его часть."""
+        low = question.lower()
+        return bool(_FULLTEXT_Q.search(low)) and not _NOT_FULLTEXT.search(_FULLTEXT_Q.sub(" ", low))
+
+    @staticmethod
+    def _whole_text(question: str, units: list[Unit]) -> Optional[Answer]:
+        """«Выведи весь текст документа» -> распознанный текст (начало; целиком — в панели «Распознанный текст» на столе)."""
+        if not DocumentQA.wants_whole_text(question):
+            return None
+        text = "\n".join(u.text for u in units)
+        shown = text if len(text) <= FULLTEXT_SHOWN else text[:FULLTEXT_SHOWN].rsplit(" ", 1)[0].rstrip() + "…"
+        tail = "" if len(text) <= FULLTEXT_SHOWN else f"\n\nПоказано начало ({len(shown)} из {len(text)} знаков). Весь текст можно открыть, скопировать или скачать кнопкой «Текст» под снимком."
+        return Answer("ok", "Распознанный текст документа:\n" + shown + tail, "document", [Source("document", "fulltext", "весь текст документа", shown, [])], confidence=0.6,
+                      debug={"fulltext": True, "chars": len(text)})
+
+    @staticmethod
     def _merge(page: OcrPage, words: list) -> list[Box]:
         """Слова одной строки -> одна рамка. Слова объединяются в координатах выпрямленного листа и переносятся на снимок один раз:
         на наклонном снимке рамка идёт вдоль строки, а не раздувается до осевого прямоугольника."""
-        rows: dict[int, list] = {}
+        # строку определяет сама строка OCR: округление высоты «центр / высота слова» на перспективном фото раскалывает одну строку надвое
+        row_of = {id(w): i for i, row in enumerate(page.rows) for w in row.words}
+        rows: dict = {}
         for w in words:
-            rows.setdefault(round((w.y0 + w.y1) / 2 / max(w.y1 - w.y0, 1)), []).append(w)
+            key = row_of.get(id(w))
+            if key is None:
+                key = ("y", round((w.y0 + w.y1) / 2 / max(w.y1 - w.y0, 1)))
+            rows.setdefault(key, []).append(w)
         return [page.map_box(min(w.x0 for w in ws), min(w.y0 for w in ws), max(w.x1 for w in ws), max(w.y1 for w in ws)) for ws in rows.values()]
 
     @staticmethod

@@ -513,6 +513,12 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
           <PaperViewer
             src={subjectUrl ?? pdfPreview?.data_url ?? null}
             fileSize={subjectFile?.size}
+            text={subjectResult?.ocr.text?.trim() || undefined}
+            onFindText={
+              stageTurn?.file
+                ? (phrase) => void submit({ file: stageTurn.file as File | null, question: `Где на документе «${phrase.replace(/[«»“”"]/g, " ").replace(/\s+/g, " ").trim()}»?`, docType: stageTurn.docType, direct: true })
+                : undefined
+            }
             srcSize={!subjectUrl && pdfPreview ? { w: pdfPreview.width, h: pdfPreview.height } : null}
             pages={subjectResult?.images?.length ? subjectResult.images : scanning ? lastPages : null}
             fileName={subjectName}

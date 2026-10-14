@@ -90,6 +90,22 @@
   .zoom { min-width: 46px; text-align: center; font-size: var(--fs-sm); color: var(--ink-2); font-weight: 650; }
   .viewer-meta { position: absolute; z-index: 5; left: 16px; bottom: 22px; margin: 0; padding: 4px 10px; border-radius: var(--r-pill); background: var(--glass); border: 1px solid var(--line); color: var(--ink-3); font-size: 11.5px; backdrop-filter: blur(8px); pointer-events: none; }
   @media (max-width: 899px) { .viewer-meta { display: none; } }
+  /* панель «Распознанный текст» */
+  .text-panel { position: absolute; z-index: 7; top: 58px; right: 14px; bottom: 72px; width: min(400px, calc(100% - 28px)); display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line-strong); box-shadow: var(--shadow-3); animation: chip-in 380ms var(--spring) both; }
+  .text-panel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .text-panel > header > div { display: grid; gap: 1px; }
+  .text-panel > header strong { font-family: var(--serif); font-size: 15px; }
+  .text-panel > header span { color: var(--ink-3); font-size: 12px; }
+  .text-find { display: flex; align-items: center; gap: 6px; padding: 0 6px 0 10px; border-radius: var(--r-pill); background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-3); }
+  .text-find:focus-within { border-color: var(--lamp); }
+  .text-find input { flex: 1; min-width: 0; height: 34px; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--fs-sm); outline: none; }
+  .text-count { color: var(--ink-3); font-size: 11.5px; white-space: nowrap; }
+  .text-show { height: 26px; padding: 0 10px; border-radius: var(--r-pill); background: var(--btn); color: var(--btn-ink); font-size: 12px; font-weight: 650; white-space: nowrap; }
+  .text-show:disabled { opacity: .45; cursor: default; }
+  .text-body { flex: 1; min-height: 0; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px 12px; border-radius: var(--r-md); background: var(--paper); color: var(--ink); border: 1px solid var(--line); font-size: 13px; line-height: 1.5; user-select: text; }
+  .text-body mark { background: var(--lamp-soft); color: inherit; border-radius: 3px; box-shadow: 0 0 0 1px var(--lamp); }
+  .text-panel > footer { display: flex; gap: 6px; justify-content: flex-end; }
+  @media (max-width: 899px) { .text-panel { top: 52px; bottom: 76px; } }
   .pager { display: inline-flex; margin-right: 4px; border-radius: var(--r-pill); background: var(--surface-3); padding: 2px; }
   .pager button { min-width: 28px; height: 28px; border-radius: var(--r-pill); font-size: var(--fs-sm); font-weight: 700; color: var(--ink-2); }
   .pager button.on { background: var(--btn); color: var(--btn-ink); }

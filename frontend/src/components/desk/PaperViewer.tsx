@@ -7,6 +7,7 @@ import { Icon } from "../../ui/Icon";
 import { useToast } from "../../ui/Toasts";
 import { BoxMarks } from "./BoxMarks";
 import { DocStrip } from "./DocStrip";
+import { OcrTextPanel } from "./OcrTextPanel";
 import type { DeskDoc, Highlight } from "./highlight";
 
 interface Props {
@@ -14,6 +15,10 @@ interface Props {
   src: string | null;
   /** размер файла в байтах: показывается в строке под листом */
   fileSize?: number;
+  /** распознанный текст документа: открывается кнопкой «Текст» под снимком */
+  text?: string;
+  /** показать фразу из текста на снимке (уходит вопросом «Где на документе «…»?») */
+  onFindText?: (phrase: string) => void;
   /** размеры страницы, к которой относится src, если картинка меньше неё (предпросмотр PDF): лист сразу ложится в нужный размер */
   srcSize?: { w: number; h: number } | null;
   pages: PagePreview[] | null;
@@ -52,6 +57,7 @@ export function PaperViewer(p: Props) {
   const toast = useToast();
   const imgRef = useRef<HTMLImageElement>(null);
   const [enhance, setEnhance] = useState(false);
+  const [showText, setShowText] = useState(false);
   const stage = useRef<HTMLDivElement>(null);
   const plane = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(0);
@@ -95,6 +101,9 @@ export function PaperViewer(p: Props) {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // другой документ — панель текста закрывается: в ней был текст прежнего
+  useEffect(() => setShowText(false), [p.fileName]);
 
   // новая страница, снимок или размер — вписываем лист
   useEffect(() => {
@@ -350,6 +359,23 @@ export function PaperViewer(p: Props) {
         </button>
       )}
 
+      {showText && p.text && (
+        <OcrTextPanel
+          text={p.text}
+          fileName={p.fileName}
+          busy={p.busy}
+          onFind={
+            p.onFindText
+              ? (phrase) => {
+                  setShowText(false); // панель закрывается, чтобы найденное место на снимке было видно
+                  p.onFindText?.(phrase);
+                }
+              : undefined
+          }
+          onClose={() => setShowText(false)}
+        />
+      )}
+
       <p className="viewer-meta tabnum" aria-label="Сведения о листе">
         {[`${iw} × ${ih} px`, p.fileSize ? formatBytes(p.fileSize) : "", p.pages && p.pages.length > 1 ? `стр. ${page + 1} из ${p.pages.length}` : ""].filter(Boolean).join(" · ")}
       </p>
@@ -380,6 +406,12 @@ export function PaperViewer(p: Props) {
           <button type="button" className={`tool wide ${p.showAll ? "on" : ""}`} aria-pressed={p.showAll} onClick={p.onToggleAll} title="Показать рамки всех найденных полей">
             <Icon name="eye" />
             <span>Все поля</span>
+          </button>
+        )}
+        {p.text && (
+          <button type="button" className={`tool wide ${showText ? "on" : ""}`} aria-pressed={showText} onClick={() => setShowText((v) => !v)} title="Распознанный текст: прочитать, найти, скопировать, скачать">
+            <Icon name="doc" />
+            <span>Текст</span>
           </button>
         )}
         <button type="button" className={`tool wide ${enhance ? "on" : ""}`} aria-pressed={enhance} onClick={() => setEnhance((v) => !v)} title="Повысить контраст: поможет прочитать бледный или тёмный снимок">

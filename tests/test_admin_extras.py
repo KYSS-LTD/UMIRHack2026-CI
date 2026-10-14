@@ -127,3 +127,43 @@ def test_history_of_one_ticket_does_not_leak_into_another(app, admin):
     a, b = make_ticket(app, "Иванов Иван", "x1"), make_ticket(app, "Петров Пётр", "x2")
     admin.patch(f"/api/admin/tickets/{a['id']}", json={"status": "rejected"})
     assert [h["text"] for h in admin.get(f"/api/admin/tickets/{b['id']}").json()["history"]] == ["обращение отправлено студентом"]
+
+
+# ============================================================================ массовая смена статуса
+def test_bulk_status_changes_every_selected_ticket_and_writes_history_for_each(app, admin):
+    a, b, c = (make_ticket(app, f"Студент {i}", f"bulk{i}") for i in range(3))
+    r = admin.post("/api/admin/tickets/bulk", json={"ids": [a["id"], b["id"], a["id"]], "status": "in_progress"})  # повтор номера не считается дважды
+    assert r.status_code == 200 and r.json() == {"updated": [a["id"], b["id"]], "missing": [], "status": "in_progress"}
+    assert {admin.get(f"/api/admin/tickets/{t['id']}").json()["status"] for t in (a, b)} == {"in_progress"}
+    assert admin.get(f"/api/admin/tickets/{c['id']}").json()["status"] == "new"  # не выбранное не тронуто
+    for t in (a, b):
+        history = admin.get(f"/api/admin/tickets/{t['id']}").json()["history"]
+        assert history[0]["text"] == "статус: в работе (вместе с другими обращениями)" and history[0]["actor"] == "test-admin"
+    assert admin.get(f"/api/admin/tickets/{c['id']}").json()["history"][0]["text"] == "обращение отправлено студентом"
+
+
+def test_bulk_can_send_one_reply_to_all_selected(app, admin):
+    a, b = make_ticket(app, "Иванов", "r1"), make_ticket(app, "Петров", "r2")
+    r = admin.post("/api/admin/tickets/bulk", json={"ids": [a["id"], b["id"]], "status": "done", "reply": "Документы приняты, ждите решения."})
+    assert r.status_code == 200 and len(r.json()["updated"]) == 2
+    for t in (a, b):
+        got = admin.get(f"/api/admin/tickets/{t['id']}").json()
+        assert got["status"] == "done" and got["reply"] == "Документы приняты, ждите решения." and got["reply_at"]
+        assert "изменён ответ студенту" in got["history"][0]["text"]
+    # без reply ответы, написанные раньше, остаются на месте
+    admin.post("/api/admin/tickets/bulk", json={"ids": [a["id"]], "status": "rejected"})
+    assert admin.get(f"/api/admin/tickets/{a['id']}").json()["reply"] == "Документы приняты, ждите решения."
+
+
+def test_bulk_reports_missing_tickets_and_validates_the_request(app, admin):
+    a = make_ticket(app, "Иванов", "v1")
+    r = admin.post("/api/admin/tickets/bulk", json={"ids": [a["id"], 99999], "status": "done"})
+    assert r.status_code == 200 and r.json()["updated"] == [a["id"]] and r.json()["missing"] == [99999]
+    assert admin.post("/api/admin/tickets/bulk", json={"ids": [a["id"]], "status": "solved"}).status_code == 400  # такого статуса нет
+    assert admin.post("/api/admin/tickets/bulk", json={"ids": [], "status": "done"}).status_code == 422
+    assert admin.post("/api/admin/tickets/bulk", json={"ids": list(range(1, 202)), "status": "done"}).status_code == 422  # не больше 200 за раз
+    assert admin.post("/api/admin/tickets/bulk", json={"ids": ["x"], "status": "done"}).status_code == 422
+
+
+def test_bulk_needs_login_and_is_not_swallowed_by_the_ticket_route(app):
+    assert TestClient(app).post("/api/admin/tickets/bulk", json={"ids": [1], "status": "done"}).status_code == 401

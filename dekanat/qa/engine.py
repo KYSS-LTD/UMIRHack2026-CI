@@ -22,6 +22,7 @@ from ..kb.requirements import RequirementModel, Requirement, cue_level, unit_id
 from ..models import NOT_FOUND, Answer, Box, Clause, FieldResult, Source
 from ..textutil import STOPWORDS, normalize, sentences, stem, stem_eq, tokenize
 from ..llm import LLMService
+from .docqa import DocumentQA
 
 log = logging.getLogger(__name__)
 
@@ -295,6 +296,8 @@ class QAEngine:
             return "completeness", None
         if _REG_MENTION.search(t):
             return "rule", None
+        if document_first and (DocumentQA.phrase_of(question) or DocumentQA.wants_whole_text(question)):
+            return "document", None  # «где на документе «фраза»», «выведи весь текст»: ищем сам текст, а не значение подходящего поля
         has_wh = any(w in _WH for w in tokenize(question)) or bool(_ASK_VERB.search(t))
         target = None if re.search(r"может быть|могут быть|должен быть|должна быть|должны быть|можно быть", t) else self._fact_target(question, dt, units)
         if document_first:

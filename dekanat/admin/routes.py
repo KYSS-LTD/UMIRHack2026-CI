@@ -45,6 +45,12 @@ class TicketPatch(BaseModel):
     reply: Optional[str] = Field(default=None, max_length=2000)  # ответ студенту: виден ему на странице статуса
 
 
+class TicketBulk(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=200)
+    status: str = Field(max_length=32)
+    reply: Optional[str] = Field(default=None, max_length=2000)  # один ответ студентам всех выбранных обращений
+
+
 class KbPatch(BaseModel):
     name: Optional[str] = Field(default=None, max_length=200)
     active: Optional[bool] = None
@@ -325,7 +331,7 @@ def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_by
             if d.get("note"):
                 parts.append("изменена заметка")
             if parts:
-                out.append({"at": e["ts"], "actor": e["actor"], "text": ", ".join(parts)})
+                out.append({"at": e["ts"], "actor": e["actor"], "text": ", ".join(parts) + (" (вместе с другими обращениями)" if d.get("bulk") else "")})
         out.append({"at": row["created_at"], "actor": "student", "text": "обращение отправлено студентом"})
         return out
 
@@ -351,6 +357,20 @@ def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_by
             raise HTTPException(404, "Обращение не найдено")
         storage.audit.log(who["username"], "ticket.update", "ticket", str(ticket_id), {"status": body.status, "note": bool(body.note), "reply": bool(body.reply)})
         return storage.tickets.get(ticket_id)
+
+    @router.post("/tickets/bulk")
+    def bulk_tickets(body: TicketBulk, who: dict = admin):
+        """Один статус (и, если нужно, один ответ студентам) сразу для нескольких обращений. В журнале и истории — запись по каждому."""
+        if body.status not in TICKET_STATUSES:
+            raise HTTPException(400, f"status: одно из {list(TICKET_STATUSES)}")
+        updated, missing = [], []
+        for ticket_id in dict.fromkeys(body.ids):  # повторы в запросе не в счёт
+            if storage.tickets.update(ticket_id, body.status, None, body.reply):
+                storage.audit.log(who["username"], "ticket.update", "ticket", str(ticket_id), {"status": body.status, "note": False, "reply": bool(body.reply), "bulk": True})
+                updated.append(ticket_id)
+            else:
+                missing.append(ticket_id)
+        return {"updated": updated, "missing": missing, "status": body.status}
 
     @router.get("/tickets/{ticket_id}/attachment")
     def ticket_attachment(ticket_id: int, who: dict = admin):

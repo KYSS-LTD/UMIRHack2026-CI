@@ -353,7 +353,7 @@ label small { color: var(--ink-3); font-weight: 400; }
 .filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 12px; }
 @container (max-width: 560px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* обращения — журнал входящих: номер, тема, когда, статус; выбранная строка — прямая полоса слева, без скруглённых плашек */
-.ticket { grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 0 12px; padding: 12px 10px 12px 12px; border-radius: 0; cursor: pointer; transition: background 140ms; }
+.ticket { grid-template-columns: 18px 46px minmax(0, 1fr) auto; align-items: center; gap: 0 12px; padding: 12px 10px 12px 12px; border-radius: 0; cursor: pointer; transition: background 140ms; }
 .ticket:hover { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
 .ticket.on { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--stamp); }
 .t-no { color: var(--ink-3); font-family: var(--serif); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -362,8 +362,16 @@ label small { color: var(--ink-3); font-weight: 400; }
 .ticket h3 { font-size: 15.5px; font-weight: 600; line-height: 1.25; }
 .ticket .item-meta { margin-top: 3px; }
 .ticket.closed h3 { color: var(--ink-2); }
-@media (max-width: 720px) { .ticket { grid-template-columns: 46px minmax(0, 1fr) auto; } }
-@media (max-width: 440px) { .ticket { grid-template-columns: 46px minmax(0, 1fr); row-gap: 6px; } .ticket .status { grid-column: 2; justify-self: start; } }
+@media (max-width: 720px) { .ticket { grid-template-columns: 18px 46px minmax(0, 1fr) auto; } }
+@media (max-width: 440px) { .ticket { grid-template-columns: 18px 46px minmax(0, 1fr); row-gap: 6px; } .ticket .status { grid-column: 3; justify-self: start; } }
+/* выбор нескольких обращений */
+.t-pick, .pick-all input { width: 16px; height: 16px; margin: 0; accent-color: var(--stamp); cursor: pointer; }
+.ticket.picked { background: color-mix(in srgb, var(--stamp) 9%, transparent); }
+.ticket.picked.on { background: var(--surface-2); }
+.bulk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 8px 0 4px; padding: 8px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
+.pick-all { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.bulk-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.bulk-reply { flex: 1 1 100%; min-width: 0; }
 .seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; gap: 2px; padding: 3px; border-radius: 18px; background: var(--surface-3); }
 .seg button { flex: none; }
 .seg button { padding: 6px 12px; border: 0; background: none; box-shadow: none; color: var(--ink-2); font-size: 13px; }
