@@ -11,6 +11,8 @@ import type { DeskDoc, Highlight } from "./highlight";
 interface Props {
   /** адрес картинки: локальный предпросмотр или готовый снимок из ответа */
   src: string | null;
+  /** размеры страницы, к которой относится src, если картинка меньше неё (предпросмотр PDF): лист сразу ложится в нужный размер */
+  srcSize?: { w: number; h: number } | null;
   pages: PagePreview[] | null;
   fileName: string;
   pdf: boolean;
@@ -52,6 +54,9 @@ export function PaperViewer(p: Props) {
   const [page, setPage] = useState(0);
   const [size, setSize] = useState({ w: 640, h: 560 });
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
+  // лист «проявляется» один раз — когда на стол кладут документ. Смена картинки того же документа (предпросмотр -> страница из ответа)
+  // анимацию не повторяет, а картинка, пришедшая на место заглушки PDF, ложится без проявления: лист не мигает
+  const placeholderFor = useRef("");
   const [view, setView] = useState<View>({ s: 1, tx: 0, ty: 0 });
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -62,8 +67,8 @@ export function PaperViewer(p: Props) {
 
   const pageInfo = p.pages?.[Math.min(page, (p.pages?.length ?? 1) - 1)] ?? null;
   const src = pageInfo?.data_url ?? p.src;
-  const iw = pageInfo?.width ?? natural?.w ?? 1000;
-  const ih = pageInfo?.height ?? natural?.h ?? 1414;
+  const iw = pageInfo?.width ?? p.srcSize?.w ?? natural?.w ?? 1000;
+  const ih = pageInfo?.height ?? p.srcSize?.h ?? natural?.h ?? 1414;
   const fit = Math.min(size.w / iw, size.h / ih) * 0.94;
   const fitView = useCallback((): View => ({ s: fit, tx: (size.w - iw * fit) / 2, ty: (size.h - ih * fit) / 2 }), [fit, size.w, size.h, iw, ih]);
 
@@ -281,8 +286,9 @@ export function PaperViewer(p: Props) {
           <div className="canvas" style={{ width: iw, height: ih, transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.s})`, ["--inv" as string]: 1 / view.s }}>
             {src ? (
               <img
-                key={src}
+                key={p.fileName}
                 ref={imgRef}
+                className={placeholderFor.current === p.fileName ? "settled" : undefined}
                 style={enhance ? { filter: "contrast(1.55) brightness(1.06) grayscale(1)" } : undefined}
                 src={src}
                 alt=""
@@ -292,7 +298,7 @@ export function PaperViewer(p: Props) {
                 onLoad={(e) => !pageInfo && setNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
               />
             ) : (
-              <div className="pdf-sheet" aria-hidden="true">
+              <div className="pdf-sheet" aria-hidden="true" ref={() => void (placeholderFor.current = p.fileName)}>
                 <Icon name="doc" size={96} />
                 <strong>{p.pdf ? "PDF" : "Документ"}</strong>
                 <span>{p.fileName}</span>

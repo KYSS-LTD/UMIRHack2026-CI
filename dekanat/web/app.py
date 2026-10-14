@@ -16,6 +16,7 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFil
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from .. import __version__
 from ..admin import AdminAuth
@@ -26,8 +27,9 @@ from ..export import result_record
 from ..kb.documents import BASE_ID, KnowledgeBaseError
 from ..kb.manager import KnowledgeBaseManager
 from ..ocr.engine import OcrUnavailable
-from ..ocr.preprocess import UnsupportedFile
-from ..pipeline import Cancelled, Dekanat
+from ..document_processing.formats import check_format
+from ..ocr.preprocess import UnsupportedFile, load_pages
+from ..pipeline import Cancelled, Dekanat, page_preview
 from ..storage import Storage
 from ..storage.topics import classify_topic
 from .assistant import COOKIE_SID, SessionLocks, build_assistant_router, remember_document
@@ -272,6 +274,23 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         # стол: с документом — ответ по документу, по Положению — если оно упомянуто в вопросе
         job = jobs.submit(lambda progress: _payload(data, name, question, doc_type, progress, sid, document_first=True), describe_error)
         return {"id": job.id}
+
+    @app.post("/api/preview")
+    async def preview_first_page(file: UploadFile = File(...)):
+        """Первый лист файла для стола: у PDF нет «картинки», пока не прошла проверка, и без этого вместо документа показывалась бы заглушка.
+        Те же формат и размер, что у проверки; страница та же, в координатах которой потом придут рамки."""
+        data, _ = await _read_upload(file, "")
+        name = file.filename or ""
+
+        def work():
+            check_format(data, name, max_bytes)  # те же форматы, что у проверки: JPG, JPEG, PNG, PDF — по содержимому, а не по расширению
+            with ocr_slots:
+                return page_preview(load_pages(data, name, 1)[0])
+
+        try:
+            return await run_in_threadpool(work)
+        except UnsupportedFile as exc:
+            raise HTTPException(400, str(exc)) from exc
 
     @app.get("/api/jobs/{job_id}")
     def job_status(job_id: str):

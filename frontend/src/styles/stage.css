@@ -46,6 +46,7 @@
   .plane { position: absolute; inset: 0; transform-style: preserve-3d; transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform 380ms var(--ease-out, ease-out); }
   .canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
   .canvas img { width: 100%; height: 100%; pointer-events: none; background: var(--paper); box-shadow: var(--shadow-paper); animation: paper-in 700ms var(--ease) both; }
+  .canvas img.settled { animation: none; }
   @keyframes paper-in { from { opacity: 0; filter: blur(8px); } }
   .pdf-sheet { display: grid; place-content: center; justify-items: center; gap: 12px; width: 100%; height: 100%; background: var(--paper); color: #6a7590; box-shadow: var(--shadow-paper); font-size: 40px; }
   .pdf-sheet strong { font-family: var(--serif); font-size: 64px; color: var(--stamp); }

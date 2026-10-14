@@ -65,6 +65,15 @@ def _ocr_hint(msg: str) -> str:
     return _OCR_VARIANT_HINTS.get(variant.strip()) or _OCR_GEOMETRY_HINTS.get(geo.strip(), "")
 
 
+def page_preview(img: np.ndarray, page: int = 0, max_side: int = 1600) -> dict:
+    """Страница -> JPEG для показа на столе. width/height — размеры самой страницы (в её координатах считаются рамки), картинка может быть меньше."""
+    h, w = img.shape[:2]
+    s = min(1.0, max_side / max(h, w))
+    small = cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_AREA) if s < 1 else img
+    ok, buf = cv2.imencode(".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, 82])
+    return {"page": page, "width": w, "height": h, "data_url": "data:image/jpeg;base64," + base64.b64encode(buf.tobytes()).decode()}
+
+
 @dataclass
 class AnalysisResult:
     doc_type: Optional[DocTypeSpec]
@@ -116,12 +125,7 @@ class AnalysisResult:
         return out
 
     def _preview(self, i: int, max_side: int = 1600) -> dict:
-        img = self.original_pages[i]
-        h, w = img.shape[:2]
-        s = min(1.0, max_side / max(h, w))
-        small = cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_AREA) if s < 1 else img
-        ok, buf = cv2.imencode(".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, 82])
-        return {"page": i, "width": w, "height": h, "data_url": "data:image/jpeg;base64," + base64.b64encode(buf.tobytes()).decode()}
+        return page_preview(self.original_pages[i], i, max_side)
 
 
 class Dekanat:

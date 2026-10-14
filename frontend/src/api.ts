@@ -1,4 +1,5 @@
 import type {
+  PagePreview,
   AnalysisResult,
   AssistantState,
   DocTypeSummary,
@@ -67,6 +68,12 @@ export const api = {
     return request<{ id: string }>("/api/jobs", { method: "POST", body: form, signal });
   },
   job: (id: string, signal?: AbortSignal) => request<JobSnapshot>(`/api/jobs/${id}`, { signal }),
+  /** Первый лист файла (для PDF — настоящая страница вместо заглушки, пока идёт проверка). */
+  async previewPage(file: Blob, fileName: string, signal?: AbortSignal): Promise<PagePreview> {
+    const form = new FormData();
+    form.append("file", file, fileName || (file as File).name || "document");
+    return request<PagePreview>("/api/preview", { method: "POST", body: form, signal });
+  },
   cancelJob: (id: string) => request<{ ok: boolean }>(`/api/jobs/${id}`, { method: "DELETE" }).catch(() => ({ ok: false })),
 
   regulation: () => request<RegulationInfo>("/api/regulation"),

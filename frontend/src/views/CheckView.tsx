@@ -12,6 +12,7 @@ import { cardOwners, type RunInput, type Turn, useDesk } from "../hooks/useDesk"
 import { useFetch } from "../hooks/useFetch";
 import { useHistory } from "../hooks/useHistory";
 import { useObjectUrl } from "../hooks/useObjectUrl";
+import { usePagePreview } from "../hooks/usePagePreview";
 import { resetActivity, setActivity } from "../lib/activity";
 import { useBus } from "../lib/bus";
 import { isQuizState, mergeCorrection, optionText } from "../lib/dialog";
@@ -363,6 +364,9 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
   const subjectName = composerFileIsNew ? (file?.name ?? "") : (stageTurn?.fileName ?? "");
   const subjectResult = composerFileIsNew ? null : (stageTurn?.phase === "done" ? stageTurn.result : null);
   const subjectUrl = useObjectUrl(subjectFile, subjectName);
+  const pdfPreview = usePagePreview(subjectFile, subjectName);
+  // пока идёт повторная проверка того же файла, на столе остаётся страница из прошлого результата, а не заглушка (рамки при этом не показываются)
+  const lastPages = useMemo(() => (subjectFile ? ([...turns].reverse().find((t) => t.file === subjectFile && t.phase === "done" && t.result?.images?.length)?.result?.images ?? null) : null), [turns, subjectFile]);
   const hasSubject = !!subjectFile || !!subjectResult;
   const scanning = !composerFileIsNew && stageTurn?.phase === "running";
   const progress = stageTurn?.progress?.fraction ?? 0;
@@ -487,8 +491,9 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
       <section className={`desk-stage ${hasSubject ? "has-subject" : "is-empty"}`} ref={stageRef} aria-label="Стол с документом">
         {hasSubject ? (
           <PaperViewer
-            src={subjectUrl}
-            pages={subjectResult?.images?.length ? subjectResult.images : null}
+            src={subjectUrl ?? pdfPreview?.data_url ?? null}
+            srcSize={!subjectUrl && pdfPreview ? { w: pdfPreview.width, h: pdfPreview.height } : null}
+            pages={subjectResult?.images?.length ? subjectResult.images : scanning ? lastPages : null}
             fileName={subjectName}
             pdf={!!subjectFile && isPdf({ name: subjectName, type: subjectFile.type })}
             scanning={!!scanning}
