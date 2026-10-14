@@ -13,7 +13,7 @@
     transition: height 380ms var(--ease), border-color 400ms var(--ease), box-shadow 400ms var(--ease);
   }
   .nav[data-compact="true"] .island { height: 52px; box-shadow: inset 0 1px 0 light-dark(rgb(255 255 255 / .8), rgb(255 255 255 / .07)), var(--shadow-2); }
-  .nav[data-busy="true"] .island { border-color: color-mix(in srgb, var(--lamp) 50%, var(--line)); box-shadow: inset 0 1px 0 light-dark(rgb(255 255 255 / .8), rgb(255 255 255 / .07)), 0 0 0 4px var(--lamp-soft), var(--shadow-3); }
+  .nav[data-busy="true"] .island { border-color: color-mix(in srgb, var(--lamp) 50%, var(--line)); }
   @keyframes island-in { from { opacity: 0; transform: translateY(-30px) scale(.95); } }
 
   /* свет и граница следуют за курсором */
@@ -56,35 +56,19 @@
   .brand-sub.busy span { overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
   .brand-sub.busy b { color: var(--lamp); font-weight: 800; }
 
-  /* ---------- вкладки ---------- */
-  .tabs { position: relative; display: flex; gap: 2px; margin: 0 auto; padding: 4px; border-radius: 17px; background: color-mix(in srgb, var(--ink) 6%, transparent); box-shadow: inset 0 1px 2px light-dark(rgb(20 33 58 / .09), rgb(0 0 0 / .4)); }
-  .tabs a { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 8px; padding: 8px 15px; border-radius: 13px; color: var(--ink-2); text-decoration: none; font-weight: 650; font-size: var(--fs-sm); white-space: nowrap; transition: color 260ms var(--ease), transform 460ms var(--spring); animation: tab-in 700ms var(--spring) both; animation-delay: calc(300ms + var(--i, 0) * 80ms); }
-  @keyframes tab-in { from { opacity: 0; transform: translateY(-12px) scale(.9); } }
-  .tabs a:hover { color: var(--ink); transform: translateY(-1px); }
-  .tabs a[aria-current="page"] { color: var(--btn-ink); }
-  .tab-ind { position: absolute; z-index: 0; left: 0; top: 4px; bottom: 4px; border-radius: 13px; background: linear-gradient(180deg, color-mix(in srgb, var(--btn) 90%, #fff), var(--btn)); box-shadow: 0 10px 20px -10px color-mix(in srgb, var(--btn) 75%, transparent), inset 0 1px 0 rgb(255 255 255 / .22); transition: transform 460ms var(--glide), width 460ms var(--glide), opacity 260ms; }
-  .tab-ind::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 16px; height: 3px; translate: -50% 0; border-radius: 3px; background: var(--lamp); box-shadow: 0 0 10px 1px var(--lamp); }
+  /* ---------- переключатель разделов: плоский, как на странице сотрудников ---------- */
+  .switch { display: flex; gap: 2px; margin-left: auto; padding: 4px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--ink) 6%, transparent); }
+  .switch a { padding: 7px 14px; border-radius: var(--r-pill); color: var(--ink-2); font-size: var(--fs-sm); font-weight: 600; text-decoration: none; white-space: nowrap; transition: color 200ms var(--ease), background 200ms var(--ease), box-shadow 200ms var(--ease); }
+  .switch a:hover { color: var(--ink); }
+  .switch a[aria-current="page"] { background: var(--btn); color: var(--btn-ink); box-shadow: var(--shadow-1); }
 
-  /* ---------- переключатель для сотрудника: тот же, что на странице сотрудников ---------- */
-  .staff-switch { display: flex; gap: 2px; padding: 4px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--ink) 6%, transparent); box-shadow: inset 0 1px 2px light-dark(rgb(20 33 58 / .09), rgb(0 0 0 / .4)); animation: tab-in 600ms var(--spring) both; }
-  .staff-switch a { padding: 6px 13px; border-radius: var(--r-pill); color: var(--ink-2); font-size: var(--fs-sm); font-weight: 650; text-decoration: none; white-space: nowrap; transition: color var(--t-fast), background var(--t-fast); }
-  .staff-switch a:hover { color: var(--ink); }
-  .staff-switch a[aria-current="page"] { background: var(--btn); color: var(--btn-ink); box-shadow: var(--shadow-1); }
-  @media (max-width: 900px) { .staff-switch a:not([aria-current]) { padding: 6px 10px; } .staff-switch a[aria-current] { display: none; } }
-
-  /* ---------- правая часть: поиск и одно меню ---------- */
+  /* ---------- правая часть: поиск и одно меню — круглые кнопки, как кнопка темы на странице сотрудников ---------- */
   .tools { display: flex; align-items: center; gap: 8px; flex: none; }
-  .search-pill { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 7px 0 13px; border-radius: 14px; background: color-mix(in srgb, var(--ink) 5%, transparent); border: 1px solid var(--line); color: var(--ink-3); font-size: var(--fs-sm); font-weight: 600; transition: border-color 200ms, background 200ms, color 200ms, transform 460ms var(--spring), box-shadow 300ms; }
-  .search-pill:hover { color: var(--ink); border-color: var(--line-strong); background: var(--surface); transform: translateY(-1px); box-shadow: var(--shadow-1); }
-  .search-label { min-width: 60px; text-align: left; }
-  .search-pill kbd { flex: none; }
-
   .nav-menu { position: relative; }
-  .menu-btn { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 14px; border: 1px solid var(--line); background: color-mix(in srgb, var(--ink) 5%, transparent); color: var(--ink-2); transition: border-color 200ms, background 200ms, color 200ms, transform 460ms var(--spring); }
-  .menu-btn:hover, .menu-btn[aria-expanded="true"] { border-color: var(--line-strong); background: var(--surface); color: var(--ink); }
-  .menu-btn:hover { transform: translateY(-1px); }
+  .nav .round-btn { width: 38px; height: 38px; }
+  .nav .round-btn:hover:not(:disabled), .nav .round-btn[aria-expanded="true"] { transform: none; background: var(--surface-3); color: var(--ink); }
   .menu-lines { display: grid; gap: 3.5px; width: 16px; }
-  .menu-lines i { display: block; height: 1.8px; border-radius: 2px; background: currentColor; transition: transform 420ms var(--spring), opacity 200ms, width 300ms var(--ease); }
+  .menu-lines i { display: block; height: 1.8px; border-radius: 2px; background: currentColor; transition: transform 320ms var(--glide), opacity 200ms, width 260ms var(--ease); }
   .menu-lines i:nth-child(2) { width: 65%; justify-self: end; }
   .menu-btn[aria-expanded="true"] .menu-lines i:nth-child(1) { transform: translateY(5.3px) rotate(45deg); }
   .menu-btn[aria-expanded="true"] .menu-lines i:nth-child(2) { opacity: 0; width: 0; }
@@ -114,31 +98,21 @@
   @keyframes icon-pop { from { transform: rotate(-80deg) scale(.3); } }
   .ts-thumb { position: absolute; z-index: 0; left: 4px; top: 4px; width: calc((100% - 8px) / 3); height: 34px; border-radius: 11px; background: var(--surface); box-shadow: var(--shadow-1), 0 0 0 1px var(--line); transform: translateX(calc(var(--i, 0) * 100%)); transition: transform 600ms var(--spring); }
 
-  /* ход проверки прямо в панели */
-  .nav-progress { position: absolute; left: 24px; right: 24px; bottom: -1px; height: 3px; border-radius: 3px; overflow: hidden; opacity: 0; pointer-events: none; transition: opacity 300ms; }
+  /* ход проверки прямо в панели: тонкая сплошная линия */
+  .nav-progress { position: absolute; left: 24px; right: 24px; bottom: -1px; height: 2px; border-radius: 2px; overflow: hidden; opacity: 0; pointer-events: none; transition: opacity 300ms; }
   .nav-progress[data-on="true"] { opacity: 1; }
-  .nav-progress i { display: block; height: 100%; transform-origin: left; transform: scaleX(var(--p, 0)); background: linear-gradient(90deg, var(--lamp), var(--stamp), var(--lamp)); background-size: 200% 100%; box-shadow: 0 0 12px var(--lamp); animation: shimmer 1.6s linear infinite; transition: transform 700ms var(--ease); }
-  .nav-done { position: absolute; inset: -1px; border: 2px solid var(--ok); border-radius: inherit; pointer-events: none; opacity: 0; animation: done-flash 1200ms var(--ease) both; }
-  @keyframes done-flash { 0% { opacity: .9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.025, 1.4); } }
+  .nav-progress i { display: block; height: 100%; transform-origin: left; transform: scaleX(var(--p, 0)); background: var(--lamp); transition: transform 700ms var(--ease); }
 
   /* ---------- адаптивность ---------- */
   @media (max-width: 1100px) {
-    .search-pill { width: 40px; padding: 0; justify-content: center; }
-    .search-label, .search-pill kbd { display: none; }
     .brand-sub.busy span { max-width: 90px; }
-  }
-  @media (max-width: 900px) {
-    .tabs a:not([aria-current="page"]) .tab-label { display: none; }
-    .tabs a { padding: 8px 13px; }
   }
   @media (max-width: 720px) {
     .island { gap: 8px; height: 56px; padding: 0 8px; }
     .nav[data-compact="true"] .island { height: 50px; }
     .brand-text { display: none; }
     .brand { padding: 0 2px; }
+    .switch a { padding: 7px 12px; }
   }
-  @media (max-width: 440px) {
-    .tabs a .tab-label { display: none !important; }
-    .tabs a { padding: 9px 12px; }
-  }
+  @media (max-width: 560px) { .switch .to-staff { display: none; } } /* на телефоне вход для сотрудников — в меню */
 }

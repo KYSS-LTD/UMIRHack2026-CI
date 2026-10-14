@@ -8,7 +8,7 @@
   .tray.is-over .tray-border rect { stroke: var(--lamp); stroke-dasharray: none; stroke-width: 3; animation: none; }
   @keyframes march { to { stroke-dashoffset: -40; } }
 
-  .sheets { position: relative; width: 190px; height: 132px; animation: bob 5.2s ease-in-out infinite; }
+  .sheets { position: relative; width: 190px; height: 132px; }
   .sheet { position: absolute; inset: 0; border-radius: 10px; background: var(--paper); box-shadow: var(--shadow-paper); transition: transform 640ms var(--spring); }
   .s1 { transform: rotate(-9deg) translate(-18px, 4px); background: #f2ecdb; }
   .s2 { transform: rotate(7deg) translate(18px, 2px); background: #f7f1e1; }
@@ -39,8 +39,7 @@
   .viewer-top > * { pointer-events: auto; }
   .file-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
   .hl-chip { background: color-mix(in srgb, var(--lamp) 22%, var(--glass)); border-color: color-mix(in srgb, var(--lamp) 55%, var(--line)); animation: chip-in 420ms var(--spring) both; cursor: pointer; }
-  .hl-chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--lamp); box-shadow: 0 0 0 0 var(--lamp); animation: ping-lamp 1.8s ease-out infinite; }
-  @keyframes ping-lamp { 70%, 100% { box-shadow: 0 0 0 8px transparent; } }
+  .hl-chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--lamp); }
 
   .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; cursor: grab; touch-action: none; user-select: none; perspective: 1500px; outline-offset: -3px; }
   .stage.grabbing { cursor: grabbing; }

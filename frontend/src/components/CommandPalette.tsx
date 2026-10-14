@@ -54,7 +54,7 @@ export function CommandPalette({ open, onClose, samples, onNavigate, onTheme }: 
       { id: "forget", title: "Удалить мои данные", group: "Действия", icon: "trash", keywords: "приватность удалить анкета документ сессия", run: act(() => (onNavigate("check"), setTimeout(() => emit("forget"), 80))) },
       { id: "theme", title: "Сменить тему оформления", group: "Действия", icon: "sun", keywords: "светлая тёмная ночь день", run: act(onTheme) },
       { id: "help", title: "Горячие клавиши", group: "Действия", icon: "keyboard", keywords: "помощь подсказка", run: act(() => emit("help")) },
-      ...samples.map<Command>((s) => ({ id: `sample-${s.file}`, title: s.title, hint: s.question, group: "Примеры на столе", icon: "sparkle", keywords: "пример образец", run: act(() => (onNavigate("check"), setTimeout(() => emit("sample", s), 80))) })),
+      ...samples.map<Command>((s) => ({ id: `sample-${s.file}`, title: s.title, hint: s.question, group: "Примеры на столе", icon: "doc", keywords: "пример образец", run: act(() => (onNavigate("check"), setTimeout(() => emit("sample", s), 80))) })),
     ];
   }, [samples, onNavigate, onClose, onTheme]);
 

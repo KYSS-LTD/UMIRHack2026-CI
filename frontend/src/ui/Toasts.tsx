@@ -16,7 +16,7 @@ interface ToastApi {
 const Ctx = createContext<ToastApi>({ show: () => {} });
 export const useToast = () => useContext(Ctx);
 
-const ICON = { info: "sparkle", ok: "check", error: "alert" } as const;
+const ICON = { info: "alert", ok: "check", error: "alert" } as const;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Toast[]>([]);

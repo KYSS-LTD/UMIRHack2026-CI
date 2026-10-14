@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useNavScroll } from "../hooks/useNavScroll";
 import type { Theme } from "../hooks/useTheme";
 import { useActivity } from "../lib/activity";
@@ -9,9 +9,9 @@ import { Logo } from "../ui/Logo";
 
 export type Route = "check" | "rules";
 
-const TABS: { id: Route; title: string; icon: IconName }[] = [
-  { id: "check", title: "Стол", icon: "doc" },
-  { id: "rules", title: "Положение", icon: "book" },
+const TABS: { id: Route; title: string }[] = [
+  { id: "check", title: "Стол" },
+  { id: "rules", title: "Положение" },
 ];
 
 const THEMES: { id: Theme; label: string; short: string; icon: IconName }[] = [
@@ -27,7 +27,7 @@ interface Props {
   onThemeSet: (t: Theme) => void;
   onPalette: () => void;
   onHelp: () => void;
-  /** сотрудник вошёл: переключатель «Стол декана | Сотрудникам», как на странице сотрудников */
+  /** сотрудник вошёл: в переключателе появляется «Сотрудникам» (как «Стол декана | Сотрудникам» на странице сотрудников) */
   staff?: boolean;
 }
 
@@ -65,7 +65,7 @@ function Menu({ theme, onThemeSet, onHelp, onForget }: { theme: Theme; onThemeSe
 
   return (
     <div className="nav-menu" ref={root}>
-      <button type="button" className="menu-btn" aria-expanded={open} aria-controls={panelId} aria-label="Меню" title="Меню" onClick={() => setOpen((o) => !o)}>
+      <button type="button" className="round-btn menu-btn" aria-expanded={open} aria-controls={panelId} aria-label="Меню" title="Меню" onClick={() => setOpen((o) => !o)}>
         <span className="menu-lines" aria-hidden="true">
           <i />
           <i />
@@ -102,21 +102,6 @@ export function NavBar({ route, onRoute, theme, onThemeSet, onPalette, onHelp, s
   const { hidden, compact } = useNavScroll();
   const activity = useActivity();
   const island = useRef<HTMLDivElement>(null);
-  const tabs = useRef<Partial<Record<Route, HTMLAnchorElement | null>>>({});
-  const [ind, setInd] = useState({ x: 0, w: 0, ready: false });
-
-  // «таблетка» под активной вкладкой плавно переезжает на новое место
-  useLayoutEffect(() => {
-    const measure = () => {
-      const el = tabs.current[route];
-      if (el) setInd({ x: el.offsetLeft, w: el.offsetWidth, ready: true });
-    };
-    measure();
-    window.addEventListener("resize", measure);
-    const t = setTimeout(measure, 300); // шрифты могли поменять ширину
-    return () => (window.removeEventListener("resize", measure), clearTimeout(t));
-  }, [route]);
-
   // удаление данных подтверждает стол: переходим на него и просим показать подтверждение
   const forget = () => {
     location.hash = "#/check";
@@ -153,29 +138,22 @@ export function NavBar({ route, onRoute, theme, onThemeSet, onPalette, onHelp, s
           </span>
         </a>
 
-        <nav className="tabs" aria-label="Разделы">
-          <span className="tab-ind" style={{ transform: `translateX(${ind.x}px)`, width: ind.w, opacity: ind.ready ? 1 : 0 }} aria-hidden="true" />
-          {TABS.map((t, i) => (
-            <a key={t.id} ref={(el) => void (tabs.current[t.id] = el)} href={`#/${t.id}`} aria-current={route === t.id ? "page" : undefined} onClick={() => onRoute(t.id)} style={{ ["--i" as string]: i }} title={t.title}>
-              <Icon name={t.icon} size={16} />
-              <span className="tab-label">{t.title}</span>
+        <nav className="switch" aria-label="Разделы">
+          {TABS.map((t) => (
+            <a key={t.id} href={`#/${t.id}`} aria-current={route === t.id ? "page" : undefined} onClick={() => onRoute(t.id)}>
+              {t.title}
             </a>
           ))}
+          {staff && (
+            <a className="to-staff" href="/admin">
+              Сотрудникам
+            </a>
+          )}
         </nav>
 
         <div className="tools">
-          {staff && (
-            <nav className="staff-switch" aria-label="Стол или страница сотрудников">
-              <a href="#/check" aria-current="page" onClick={() => onRoute("check")}>
-                Стол декана
-              </a>
-              <a href="/admin">Сотрудникам</a>
-            </nav>
-          )}
-          <button type="button" className="search-pill" onClick={onPalette} aria-label="Поиск и команды (Ctrl+K)">
+          <button type="button" className="round-btn" onClick={onPalette} aria-label="Поиск и команды (Ctrl+K)" title="Поиск и команды (Ctrl+K)">
             <Icon name="search" size={16} />
-            <span className="search-label">Поиск</span>
-            <kbd>Ctrl K</kbd>
           </button>
           <Menu theme={theme} onThemeSet={onThemeSet} onHelp={onHelp} onForget={forget} />
         </div>
@@ -183,7 +161,6 @@ export function NavBar({ route, onRoute, theme, onThemeSet, onPalette, onHelp, s
         <div className="nav-progress" data-on={activity.busy} aria-hidden="true">
           <i style={{ ["--p" as string]: activity.fraction }} />
         </div>
-        {activity.finishedAt > 0 && <span className="nav-done" key={activity.finishedAt} aria-hidden="true" />}
       </div>
     </header>
   );

@@ -341,7 +341,7 @@ export function PaperViewer(p: Props) {
 
       {p.cta && (
         <button type="button" className="viewer-cta" onClick={p.cta.onClick} disabled={p.busy}>
-          <Icon name="sparkle" size={16} /> {p.cta.label}
+          <Icon name="arrowRight" size={16} /> {p.cta.label}
         </button>
       )}
 

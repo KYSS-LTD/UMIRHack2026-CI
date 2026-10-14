@@ -107,3 +107,21 @@ describe("Logo", () => {
     expect(container.querySelectorAll("rect")).toHaveLength(0);
   });
 });
+
+describe("NavBar in the staff-page style", () => {
+  it("has one flat switch; staff get 'Сотрудникам' in it, visitors do not", () => {
+    const { rerender } = render(<NavBar {...props} />);
+    const nav = screen.getByRole("navigation", { name: "Разделы" });
+    expect(within(nav).getAllByRole("link").map((a) => a.textContent)).toEqual(["Стол", "Положение"]);
+    rerender(<NavBar {...props} staff />);
+    expect(within(screen.getByRole("navigation", { name: "Разделы" })).getByRole("link", { name: "Сотрудникам" })).toHaveAttribute("href", "/admin");
+    expect(document.querySelectorAll(".staff-switch, .tab-ind, .search-pill")).toHaveLength(0);
+  });
+
+  it("search and menu are round icon buttons without the wide search pill", () => {
+    render(<NavBar {...props} />);
+    expect(screen.getByRole("button", { name: /Поиск и команды/ })).toHaveClass("round-btn");
+    expect(screen.getByRole("button", { name: /^Меню/ })).toHaveClass("round-btn");
+    expect(screen.queryByText("Ctrl K")).not.toBeInTheDocument();
+  });
+});

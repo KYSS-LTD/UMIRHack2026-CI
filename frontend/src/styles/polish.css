@@ -19,10 +19,9 @@
   .another:hover:not(:disabled) { transform: translateY(-2px); background: color-mix(in srgb, var(--lamp) 28%, transparent); }
   .another:disabled { opacity: .5; cursor: not-allowed; }
 
-  .viewer-cta { position: absolute; z-index: 6; bottom: 74px; display: inline-flex; align-items: center; gap: 8px; padding: 11px 22px; border-radius: var(--r-pill); background: var(--btn); color: var(--btn-ink); font-weight: 750; white-space: nowrap; box-shadow: var(--shadow-3); animation: cta-in 600ms var(--spring) both, cta-pulse 2.4s 1s ease-in-out infinite; }
+  .viewer-cta { position: absolute; z-index: 6; bottom: 74px; display: inline-flex; align-items: center; gap: 8px; padding: 11px 22px; border-radius: var(--r-pill); background: var(--btn); color: var(--btn-ink); font-weight: 750; white-space: nowrap; box-shadow: var(--shadow-3); animation: cta-in 600ms var(--spring) both; }
   .viewer-cta:disabled { opacity: .5; animation: none; }
   @keyframes cta-in { from { opacity: 0; transform: translateY(16px) scale(.9); } }
-  @keyframes cta-pulse { 50% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--lamp) 26%, transparent), var(--shadow-3); } }
 
   @media (max-width: 1099px) { .desk-stage:not(.is-empty) { height: min(54dvh, 480px); } }
   @media (max-width: 520px) {

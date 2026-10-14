@@ -75,19 +75,16 @@ code { font-family: var(--mono); background: var(--surface-3); padding: 1px 6px;
 .row > .grow { flex: 1 1 180px; }
 .icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 
-/* ====================================================================== фон: дрейфующие пятна света и зерно бумаги */
+/* ====================================================================== фон: спокойное неподвижное пятно света и зерно бумаги */
 .ambient { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: var(--bg); }
 .ambient::after {
   content: ""; position: absolute; inset: 0; opacity: .5; mix-blend-mode: soft-light;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.45 0 0 0 0 0.4 0 0 0 .35 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .9; will-change: transform; }
-.b1 { width: 52vw; height: 52vw; left: -14vw; top: -22vw; background: light-dark(rgb(255 200 120 / .55), rgb(246 178 76 / .13)); animation: drift1 26s ease-in-out infinite alternate; }
-.b2 { width: 46vw; height: 46vw; right: -16vw; top: 12vh; background: light-dark(rgb(198 58 37 / .13), rgb(90 130 230 / .16)); animation: drift2 31s ease-in-out infinite alternate; }
-.b3 { width: 40vw; height: 40vw; left: 28vw; bottom: -24vw; background: light-dark(rgb(120 150 210 / .22), rgb(198 58 37 / .1)); animation: drift3 36s ease-in-out infinite alternate; }
-@keyframes drift1 { to { transform: translate(9vw, 7vh) scale(1.12); } }
-@keyframes drift2 { to { transform: translate(-8vw, 9vh) scale(.9); } }
-@keyframes drift3 { to { transform: translate(-6vw, -8vh) scale(1.15); } }
+.blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .6; }
+.b1 { width: 52vw; height: 52vw; left: -14vw; top: -22vw; background: light-dark(rgb(255 200 120 / .55), rgb(246 178 76 / .13)); }
+.b2 { width: 46vw; height: 46vw; right: -16vw; top: 12vh; background: light-dark(rgb(198 58 37 / .13), rgb(90 130 230 / .16)); display: none; }
+.b3 { width: 40vw; height: 40vw; left: 28vw; bottom: -24vw; background: light-dark(rgb(120 150 210 / .22), rgb(198 58 37 / .1)); display: none; }
 
 /* ====================================================================== верхняя панель — «остров» */
 header.top { position: sticky; top: 12px; z-index: 40; padding: 0 12px; margin-bottom: 22px; }

@@ -224,17 +224,36 @@ export function CheckView({ types, health, onOpenClause }: Props) {
     setActiveField(null);
   }, [desk]);
 
-  const forget = useCallback(async () => {
-    setForgetting(false);
-    try {
-      const res = await api.assistant.deleteData();
+  /**
+   * Одно действие для «Очистить чат» и «Удалить мои данные»: сервер забывает сессию (анкету, документ, готовые файлы), стол пустеет,
+   * чат начинается с нуля — с приветствием секретаря. Если сервер данные не удалил, ничего не сбрасываем: на экране не должно быть
+   * «пустого» чата при живых данных на сервере.
+   */
+  const wipe = useCallback(
+    async (sweep: boolean) => {
+      if (sweeping) return;
+      setForgetting(false);
+      setSweeping(true);
+      desk.cancel();
+      const wiped = api.assistant.deleteData().then(
+        (res) => ({ res, error: null as Error | null }),
+        (error: Error) => ({ res: null, error }),
+      );
+      if (sweep && turns.length) await new Promise((r) => setTimeout(r, 420)); // реплики «сметаются» с ленты
+      const { res, error } = await wiped;
+      setSweeping(false);
+      if (error) {
+        toast.show(`Не удалось очистить чат: ${error.message}`, "error");
+        return;
+      }
       reset();
-      toast.show(res.message, "ok");
-    } catch (e) {
-      toast.show((e as Error).message, "error");
-    }
-    await assistant.load();
-  }, [reset, toast, assistant]);
+      setAway(false);
+      toast.show(res?.message ?? "Чат очищен, данные сессии удалены.", "ok");
+      await assistant.load(); // новая пустая сессия
+      composer.current?.focusQuestion();
+    },
+    [sweeping, desk, turns.length, reset, toast, assistant],
+  );
 
   const offerToContinue = useCallback(
     (state: DialogState) =>
@@ -256,23 +275,8 @@ export function CheckView({ types, health, onOpenClause }: Props) {
     }
   }, [assistant.info, desk, offerToContinue]);
 
-  /**
-   * «Очистить чат»: реплики «сметаются» с ленты, стол пустеет. Данные на сервере не удаляются (для этого — «Удалить мои данные»);
-   * незаконченную анкету сразу предлагается продолжить, как после перезагрузки страницы.
-   */
-  const clearChat = useCallback(() => {
-    if (sweeping) return;
-    if (!turns.length) return reset();
-    setSweeping(true);
-    setTimeout(() => {
-      reset();
-      setSweeping(false);
-      setAway(false);
-      const state = assistant.dialog?.state;
-      if (state && isQuizState(state)) offerToContinue(state);
-      composer.current?.focusQuestion();
-    }, 420);
-  }, [sweeping, turns.length, reset, assistant.dialog?.state, offerToContinue]);
+  const clearChat = useCallback(() => void wipe(true), [wipe]);
+  const forget = useCallback(() => void wipe(false), [wipe]);
 
   useBus<SampleItem>("sample", (s) => void loadSample(s));
   useBus<string>("say", (text) => say(text));
@@ -512,10 +516,10 @@ export function CheckView({ types, health, onOpenClause }: Props) {
         <ConfirmDialog
           open={forgetting}
           title="Удалить мои данные?"
-          message="Будут удалены анкета, карточка проверенного документа и готовые файлы этой сессии. Обращения, уже переданные в деканат, остаются у деканата. Отменить удаление нельзя."
+          message="Чат начнётся с нуля. Будут удалены анкета, карточка проверенного документа и готовые файлы этой сессии. Обращения, уже переданные в деканат, остаются у деканата. Отменить удаление нельзя."
           confirmLabel="Удалить"
           danger
-          onConfirm={() => void forget()}
+          onConfirm={forget}
           onCancel={() => setForgetting(false)}
         />
         <ClauseDrawer refId={drawer?.ref ?? null} quote={drawer?.quote ?? ""} onClose={() => setDrawer(null)} onOpenRegulation={(ref) => (setDrawer(null), onOpenClause(ref))} />

@@ -72,7 +72,7 @@ export function TypePicker({ value, types, disabled, onChange }: Props) {
         aria-label={`Тип документа: ${current.title}`}
         onClick={() => setOpen((o) => !o)}
       >
-        <Icon name={value === AUTO_TYPE ? "sparkle" : "layers"} size={15} />
+        <Icon name={value === AUTO_TYPE ? "doc" : "layers"} size={15} />
         <span>{current.title}</span>
         <Icon name="chevronDown" size={14} className="chev" />
       </button>

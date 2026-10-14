@@ -131,8 +131,6 @@
   .verdict-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
   .verdict h2 { margin-top: 2px; font-size: var(--fs-xl); letter-spacing: -.02em; color: var(--tone); }
   .verdict-text { font-size: var(--fs-md); line-height: 1.55; color: var(--ink); }
-  .reveal .w { display: inline-block; opacity: 0; animation: word-in 520ms var(--ease) forwards; }
-  @keyframes word-in { from { opacity: 0; transform: translateY(7px); filter: blur(5px); } to { opacity: 1; transform: none; filter: none; } }
   .v-missing { display: grid; gap: 6px; padding: 0; list-style: none; }
   .v-missing li { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-radius: var(--r-md); background: color-mix(in srgb, var(--surface) 78%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 25%, var(--line)); animation: chip-in 500ms var(--spring) both; animation-delay: calc(900ms + var(--i) * 90ms); }
   .miss-x { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--warn); color: #fff; flex: none; }
@@ -256,8 +254,7 @@
   .quiz-ticks { display: flex; gap: 4px; }
   .quiz-ticks i { width: 16px; height: 4px; border-radius: 2px; background: var(--line-strong); animation: chip-in 400ms var(--spring) both; animation-delay: calc(var(--i) * 40ms); transition: background var(--t-slow) var(--ease); }
   .quiz-ticks i.done { background: var(--ok); }
-  .quiz-ticks i.now { background: var(--lamp); animation: chip-in 400ms var(--spring) both, tick-pulse 1.4s var(--ease) 600ms infinite; }
-  @keyframes tick-pulse { 50% { opacity: .4; } }
+  .quiz-ticks i.now { background: var(--lamp); animation: chip-in 400ms var(--spring) both; }
 
   .replies { display: flex; flex-wrap: wrap; gap: 6px; }
   .reply-chip { padding: 6px 14px; border-radius: var(--r-pill); border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font-size: var(--fs-sm); font-weight: 600; animation: chip-in 480ms var(--spring) both; animation-delay: calc(250ms + var(--i) * 60ms); transition: transform var(--t-base) var(--spring), border-color var(--t-fast), background var(--t-fast); }
