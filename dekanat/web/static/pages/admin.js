@@ -75,16 +75,23 @@ function showLogin(note) {
 }
 
 let toastTimer = 0;
-function toast(text) {
+/** Короткое сообщение внизу. undo — действие «Отменить»: кнопка живёт в сообщении несколько секунд дольше обычного. */
+function toast(text, undo) {
   let t = document.querySelector(".toast");
   if (!t) {
     t = el("div", "toast", null, { role: "status" });
     document.body.appendChild(t);
   }
   t.textContent = text;
+  t.classList.toggle("has-action", !!undo);
+  if (undo) {
+    const b = el("button", "toast-undo", "Отменить", { type: "button" });
+    b.addEventListener("click", () => { t.classList.remove("on"); clearTimeout(toastTimer); undo(); });
+    t.appendChild(b);
+  }
   t.classList.add("on");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove("on"), 2200);
+  toastTimer = setTimeout(() => t.classList.remove("on"), undo ? 7000 : 2200);
 }
 
 // ---------------------------------------------------------------- строительные блоки
@@ -206,6 +213,29 @@ function toggle(checked, label, onChange) {
   input.addEventListener("change", () => onChange(input.checked));
   return l;
 }
+
+/** Флажок в стиле кабинета: настоящий input (клавиатура, скринридер), нарисован рамкой и галочкой; ни метка, ни флажок не «проваливаются» в строку. */
+function tick(input) {
+  const label = el("label", "tick");
+  label.append(input, el("span", "tick-box", null, { "aria-hidden": "true" }));
+  label.addEventListener("click", (e) => e.stopPropagation());
+  return label;
+}
+
+/** Инициалы для кружка: «Иванов Иван Иванович» -> «ИИ»; без имени — знак номера. */
+function initials(name) {
+  const words = String(name || "").trim().split(" ").filter(Boolean);
+  return words.length ? (words[0][0] + (words[1] ? words[1][0] : "")).toUpperCase() : "№";
+}
+
+/** Цвет кружка зависит только от имени: один и тот же студент всегда одного цвета. */
+function tone(key) {
+  let h = 0;
+  for (const ch of String(key)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h % 6;
+}
+
+const foldText = (x) => String(x || "").toLowerCase().replace(/ё/g, "е");
 
 function empty(title, text) {
   const d = el("div", "empty");
@@ -643,12 +673,19 @@ async function viewTickets(panel) {
   from.value = ticketFilter.from;
   to.value = ticketFilter.to;
   const tally = el("div", "status-tally");
+  const searchInput = el("input", null, null, { type: "search", placeholder: "Найти по имени, номеру или теме", "aria-label": "Найти обращение по имени, номеру или теме", autocomplete: "off" });
+  const searchBox = el("label", "t-search");
+  searchBox.append(icon("search"), searchInput);
   const list = el("div", "items", null, { role: "listbox", "aria-label": "Обращения" });
   // выбор нескольких обращений: один статус (и, если нужно, один ответ) сразу для всех выбранных
   const picked = new Set();
+  const byId = new Map(); // последние загруженные обращения: поиск и отмена берут данные отсюда
+  let needle = "";
   const bulkBar = el("div", "bulk-bar hidden");
-  const bulkReply = el("input", "bulk-reply", null, { type: "text", maxlength: "2000", placeholder: "Один ответ студентам (необязательно)", "aria-label": "Ответ студентам выбранных обращений" });
-  left.append(filtersBox, tally, bulkBar, list);
+  const bulkReply = el("textarea", "bulk-reply", null, { rows: "2", maxlength: "2000", placeholder: "Один ответ всем выбранным студентам (необязательно)", "aria-label": "Ответ студентам выбранных обращений" });
+  const bulkReplyRow = el("div", "bulk-reply-row hidden");
+  bulkReplyRow.appendChild(bulkReply);
+  left.append(filtersBox, tally, searchBox, bulkBar, list);
 
   let meta = null;
   let firstLoad = true;
@@ -661,7 +698,10 @@ async function viewTickets(panel) {
   };
   const query = (extra = {}) => new URLSearchParams({ date_from: ticketFilter.from, date_to: ticketFilter.to, type: ticketFilter.type, status: ticketFilter.status, topic: ticketFilter.topic, limit: "50", ...extra });
   const rows = () => [...list.querySelectorAll(".ticket")];
-  const shownIds = () => rows().map((x) => Number(x.dataset.id));
+  const visibleRows = () => rows().filter((x) => !x.classList.contains("hidden"));
+  const visibleIds = () => visibleRows().map((x) => Number(x.dataset.id));
+  const filtersOn = () => !!(ticketFilter.from || ticketFilter.to || ticketFilter.type || ticketFilter.topic || ticketFilter.status);
+  const searchText = (t) => foldText([t.id, `№ ${t.id}`, `№${t.id}`, t.student, t.topic, TYPE_TITLES[t.type], t.request].filter(Boolean).join(" "));
   const syncPicks = () => {
     for (const x of rows()) {
       const on = picked.has(Number(x.dataset.id));
@@ -670,41 +710,133 @@ async function viewTickets(panel) {
     }
     drawBulk();
   };
+  /** Поиск работает по уже загруженным обращениям; скрытые поиском из выбора выпадают, чтобы массовое действие не задело невидимое. */
+  function applySearch() {
+    let shown = 0;
+    for (const x of rows()) {
+      const id = Number(x.dataset.id);
+      const hit = !needle || searchText(byId.get(id)).includes(needle);
+      x.classList.toggle("hidden", !hit);
+      if (hit) shown += 1;
+      else picked.delete(id);
+    }
+    const none = list.querySelector(".no-match");
+    if (none) none.classList.toggle("hidden", !(needle && !shown && rows().length));
+    syncPicks();
+  }
+  searchInput.addEventListener("input", () => { needle = foldText(searchInput.value.trim()); applySearch(); });
+  searchInput.addEventListener("keydown", (e) => { if (e.key === "Escape" && searchInput.value) { searchInput.value = ""; needle = ""; applySearch(); } });
+
+  function drawTally(per, all) {
+    clear(tally);
+    const group = el("div", "seg tally", null, { role: "group", "aria-label": "Статус" });
+    const add = (value, label, n) => {
+      const b = el("button", n ? null : "zero", null, { type: "button", "aria-pressed": String(value === ticketFilter.status) });
+      if (value) b.appendChild(el("i", `dot ${value}`, null, { "aria-hidden": "true" }));
+      b.append(document.createTextNode(label), el("em", "n", String(n)));
+      b.addEventListener("click", () => { ticketFilter.status = value; load(); });
+      group.appendChild(b);
+    };
+    add("", "Все", all);
+    for (const [x, c] of per) add(x, STATUS_PLURAL[x], c);
+    tally.appendChild(group);
+    // «Сбросить» появляется только когда что-то отфильтровано
+    if (filtersOn()) {
+      tally.appendChild(button("Сбросить фильтры", () => {
+        Object.assign(ticketFilter, { from: "", to: "", type: "", status: "", topic: "" });
+        from.value = to.value = type.value = topic.value = "";
+        load();
+      }, "link-btn"));
+    }
+  }
+
+  /** Полоса над списком: без выбора — тонкая строка «Выбрать все», с выбором — плавающая тёмная панель с действиями. */
   function drawBulk() {
-    const ids = shownIds();
+    const ids = visibleIds();
     clear(bulkBar);
     bulkBar.classList.toggle("hidden", !ids.length);
+    bulkBar.classList.toggle("active", picked.size > 0);
     if (!ids.length) return;
     const all = el("input", null, null, { type: "checkbox", "aria-label": "Выбрать все обращения в списке" });
     all.checked = ids.every((i) => picked.has(i));
     all.indeterminate = !all.checked && ids.some((i) => picked.has(i));
     all.addEventListener("change", () => { for (const i of ids) (all.checked ? picked.add(i) : picked.delete(i)); syncPicks(); });
-    const label = el("label", "pick-all");
-    label.append(all, document.createTextNode(picked.size ? `Выбрано: ${picked.size}` : "Выбрать все"));
-    bulkBar.appendChild(label);
-    if (!picked.size) return;
-    const actions = el("div", "bulk-actions");
-    for (const st of ["in_progress", "done", "rejected"]) actions.appendChild(button(STATUS_LABEL[st], () => applyBulk(st), "small"));
-    actions.appendChild(button("Снять выбор", () => { picked.clear(); syncPicks(); }, "link-btn"));
-    bulkBar.append(actions, bulkReply);
+    const head = el("div", "bulk-head");
+    head.append(tick(all), el("span", "bulk-count", picked.size ? `Выбрано: ${picked.size}` : "Выбрать все"));
+    if (!picked.size) {
+      head.appendChild(el("span", "bulk-total", `${ids.length} ${plural(ids.length, ["обращение", "обращения", "обращений"])}`));
+      bulkBar.appendChild(head);
+      return;
+    }
+    const actions = el("div", "bulk-actions", null, { role: "group", "aria-label": "Статус для выбранных" });
+    for (const st of ["in_progress", "done", "rejected"]) {
+      const b = el("button", "bulk-st", null, { type: "button" });
+      b.append(el("i", `dot ${st}`, null, { "aria-hidden": "true" }), document.createTextNode(STATUS_LABEL[st]));
+      b.addEventListener("click", () => applyBulk(st));
+      actions.appendChild(b);
+    }
+    const replyOpen = !bulkReplyRow.classList.contains("hidden");
+    const replyBtn = el("button", "bulk-aux", null, { type: "button", "aria-expanded": String(replyOpen), title: "Один ответ всем выбранным студентам" });
+    replyBtn.append(icon("doc"), document.createTextNode("Ответ"));
+    replyBtn.addEventListener("click", () => { bulkReplyRow.classList.toggle("hidden"); drawBulk(); if (!bulkReplyRow.classList.contains("hidden")) bulkReply.focus(); });
+    const drop = el("button", "bulk-aux icon-only", null, { type: "button", "aria-label": "Снять выбор", title: "Снять выбор" });
+    drop.appendChild(icon("x"));
+    drop.addEventListener("click", () => { picked.clear(); syncPicks(); });
+    head.append(actions, replyBtn, drop);
+    bulkBar.append(head, bulkReplyRow);
   }
+
+  const afterChange = async (id) => {
+    await load();
+    refreshCounts();
+    if (openTicketId && (id === undefined || id === openTicketId)) showTicket(openTicketId);
+  };
+
   async function applyBulk(status) {
-    const ids = [...picked].filter((i) => shownIds().includes(i)); // скрытое фильтром не трогаем
+    const ids = [...picked].filter((i) => visibleIds().includes(i)); // скрытое фильтром или поиском не трогаем
     if (!ids.length) return;
     const reply = bulkReply.value.trim();
-    const sure = status !== "rejected" && ids.length <= 5 && !reply
-      ? true
-      : window.confirm(`Поставить статус «${STATUS_TITLES[status]}» у обращений: ${ids.length}?` + (reply ? " Все студенты получат один и тот же ответ." : ""));
-    if (!sure) return;
+    if (status === "rejected" || ids.length > 5 || reply) {
+      const ok = await askConfirm({
+        title: `Поставить статус «${STATUS_TITLES[status]}»?`,
+        text: `Обращений: ${ids.length}.` + (reply ? " Все эти студенты получат один и тот же ответ." : ""),
+        ok: "Применить",
+        danger: status === "rejected",
+      });
+      if (!ok) return;
+    }
+    const before = ids.map((id) => [id, (byId.get(id) || {}).status]);
     const res = await guarded(() => api("POST", "/api/admin/tickets/bulk", { ids, status, ...(reply ? { reply } : {}) }));
     if (!res) return;
     picked.clear();
     bulkReply.value = "";
-    toast(res.missing.length ? `Обновлено: ${res.updated.length}, не найдено: ${res.missing.length}` : `Статус «${STATUS_TITLES[status]}»: ${res.updated.length} ${plural(res.updated.length, ["обращение", "обращения", "обращений"])}`);
-    await load();
-    refreshCounts();
-    if (openTicketId && res.updated.includes(openTicketId)) showTicket(openTicketId);
+    bulkReplyRow.classList.add("hidden");
+    const n = res.updated.length;
+    const text = res.missing.length ? `Обновлено: ${n}, не найдено: ${res.missing.length}` : `«${STATUS_LABEL[status]}»: ${n} ${plural(n, ["обращение", "обращения", "обращений"])}`;
+    // отмена возвращает прежние статусы; общий ответ студентам уже ушёл, поэтому после него отмены нет
+    const undo = reply ? undefined : async () => {
+      const groups = new Map();
+      for (const [id, st] of before) if (st && res.updated.includes(id)) groups.set(st, [...(groups.get(st) || []), id]);
+      for (const [st, group] of groups) await guarded(() => api("POST", "/api/admin/tickets/bulk", { ids: group, status: st }));
+      toast("Статусы возвращены");
+      await afterChange();
+    };
+    toast(text, undo);
+    await afterChange(undefined);
   }
+
+  /** Один щелчок «Обработано» в строке; «Отменить» в сообщении возвращает прежний статус. */
+  async function quickDone(t) {
+    const ok = await guarded(async () => { await api("PATCH", `/api/admin/tickets/${t.id}`, { status: "done" }); return true; });
+    if (!ok) return;
+    toast(`№ ${t.id}: обработано`, async () => {
+      await guarded(() => api("PATCH", `/api/admin/tickets/${t.id}`, { status: t.status }));
+      toast("Статус возвращён");
+      await afterChange(t.id);
+    });
+    await afterChange(t.id);
+  }
+
   const select = (it, id) => { openTicketId = id; for (const x of rows()) { x.classList.toggle("on", x === it); x.setAttribute("aria-selected", String(x === it)); } showTicket(id); };
 
   async function load() {
@@ -718,41 +850,54 @@ async function viewTickets(panel) {
     csvLink.href = "/api/admin/tickets/export.csv?" + query(); // выгрузка с теми же фильтрами, что в списке
     const per = meta.statuses.map((x) => [x, (res.counts || {})[x] || 0]); // счётчики приходят вместе со списком: один запрос вместо пяти
     const all = per.reduce((n, [, c]) => n + c, 0);
-    clear(tally).appendChild(seg([["", `Все · ${all}`], ...per.map(([x, c]) => [x, `${STATUS_PLURAL[x]} · ${c}`])], ticketFilter.status, (v) => { ticketFilter.status = v; load(); }, "Статус"));
-    // «Сбросить» появляется только когда что-то отфильтровано
-    if (ticketFilter.from || ticketFilter.to || ticketFilter.type || ticketFilter.topic || ticketFilter.status) {
-      tally.appendChild(button("Сбросить фильтры", () => {
-        Object.assign(ticketFilter, { from: "", to: "", type: "", status: "", topic: "" });
-        from.value = to.value = type.value = topic.value = "";
-        load();
-      }, "link-btn"));
-    }
+    drawTally(per, all);
     for (const id of [...picked]) if (!res.items.some((t) => t.id === id)) picked.delete(id); // выбор живёт только среди показанного
     clear(list);
-    if (!res.items.length) list.appendChild(empty("Обращений нет", ticketFilter.status || ticketFilter.from || ticketFilter.to || ticketFilter.type || ticketFilter.topic ? "По этим условиям ничего не нашлось — попробуйте убрать часть фильтров." : "Когда студент передаст обращение из анкеты, оно появится здесь."));
+    byId.clear();
+    for (const t of res.items) byId.set(t.id, t);
+    if (!res.items.length) list.appendChild(empty("Обращений нет", filtersOn() ? "По этим условиям ничего не нашлось — попробуйте убрать часть фильтров." : "Когда студент передаст обращение из анкеты, оно появится здесь."));
     res.items.forEach((t, i) => {
       const closed = t.status === "done" || t.status === "rejected";
-      const it = el("div", `item ticket${closed ? " closed" : ""}${t.id === openTicketId ? " on" : ""}${picked.has(t.id) ? " picked" : ""}`, null, { role: "option", tabindex: "0", "aria-selected": String(t.id === openTicketId), "data-id": String(t.id) });
-      const pick = el("input", "t-pick", null, { type: "checkbox", "aria-label": `Выбрать обращение № ${t.id}` });
-      pick.checked = picked.has(t.id);
-      for (const ev of ["click", "keydown"]) pick.addEventListener(ev, (e) => e.stopPropagation()); // пробел и щелчок по флажку не открывают обращение
-      pick.addEventListener("change", () => { (pick.checked ? picked.add(t.id) : picked.delete(t.id)); it.classList.toggle("picked", pick.checked); drawBulk(); });
+      const name = t.student || "";
+      const topicText = t.topic || TYPE_TITLES[t.type] || t.type;
+      const it = el("div", `item ticket${t.status === "new" ? " is-new" : ""}${closed ? " closed" : ""}${t.id === openTicketId ? " on" : ""}${picked.has(t.id) ? " picked" : ""}`, null, { role: "option", tabindex: "0", "aria-selected": String(t.id === openTicketId), "data-id": String(t.id) });
       it.style.animationDelay = `${Math.min(i * 35, 500)}ms`;
-      // журнал входящих: номер — тема — когда — статус; тип в заголовок идёт, только если темы нет (иначе «Перевод · Перевод из другого вуза»)
+      const pick = el("input", "t-pick", null, { type: "checkbox", "aria-label": `Выбрать обращение № ${t.id}${name ? `, ${name}` : ""}` });
+      pick.checked = picked.has(t.id);
+      pick.addEventListener("keydown", (e) => e.stopPropagation()); // пробел в флажке не открывает обращение
+      pick.addEventListener("change", () => { (pick.checked ? picked.add(t.id) : picked.delete(t.id)); it.classList.toggle("picked", pick.checked); drawBulk(); });
+      // журнал входящих: кто — с чем — номер и когда — статус; без имени (анкета без ФИО) заголовком идёт тема
       const main = el("div", "t-main");
-      main.appendChild(el("h3", null, t.topic || TYPE_TITLES[t.type] || t.type));
-      main.appendChild(el("p", "item-meta", [relTime(t.created_at), t.note ? "есть заметка" : ""].filter(Boolean).join(" · "), { title: fmtWhen(t.created_at) }));
-      it.append(pick, el("span", "t-no", `№ ${t.id}`), main, el("span", `status ${t.status}`, STATUS_TITLES[t.status] || t.status));
+      main.appendChild(el("h3", null, name || topicText));
+      const meta = el("p", "item-meta");
+      meta.appendChild(el("span", null, [name ? topicText : "", `№ ${t.id}`, relTime(t.created_at)].filter(Boolean).join(" · "), { title: fmtWhen(t.created_at) }));
+      if (t.reply) meta.appendChild(el("span", "t-flag ok", "ответ отправлен"));
+      if (t.note) meta.appendChild(el("span", "t-flag", "заметка"));
+      main.appendChild(meta);
+      const pill = el("span", `pill ${t.status}`);
+      pill.append(el("i", null, null, { "aria-hidden": "true" }), document.createTextNode(STATUS_TITLES[t.status] || t.status));
+      // справа статус; при наведении на его место встаёт «Обработано» — строка не меняет высоту
+      const side = el("div", `t-side${closed ? "" : " has-quick"}`);
+      side.appendChild(pill);
+      if (!closed) {
+        const quick = el("button", "t-quick", null, { type: "button", title: "Отметить обработанным", "aria-label": `Отметить обработанным: обращение № ${t.id}` });
+        quick.append(icon("check"), document.createTextNode("Обработано"));
+        quick.addEventListener("click", (e) => { e.stopPropagation(); quickDone(t); });
+        quick.addEventListener("keydown", (e) => e.stopPropagation());
+        side.appendChild(quick);
+      }
+      it.append(tick(pick), el("span", `t-avatar tone-${tone(name || t.id)}`, initials(name), { "aria-hidden": "true" }), main, side);
       it.addEventListener("click", () => select(it, t.id));
       it.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(it, t.id); return; }
         const step = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
-        const all2 = rows();
+        const all2 = visibleRows();
         const next = step && all2[all2.indexOf(it) + step];
         if (next) { e.preventDefault(); next.focus(); next.click(); }
       });
       list.appendChild(it);
     });
+    list.appendChild(el("div", "empty no-match hidden", "Ничего не нашлось — попробуйте другое имя или номер."));
     // зашли на вкладку — сразу показываем первое обращение (новое в приоритете): лишний клик не нужен
     if (firstLoad && !openTicketId && res.items.length) {
       firstLoad = false;
@@ -760,7 +905,7 @@ async function viewTickets(panel) {
       select(rows()[res.items.indexOf(target)], target.id);
     }
     firstLoad = false;
-    drawBulk();
+    applySearch();
   }
 
   async function showTicket(id) {

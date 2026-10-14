@@ -37,6 +37,7 @@ const ICONS = {
   layers: "M12 3l9 5-9 5-9-5zM3 13l9 5 9-5",
   logout: "M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11",
   key: "M15 7a4 4 0 1 1-3.9 5H3v3h3v2h3v-2h2.1A4 4 0 0 1 15 7zM16 10.5h.01",
+  search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4",
 };
 
 function icon(name, cls) {

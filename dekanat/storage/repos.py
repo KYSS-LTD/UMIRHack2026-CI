@@ -392,7 +392,15 @@ class TicketRepo:
         w, params = self._where(date_from, date_to, type_, status, topic)
         total = int(self.db.one(f"SELECT COUNT(*) AS n FROM tickets WHERE {w}", params)["n"])
         rows = self.db.query(f"SELECT * FROM tickets WHERE {w} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?", [*params, max(1, min(500, limit)), max(0, offset)])
-        return [self._row(r, False) for r in rows], total
+        out = []
+        for r in rows:
+            item = self._row(r, False)
+            payload = _loads(r["payload_json"], {})
+            # для сотрудника: кто обратился и с чем — строка списка читается без открытия обращения (публичная страница статуса этого не получает)
+            item["student"] = str((payload.get("fields") or {}).get("ФИО") or "").strip() or None
+            item["request"] = str(payload.get("request") or "").strip()[:140] or None
+            out.append(item)
+        return out, total
 
     def similar(self, ticket_id: int, limit: int = 5) -> list[dict]:
         """Другие обращения с тем же ФИО (регистр, «ё» и пробелы не важны): сотрудник видит, что студент уже обращался."""

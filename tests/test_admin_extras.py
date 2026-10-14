@@ -167,3 +167,17 @@ def test_bulk_reports_missing_tickets_and_validates_the_request(app, admin):
 
 def test_bulk_needs_login_and_is_not_swallowed_by_the_ticket_route(app):
     assert TestClient(app).post("/api/admin/tickets/bulk", json={"ids": [1], "status": "done"}).status_code == 401
+
+
+# ============================================================================ строки списка обращений
+def test_list_rows_tell_who_asked_and_about_what_but_the_public_status_does_not(app, admin):
+    t = make_ticket(app, "Иванов Иван Иванович", "list1")
+    app.state.storage.tickets.create("r", "other", "Анкета", {"request": "x" * 300, "fields": {}}, "queue", "list2")  # без ФИО
+    items = {i["id"]: i for i in admin.get("/api/admin/tickets").json()["items"]}
+    assert items[t["id"]]["student"] == "Иванов Иван Иванович" and items[t["id"]]["request"] == "перевод"
+    nameless = next(i for i in items.values() if i["topic"] == "Анкета")
+    assert nameless["student"] is None and len(nameless["request"]) == 140  # длинный текст обрезается
+    code = "ABCD-2345"
+    app.state.storage.tickets.attach_code(t["id"], code)
+    public = app.state.storage.tickets.check_code(t["id"], code)
+    assert public is not None and "student" not in public and "request" not in public and "payload" not in public
