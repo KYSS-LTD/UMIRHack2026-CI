@@ -56,6 +56,12 @@
   .box.dim { border: calc(1.5px * var(--inv, 1)) solid color-mix(in srgb, var(--link) 70%, transparent); background: color-mix(in srgb, var(--link) 9%, transparent); animation: box-in 520ms var(--spring) both; animation-delay: calc(var(--i, 0) * 40ms); }
   .box.hover { border: calc(2.5px * var(--inv, 1)) solid var(--lamp); background: color-mix(in srgb, var(--lamp) 16%, transparent); animation: box-in 260ms var(--ease) both; }
   .box.hit { border: calc(3px * var(--inv, 1)) solid var(--lamp); background: var(--lamp-soft); box-shadow: 0 0 0 calc(5px * var(--inv, 1)) color-mix(in srgb, var(--lamp) 28%, transparent), 0 0 calc(34px * var(--inv, 1)) color-mix(in srgb, var(--lamp) 42%, transparent); animation: box-in 560ms var(--spring) both, hit-pulse 2.4s 700ms ease-in-out infinite; animation-delay: calc(var(--i, 0) * 45ms), 700ms; }
+  /* снимок под углом: рамки строк — наклонные многоугольники, а не осевые прямоугольники */
+  .quad-layer { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+  .quad { stroke-linejoin: round; transform-box: fill-box; transform-origin: center; }
+  .quad.dim { fill: color-mix(in srgb, var(--link) 9%, transparent); stroke: color-mix(in srgb, var(--link) 70%, transparent); stroke-width: calc(1.5px * var(--inv, 1)); animation: box-in 520ms var(--spring) both; animation-delay: calc(var(--i, 0) * 40ms); }
+  .quad.hover { fill: color-mix(in srgb, var(--lamp) 16%, transparent); stroke: var(--lamp); stroke-width: calc(2.5px * var(--inv, 1)); animation: box-in 260ms var(--ease) both; }
+  .quad.hit { fill: var(--lamp-soft); stroke: var(--lamp); stroke-width: calc(3px * var(--inv, 1)); filter: drop-shadow(0 0 calc(10px * var(--inv, 1)) color-mix(in srgb, var(--lamp) 55%, transparent)); animation: box-in 560ms var(--spring) both; animation-delay: calc(var(--i, 0) * 45ms); }
   @keyframes box-in { from { opacity: 0; transform: scale(1.14); } to { opacity: 1; transform: none; } }
   @keyframes hit-pulse { 50% { box-shadow: 0 0 0 calc(9px * var(--inv, 1)) color-mix(in srgb, var(--lamp) 14%, transparent), 0 0 calc(44px * var(--inv, 1)) color-mix(in srgb, var(--lamp) 50%, transparent); } }
 

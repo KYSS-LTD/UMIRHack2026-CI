@@ -194,8 +194,7 @@ class DocumentQA:
         text = f"{shown}" if value else f"В документе написано: «{shown}»"
         words = seg_words or unit.segments and [w for _, ws in unit.segments for w in ws]
         page = next(p for p in pages if p.index == unit.page)
-        boxes = page.map_words(words) if words else []
-        merged = self._merge(boxes)
+        merged = self._merge(page, words) if words else []
         src = Source("document", best.clause.number, "фрагмент документа" + (f" (стр. {unit.page + 1})" if len(pages) > 1 else ""), quote, merged)
         related = []
         for h in hits[1:3]:
@@ -302,7 +301,7 @@ class DocumentQA:
         if len(shown) > 420:
             shown = shown[:417].rstrip() + "…"
         page = next(p for p in pages if p.index == item.page)
-        boxes = self._merge(page.map_words([w for u in item.units for w in u.words]))
+        boxes = self._merge(page, [w for u in item.units for w in u.words])
         label = f"п. {item.number} документа" + (f" (стр. {item.page + 1})" if len(pages) > 1 else "")
         src = Source("document", f"i{item.page}:{item.number}", label, text, boxes)
         related = [Source("document", f"i{o.page}:{o.number}", f"п. {o.number} документа", clean_value(o.text), []) for o in others]
@@ -347,26 +346,19 @@ class DocumentQA:
                 what = "Номер документа"
             if value:
                 page = next(p for p in pages if p.index == u.page)
-                boxes = self._merge(page.map_words(u.words))
+                boxes = self._merge(page, u.words)
                 src = Source("document", f"{u.page}:{u.row}", "шапка документа", u.text, boxes)
                 return Answer("ok", f"{what}: {value}{note}", "document", [src], confidence=0.7 if not note else 0.4, debug={"requisite": True})
         return None
 
     @staticmethod
-    def _merge(boxes: list[Box]) -> list[Box]:
-        """Слова одной строки -> одна рамка."""
-        if not boxes:
-            return []
-        rows: dict[tuple[int, int], list[Box]] = {}
-        for b in boxes:
-            rows.setdefault((b.page, round((b.y0 + b.y1) / 2 / max(b.h, 1))), []).append(b)
-        out = []
-        for group in rows.values():
-            u = group[0]
-            for b in group[1:]:
-                u = u.union(b)
-            out.append(u)
-        return out
+    def _merge(page: OcrPage, words: list) -> list[Box]:
+        """Слова одной строки -> одна рамка. Слова объединяются в координатах выпрямленного листа и переносятся на снимок один раз:
+        на наклонном снимке рамка идёт вдоль строки, а не раздувается до осевого прямоугольника."""
+        rows: dict[int, list] = {}
+        for w in words:
+            rows.setdefault(round((w.y0 + w.y1) / 2 / max(w.y1 - w.y0, 1)), []).append(w)
+        return [page.map_box(min(w.x0 for w in ws), min(w.y0 for w in ws), max(w.x1 for w in ws), max(w.y1 for w in ws)) for ws in rows.values()]
 
     @staticmethod
     def _kind_title(units: list[Unit]) -> Optional[str]:

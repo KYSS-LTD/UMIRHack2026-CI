@@ -1,3 +1,5 @@
+import math
+
 import cv2
 import numpy as np
 import pytest
@@ -37,6 +39,47 @@ def test_box_mapping_roundtrip(doc):
     p = p[:2] / p[2]
     box = page.map_box(p[0] - 10, p[1] - 10, p[0] + 10, p[1] + 10)
     assert abs((box.x0 + box.x1) / 2 - cx) < 3 and abs((box.y0 + box.y1) / 2 - cy) < 3
+
+
+def test_tilted_scan_gets_a_slanted_quad_along_the_text_line(doc):
+    """Снимок под углом: рамка строки — наклонный четырёхугольник, а не раздутый осевой прямоугольник."""
+    h, w = doc.shape[:2]
+    rotated, m = pp.rotate_expand(doc, 12)
+    page = OcrPage(0, rotated.shape[1], rotated.shape[0], [], [], m, (w, h))
+    box = page.map_box(700, 900, 1100, 940)  # длинная узкая строка 400×40, целиком внутри листа
+    assert box.quad is not None and len(box.quad) == 4
+    top, right = box.quad[1][1] - box.quad[0][1], box.quad[1][0] - box.quad[0][0]
+    assert abs(math.degrees(math.atan2(abs(top), right)) - 12) < 1.0  # верхняя сторона наклонена так же, как лист
+    side = math.dist(box.quad[0], box.quad[1])
+    assert abs(side - 400) < 2 and abs(math.dist(box.quad[1], box.quad[2]) - 40) < 2  # размеры строки сохранились
+    assert (box.h * box.w) > 2 * side * 40  # описанный прямоугольник сильно больше самой строки: именно он и «кривил» подсветку
+    d = box.to_dict()
+    assert len(d["quad"]) == 4 and all(len(p) == 2 for p in d["quad"])
+
+
+def test_straight_scan_keeps_a_plain_box(doc):
+    h, w = doc.shape[:2]
+    page = OcrPage(0, w, h, [], [], np.eye(3), (w, h))
+    box = page.map_box(100, 200, 500, 240)
+    assert box.quad is None and "quad" not in box.to_dict()
+    # несущественный наклон (доли градуса) тоже не порождает четырёхугольник
+    rotated, m = pp.rotate_expand(doc, 0.2)
+    slight = OcrPage(0, rotated.shape[1], rotated.shape[0], [], [], m, (w, h)).map_box(100, 200, 500, 240)
+    assert slight.quad is None
+
+
+def test_overlay_follows_the_tilt(doc):
+    from dekanat.highlight import draw_overlay
+    from dekanat.models import Box
+
+    flat = Box(100, 100, 500, 140)
+    slanted = Box(100, 100, 500, 240, 0, ((100, 140), (480, 100), (500, 200), (120, 240)))
+    img = np.full((300, 600, 3), 255, np.uint8)
+    out_flat = draw_overlay(img, [(flat, "", (255, 140, 0))], 0)
+    out_quad = draw_overlay(img, [(slanted, "", (255, 140, 0))], 0)
+    assert (out_flat != 255).any() and (out_quad != 255).any()
+    # в левом верхнем углу описанного прямоугольника рамка наклонного четырёхугольника не закрашивает ничего
+    assert (out_quad[102:110, 102:110] == 255).all()
 
 
 def test_page_quad_found_on_a_photo(doc):

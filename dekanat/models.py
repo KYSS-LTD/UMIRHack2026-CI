@@ -17,6 +17,9 @@ class Box:
     x1: float
     y1: float
     page: int = 0
+    # Снимок, сделанный под углом: строка текста на нём наклонена, и осевой прямоугольник вокруг неё получается «раздутым» и съехавшим.
+    # Тогда рядом с ограничивающим прямоугольником хранится сам наклонный четырёхугольник — 4 угла по часовой стрелке в тех же пикселях.
+    quad: Optional[tuple] = None
 
     def union(self, other: "Box") -> "Box":
         return Box(min(self.x0, other.x0), min(self.y0, other.y0), max(self.x1, other.x1), max(self.y1, other.y1), self.page)
@@ -30,7 +33,10 @@ class Box:
         return self.y1 - self.y0
 
     def to_dict(self) -> dict:
-        return {"page": self.page, "x0": round(self.x0), "y0": round(self.y0), "x1": round(self.x1), "y1": round(self.y1)}
+        out = {"page": self.page, "x0": round(self.x0), "y0": round(self.y0), "x1": round(self.x1), "y1": round(self.y1)}
+        if self.quad:
+            out["quad"] = [[round(x), round(y)] for x, y in self.quad]
+        return out
 
 
 @dataclass
@@ -102,18 +108,28 @@ class OcrPage:
         return "\n".join(r.text for r in self.rows)
 
     def map_box(self, x0: float, y0: float, x1: float, y1: float) -> Box:
-        """Прямоугольник обработанного изображения -> ограничивающий прямоугольник в исходном."""
+        """Прямоугольник обработанного (выпрямленного) изображения -> ограничивающий прямоугольник в исходном.
+        Если исходный снимок наклонён, к нему добавляется точный наклонный четырёхугольник (quad): подсветка идёт вдоль строки."""
         inv = np.linalg.inv(self.transform)
         pts = np.array([[x0, y0, 1], [x1, y0, 1], [x1, y1, 1], [x0, y1, 1]], dtype=np.float64).T
         mapped = inv @ pts
         mapped = mapped[:2] / mapped[2:3]
         ow, oh = self.orig_size
+        lo, hi = mapped.min(axis=1), mapped.max(axis=1)
+        corners = np.array([[lo[0], lo[1]], [hi[0], lo[1]], [hi[0], hi[1]], [lo[0], hi[1]]])
+        # поворот на 90° и зеркальные случаи дают тот же прямоугольник с переставленными углами; наклон — углы уходят от углов описанного прямоугольника
+        away = max(float(np.min(np.hypot(*(corners - p).T))) for p in mapped.T)
+        tol = max(1.5, 0.006 * float(max(hi[0] - lo[0], hi[1] - lo[1])))
+        quad = None
+        if away > tol:
+            quad = tuple((float(np.clip(x, 0, ow)), float(np.clip(y, 0, oh))) for x, y in mapped.T)
         return Box(
-            float(np.clip(mapped[0].min(), 0, ow)),
-            float(np.clip(mapped[1].min(), 0, oh)),
-            float(np.clip(mapped[0].max(), 0, ow)),
-            float(np.clip(mapped[1].max(), 0, oh)),
+            float(np.clip(lo[0], 0, ow)),
+            float(np.clip(lo[1], 0, oh)),
+            float(np.clip(hi[0], 0, ow)),
+            float(np.clip(hi[1], 0, oh)),
             self.index,
+            quad,
         )
 
     def map_words(self, words: list[Word]) -> list[Box]:

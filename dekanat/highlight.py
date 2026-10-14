@@ -26,6 +26,17 @@ def _font(size: int) -> ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
+def _grow(quad, pad: float) -> list[tuple[float, float]]:
+    """Наклонную рамку чуть раздвигаем от центра — так же, как прямоугольную, чтобы она не прилипала к буквам."""
+    cx, cy = sum(p[0] for p in quad) / len(quad), sum(p[1] for p in quad) / len(quad)
+    out = []
+    for x, y in quad:
+        dist = max(float(np.hypot(x - cx, y - cy)), 1.0)
+        k = (dist + pad * 1.4) / dist
+        out.append((cx + (x - cx) * k, cy + (y - cy) * k))
+    return out
+
+
 def draw_overlay(image_bgr: np.ndarray, items: list[tuple[Box, str, tuple]], page: int = 0) -> np.ndarray:
     """items: (рамка, подпись, цвет RGB). Рисует только рамки нужной страницы."""
     h, w = image_bgr.shape[:2]
@@ -40,10 +51,18 @@ def draw_overlay(image_bgr: np.ndarray, items: list[tuple[Box, str, tuple]], pag
             continue
         pad = lw * 2
         x0, y0, x1, y1 = box.x0 - pad, box.y0 - pad, box.x1 + pad, box.y1 + pad
-        d.rectangle([x0, y0, x1, y1], outline=color + (255,), width=lw, fill=color + (45,))
+        if box.quad:  # наклонный снимок: рамка идёт вдоль строки, а не по описанному прямоугольнику; подпись — у её левого верхнего угла
+            pts = _grow(box.quad, pad)
+            d.polygon(pts, fill=color + (45,))
+            d.line(pts + [pts[0]], fill=color + (255,), width=lw, joint="curve")
+            rising = pts[1][1] < pts[0][1]  # строка идёт вверх вправо: плашка над левым концом легла бы на сам текст — ставим её под левым концом
+            x0, y0, y1 = (pts[3][0], pts[3][1], pts[3][1]) if rising else (pts[0][0], pts[0][1], pts[3][1])
+        else:
+            rising = False
+            d.rectangle([x0, y0, x1, y1], outline=color + (255,), width=lw, fill=color + (45,))
         if label:
             tw = d.textlength(label, font=font)
-            ty = y0 - size - 6 if y0 > size + 8 else y1 + 2
+            ty = y0 - size - 6 if (y0 > size + 8 and not rising) else y1 + 2
             d.rectangle([x0, ty, x0 + tw + 10, ty + size + 6], fill=color + (235,))
             d.text((x0 + 5, ty + 2), label, font=font, fill=(255, 255, 255, 255))
     out = Image.alpha_composite(pil, layer).convert("RGB")

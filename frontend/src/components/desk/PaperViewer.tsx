@@ -5,6 +5,7 @@ import type { Box, PagePreview } from "../../types";
 import { renderAnnotated } from "../../lib/annotate";
 import { Icon } from "../../ui/Icon";
 import { useToast } from "../../ui/Toasts";
+import { BoxMarks } from "./BoxMarks";
 import { DocStrip } from "./DocStrip";
 import type { DeskDoc, Highlight } from "./highlight";
 
@@ -308,15 +309,9 @@ export function PaperViewer(p: Props) {
                 <span>{p.fileName}</span>
               </div>
             )}
-            {dim.map((b, i) => (
-              <span key={`${p.revealKey}d${i}`} className="box dim" style={{ left: b.x0, top: b.y0, width: b.x1 - b.x0, height: b.y1 - b.y0, ["--i" as string]: Math.min(i, 24) }} />
-            ))}
-            {hv.map((b, i) => (
-              <span key={`hv${p.hover?.id}${i}`} className="box hover" style={{ left: b.x0, top: b.y0, width: b.x1 - b.x0, height: b.y1 - b.y0 }} />
-            ))}
-            {hl.map((b, i) => (
-              <span key={`${p.highlight?.id}${i}`} className="box hit" style={{ left: b.x0, top: b.y0, width: b.x1 - b.x0, height: b.y1 - b.y0, ["--i" as string]: Math.min(i, 24) }} />
-            ))}
+            <BoxMarks boxes={dim} kind="dim" keyPrefix={`${p.revealKey}d`} width={iw} height={ih} />
+            <BoxMarks boxes={hv} kind="hover" keyPrefix={`hv${p.hover?.id}`} width={iw} height={ih} />
+            <BoxMarks boxes={hl} kind="hit" keyPrefix={`${p.highlight?.id}`} width={iw} height={ih} />
             {p.scanning && <span className="beam" aria-hidden="true" />}
           </div>
         </div>

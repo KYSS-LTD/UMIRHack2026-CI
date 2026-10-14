@@ -9,6 +9,8 @@ export interface Box {
   y0: number;
   x1: number;
   y1: number;
+  /** снимок сделан под углом: четыре угла строки по часовой стрелке (тот же масштаб, что и x0…y1). Рамка идёт вдоль строки, а не по описанному прямоугольнику */
+  quad?: [number, number][];
 }
 
 export interface PartResult {

@@ -54,7 +54,8 @@ export function verdictMeta(verdict: Verdict, intent?: string): { title: string;
 /** Объединяет рамки в одну — чтобы приблизить снимок к нужному фрагменту. */
 export function unionBoxes(boxes: Box[]): Box | null {
   if (!boxes.length) return null;
-  return boxes.reduce((u, b) => ({ page: u.page, x0: Math.min(u.x0, b.x0), y0: Math.min(u.y0, b.y0), x1: Math.max(u.x1, b.x1), y1: Math.max(u.y1, b.y1) }), { ...boxes[0]! });
+  const first = boxes[0]!;
+  return boxes.reduce((u, b) => ({ page: u.page, x0: Math.min(u.x0, b.x0), y0: Math.min(u.y0, b.y0), x1: Math.max(u.x1, b.x1), y1: Math.max(u.y1, b.y1) }), { page: first.page, x0: first.x0, y0: first.y0, x1: first.x1, y1: first.y1 });
 }
 
 export function fieldBoxes(f: FieldResult): Box[] {
