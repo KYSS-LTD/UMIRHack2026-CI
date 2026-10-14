@@ -38,6 +38,9 @@ const ICONS = {
   logout: "M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11",
   key: "M15 7a4 4 0 1 1-3.9 5H3v3h3v2h3v-2h2.1A4 4 0 0 1 15 7zM16 10.5h.01",
   search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4",
+  filter: "M4 5h16l-6.5 7.5V19l-3 1.5v-8z",
+  up: "M6 15l6-6 6 6",
+  down: "M6 9l6 6 6-6",
 };
 
 function icon(name, cls) {
