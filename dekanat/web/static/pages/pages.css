@@ -202,7 +202,16 @@ input[type=text], input[type=password], input[type=date], textarea, select {
 }
 input[type=text]:focus, input[type=password]:focus, input[type=date]:focus, textarea:focus, select:focus { outline: none; border-color: color-mix(in srgb, var(--lamp) 70%, var(--line-strong)); box-shadow: 0 0 0 4px var(--lamp-soft); background: var(--surface); }
 textarea { resize: vertical; min-height: 84px; }
-select { padding-right: 32px; text-overflow: ellipsis; }
+select {
+  appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 36px; text-overflow: ellipsis;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 19px) 50%, calc(100% - 14px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+}
+select option { font-size: 14px; }
+input[type=date] { min-width: 0; font-variant-numeric: tabular-nums; }
+input[type=date]::-webkit-calendar-picker-indicator { opacity: .55; cursor: pointer; border-radius: 6px; transition: opacity 140ms; }
+input[type=date]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+input::placeholder, textarea::placeholder { color: var(--ink-3); opacity: 1; }
 label { display: block; margin: 12px 0 5px; font-weight: 600; font-size: 13px; color: var(--ink-2); }
 label small { color: var(--ink-3); font-weight: 400; }
 .form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
@@ -335,13 +344,16 @@ label small { color: var(--ink-3); font-weight: 400; }
 .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 650; white-space: nowrap; }
 .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .status.new { color: var(--stamp); } .status.in_progress { color: var(--lamp); } .status.done { color: var(--ok); } .status.rejected { color: var(--none); }
-.status-tally { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 12px; }
-.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0 12px; }
+.status-tally { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 16px 0 6px; padding-top: 14px; border-top: 1px solid var(--line); }
+.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 12px; }
+@media (max-width: 560px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .ticket { cursor: pointer; border-radius: 10px; padding-left: 8px; padding-right: 8px; transition: background 140ms; }
 .ticket:hover, .ticket.on { background: var(--surface-2); }
 .ticket.on { box-shadow: inset 3px 0 0 var(--ink); }
 .ticket h3 { font-family: var(--font); font-size: 14.5px; font-weight: 650; }
-.seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: var(--r-pill); background: var(--surface-3); }
+.seg { display: inline-flex; flex-wrap: nowrap; max-width: 100%; gap: 2px; padding: 3px; overflow-x: auto; scrollbar-width: none; border-radius: var(--r-pill); background: var(--surface-3); }
+.seg::-webkit-scrollbar { display: none; }
+.seg button { flex: none; }
 .seg button { padding: 6px 12px; border: 0; background: none; box-shadow: none; color: var(--ink-2); font-size: 13px; }
 .seg button:hover:not(:disabled) { background: var(--surface); transform: none; box-shadow: none; }
 .seg button[aria-pressed="true"] { background: var(--btn); color: var(--btn-ink); }

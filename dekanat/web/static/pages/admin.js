@@ -629,6 +629,14 @@ async function viewTickets(panel) {
     const per = await Promise.all(meta.statuses.map((x) => api("GET", "/api/admin/tickets?" + query({ status: x, limit: "1" })).then((r) => [x, r.total])));
     const all = per.reduce((n, [, c]) => n + c, 0);
     clear(tally).appendChild(seg([["", `Все · ${all}`], ...per.map(([x, c]) => [x, `${STATUS_PLURAL[x]} · ${c}`])], ticketFilter.status, (v) => { ticketFilter.status = v; load(); }, "Статус"));
+    // «Сбросить» появляется только когда что-то отфильтровано
+    if (ticketFilter.from || ticketFilter.to || ticketFilter.type || ticketFilter.topic || ticketFilter.status) {
+      tally.appendChild(button("Сбросить фильтры", () => {
+        Object.assign(ticketFilter, { from: "", to: "", type: "", status: "", topic: "" });
+        from.value = to.value = type.value = topic.value = "";
+        load();
+      }, "link-btn"));
+    }
     clear(list);
     if (!res.items.length) list.appendChild(empty("Обращений нет", ticketFilter.status || ticketFilter.from || ticketFilter.to || ticketFilter.type || ticketFilter.topic ? "По этим условиям ничего не нашлось — попробуйте убрать часть фильтров." : "Когда студент передаст обращение из анкеты, оно появится здесь."));
     res.items.forEach((t, i) => {
