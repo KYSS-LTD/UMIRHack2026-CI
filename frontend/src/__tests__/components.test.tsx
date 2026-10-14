@@ -229,7 +229,7 @@ describe("regulation helpers", () => {
   });
   it("parses the hash route", () => {
     expect(parseHash("")).toEqual({ route: "check", clause: null });
-    expect(parseHash("#/types")).toEqual({ route: "types", clause: null });
+    expect(parseHash("#/types")).toEqual({ route: "check", clause: null }); // раздела «Типы документов» больше нет
     expect(parseHash("#/rules/3.4")).toEqual({ route: "rules", clause: "3.4" });
   });
 });

@@ -5,7 +5,6 @@ import { rank, score } from "../lib/fuzzy";
 import { HISTORY_LIMIT, loadHistory, type HistoryEntry, pushEntry } from "../lib/history";
 import { STAGES, stageIndex } from "../lib/stages";
 import { suggestionsFor } from "../lib/suggestions";
-import { errorLine, extractFields } from "../lib/yaml";
 import type { DocTypeSummary } from "../types";
 
 const entry = (over: Partial<HistoryEntry> = {}): HistoryEntry => ({
@@ -102,22 +101,6 @@ describe("fuzzy search for the palette", () => {
   });
 });
 
-describe("yaml helpers for the type editor", () => {
-  const yaml = `id: x\ntitle: Тест\nfields:\n  - id: student_name\n    title: ФИО студента  # комментарий\n    labels: [ФИО]\n  - id: issue\n    title: "Номер и дата"\n    parts:\n      - id: number\n        title: Номер\nclassify:\n  keywords: []\n`;
-  it("lists top-level fields with titles and ignores parts", () => {
-    expect(extractFields(yaml)).toEqual([
-      { id: "student_name", title: "ФИО студента" },
-      { id: "issue", title: "Номер и дата" },
-    ]);
-  });
-  it("finds a line number in an error message", () => {
-    expect(errorLine("ошибка в строке 12: что-то")).toBe(12);
-    expect(errorLine("mapping values are not allowed (line 5)")).toBe(5);
-    expect(errorLine(undefined)).toBeNull();
-    expect(errorLine("без номера")).toBeNull();
-  });
-});
-
 describe("stages", () => {
   it("maps server stages to steps", () => {
     expect(stageIndex("load")).toBe(0);
@@ -151,6 +134,19 @@ describe("cropAround", () => {
     expect(g.w).toBeGreaterThanOrEqual(380);
     expect(g.x).toBeLessThanOrEqual(100);
     expect(g.x + g.w).toBeGreaterThanOrEqual(180);
+  });
+  it("keeps a wide landscape shape even around a large field such as a stamp", () => {
+    const g = cropAround([{ page: 0, x0: 400, y0: 900, x1: 700, y1: 1150 }], 1000, 1400)!;
+    expect(g.w / g.h).toBeGreaterThanOrEqual(1.2);
+    expect(g.y).toBeLessThanOrEqual(900);
+    expect(g.y + g.h).toBeGreaterThanOrEqual(1150);
+    expect(g.x).toBeLessThanOrEqual(400);
+    expect(g.x + g.w).toBeGreaterThanOrEqual(700);
+    // на узком снимке фрагмент подрезается по высоте, но поле остаётся целиком
+    const narrow = cropAround([{ page: 0, x0: 100, y0: 500, x1: 300, y1: 800 }], 400, 1400)!;
+    expect(narrow.w / narrow.h).toBeGreaterThanOrEqual(1.2);
+    expect(narrow.y).toBeLessThanOrEqual(500);
+    expect(narrow.y + narrow.h).toBeGreaterThanOrEqual(800);
   });
   it("clamps the crop to the image corner", () => {
     const g = cropAround([{ page: 0, x0: 950, y0: 1380, x1: 1000, y1: 1400 }], 1000, 1400)!;

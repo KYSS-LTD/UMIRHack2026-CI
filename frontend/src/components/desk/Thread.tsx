@@ -41,9 +41,6 @@ interface Props {
   /** проверка, чью карточку можно исправить (документ текущей сессии) */
   editableId: string | null;
   onCorrect: (turn: Turn, unit: string, value: string) => Promise<boolean>;
-  /** сессия есть: показываем, что хранится на сервере, и даём удалить */
-  session: boolean;
-  onForget: () => void;
   /** идёт очистка чата: реплики уходят с ленты, затем стол пустеет */
   sweeping?: boolean;
 }
@@ -86,16 +83,6 @@ export function Thread(p: Props) {
     setTimeout(() => document.getElementById(`turn-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
   };
 
-  const privacy = p.session && (
-    <p className="privacy-line">
-      <Icon name="eye" size={13} />
-      <span>Анкета и карточка полей хранятся на сервере до суток, сам снимок в базу не попадает.</span>
-      <button type="button" className="link" onClick={p.onForget}>
-        Удалить мои данные
-      </button>
-    </p>
-  );
-
   if (!p.turns.length) {
     return (
       <div className="thread-empty">
@@ -126,7 +113,6 @@ export function Thread(p: Props) {
               <li key={q} style={{ ["--i" as string]: i }}>
                 <button type="button" className="start-line" disabled={p.busy} onClick={() => p.onSay(q)}>
                   <span className="start-q">«{q}»</span>
-                  <span className="start-lead" aria-hidden="true" />
                   <span className="start-hint">{hint}</span>
                   <Icon name="arrowRight" size={14} className="start-arrow" />
                 </button>
@@ -161,7 +147,6 @@ export function Thread(p: Props) {
             <p className="hint">История хранится только в этом браузере, снимки в неё не попадают.</p>
           </section>
         )}
-        {privacy}
       </div>
     );
   }
@@ -231,7 +216,6 @@ export function Thread(p: Props) {
           )}
         </div>
       ))}
-      {privacy}
       <div ref={end} className="thread-end" />
     </div>
   );

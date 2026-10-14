@@ -214,12 +214,14 @@ function empty(title, text) {
 function filePick(id, accept, hint, onChange) {
   const label = el("label", "filepick");
   const input = el("input", null, null, { type: "file", id, accept });
+  const badge = el("span", "fp-icon", null, { "aria-hidden": "true" });
   const title = el("strong");
   const sub = el("small");
-  label.append(input, title, sub);
+  label.append(input, badge, title, sub);
   const show = () => {
     const f = input.files && input.files[0];
     label.classList.toggle("chosen", !!f);
+    clear(badge).appendChild(icon(f ? "check" : "upload"));
     title.textContent = f ? f.name : "Перетащите файл сюда или нажмите";
     sub.textContent = f ? fmtSize(f.size) : hint;
     if (onChange) onChange(f || null);
@@ -819,10 +821,10 @@ async function viewTemplates(panel) {
     refreshCounts();
   }), "primary", "upload");
   upload.disabled = true;
-  const actions = el("div", "form-actions");
+  const actions = el("div", "form-actions block");
   actions.append(upload, el("span", "hint", "Сначала выберите файл"));
   pick.input.addEventListener("change", () => actions.lastChild.classList.toggle("hidden", !!pick.input.files[0]));
-  right.appendChild(sheet("Добавить шаблон", null, field("Что сделать", target, "t-target"), field("Название", nameIn, "t-name", "(необязательно)"), el("div"), pick.node, actions));
+  right.appendChild(sheet("Добавить шаблон", null, field("Что сделать", target, "t-target"), field("Название", nameIn, "t-name", "(необязательно)"), pick.node, actions));
 
   // ---- какие данные подставляются
   const chips = el("div", "chips");
@@ -941,10 +943,10 @@ async function viewKb(panel) {
     refreshCounts();
   }), "primary", "upload");
   addBtn.disabled = true;
-  const actions = el("div", "form-actions");
+  const actions = el("div", "form-actions block");
   actions.append(addBtn, el("span", "hint", "Сначала выберите файл"));
   pick.input.addEventListener("change", () => actions.lastChild.classList.toggle("hidden", !!pick.input.files[0]));
-  right.appendChild(sheet("Добавить документ", null, field("Название", nameIn, "k-name", "(необязательно)"), el("div"), pick.node, actions,
+  right.appendChild(sheet("Добавить документ", null, field("Название", nameIn, "k-name", "(необязательно)"), pick.node, actions,
     el("p", "sheet-note", "Нумерация пунктов («3.4.», «п. 3.4») определяется сама, поиск обновляется сразу. Прежние версии сохраняются в истории.")));
 }
 

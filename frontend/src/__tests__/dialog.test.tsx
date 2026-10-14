@@ -2,6 +2,8 @@ import { act, fireEvent, render, renderHook, screen, waitFor, within } from "@te
 import userEvent from "@testing-library/user-event";
 import { AnswerTurn } from "../components/desk/AnswerTurn";
 import { DialogTurn } from "../components/desk/DialogTurn";
+import { cropAround } from "../components/desk/highlight";
+import { SnippetCrop } from "../components/desk/SnippetCrop";
 import { FieldsCard } from "../components/desk/FieldsCard";
 import { Thread } from "../components/desk/Thread";
 import { NavBar } from "../components/NavBar";
@@ -264,8 +266,6 @@ describe("Thread empty state", () => {
     onGenerate: noop,
     editableId: null,
     onCorrect: async () => true,
-    session: true,
-    onForget: noop,
   };
 
   it("lists what the secretary does as a numbered ledger, not as cards", () => {
@@ -283,13 +283,10 @@ describe("Thread empty state", () => {
     expect(onSay).toHaveBeenCalledWith("Я хочу перевестись");
   });
 
-  it("lets the visitor delete their data", async () => {
-    const onForget = vi.fn();
-    render(<Thread {...props} onForget={onForget} />);
-    await userEvent.click(screen.getByRole("button", { name: "Удалить мои данные" }));
-    expect(onForget).toHaveBeenCalledTimes(1);
-    render(<Thread {...props} session={false} />);
-    expect(screen.getAllByRole("button", { name: "Удалить мои данные" })).toHaveLength(1);
+  it("does not clutter the thread with storage notes", () => {
+    render(<Thread {...props} />);
+    expect(screen.queryByText(/хранятся на сервере/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Удалить мои данные" })).not.toBeInTheDocument();
   });
 });
 
@@ -415,5 +412,19 @@ describe("answers by the document, regulation only when named", () => {
     const list = followUps(r, "Сколько дней рассматривается заявление?", []);
     expect(list[0]).toBe("Сколько дней рассматривается заявление — по Положению?");
     expect(followUps(result(), "Что-то", [])[0]).not.toContain("по Положению");
+  });
+});
+
+describe("snippet crop keeps the proportions of the photo", () => {
+  it("sizes the box by the crop ratio so the background is never stretched", () => {
+    const boxes = [{ page: 0, x0: 400, y0: 900, x1: 700, y1: 1100 }];
+    const { container } = render(<SnippetCrop src="blob:x" width={1000} height={1400} boxes={boxes} label="печать" />);
+    const el = container.querySelector(".snippet-img") as HTMLElement;
+    const g = cropAround(boxes, 1000, 1400)!;
+    expect(Number(el.style.getPropertyValue("--r"))).toBeCloseTo(g.w / g.h, 5);
+    // фон масштабируется по осям так, что снимок сохраняет свои пропорции (1000 × 1400)
+    const [bw, bh] = el.style.backgroundSize.split(" ").map((v) => parseFloat(v));
+    expect((bw! * (g.w / 100)) / (bh! * (g.h / 100))).toBeCloseTo(1000 / 1400, 4);
+    expect(el.style.maxHeight).toBe("");
   });
 });

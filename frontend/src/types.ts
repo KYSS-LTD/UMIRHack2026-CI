@@ -190,15 +190,6 @@ export interface RegulationInfo {
   editable: boolean;
 }
 
-export interface TypeValidation {
-  ok: boolean;
-  error?: string;
-  id?: string;
-  title?: string;
-  fields?: number;
-  units?: number;
-}
-
 /* ---------- анкета и документ сессии (/api/assistant, см. dekanat/web/assistant.py) ---------- */
 
 export type DialogState = "idle" | "screening" | "review" | "document_generation" | "completed";

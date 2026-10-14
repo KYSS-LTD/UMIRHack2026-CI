@@ -12,17 +12,16 @@ import { LogoDefs } from "./ui/Logo";
 import { ToastProvider } from "./ui/Toasts";
 import { CheckView } from "./views/CheckView";
 import { RegulationView } from "./views/RegulationView";
-import { TypesView } from "./views/TypesView";
 
 export function parseHash(hash: string): { route: Route; clause: string | null } {
   const m = hash.replace(/^#\/?/, "").split("/");
-  const route = m[0] === "rules" || m[0] === "types" ? m[0] : "check";
+  const route = m[0] === "rules" ? "rules" : "check";
   return { route, clause: route === "rules" && m[1] ? decodeURIComponent(m[1]) : null };
 }
 
 const SHORTCUTS: [string, string][] = [
   ["Ctrl + K", "Поиск и команды: переходы, примеры, пункты Положения"],
-  ["Alt + 1 / 2 / 3", "Стол, Положение, Типы документов"],
+  ["Alt + 1 / 2", "Стол, Положение"],
   ["Enter", "Отправить вопрос (Shift + Enter — новая строка)"],
   ["Ctrl + V", "Вставить снимок из буфера обмена"],
   ["/", "Перейти к полю вопроса"],
@@ -55,9 +54,9 @@ function Shell() {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPalette((o) => !o);
-      } else if (e.altKey && !e.ctrlKey && !e.metaKey && ["1", "2", "3"].includes(e.key)) {
+      } else if (e.altKey && !e.ctrlKey && !e.metaKey && ["1", "2"].includes(e.key)) {
         e.preventDefault();
-        location.hash = `#/${(["check", "rules", "types"] as const)[Number(e.key) - 1]}`;
+        location.hash = `#/${(["check", "rules"] as const)[Number(e.key) - 1]}`;
       } else if (e.key === "?" && !typing) setHelp(true);
     };
     window.addEventListener("keydown", onKey);
@@ -119,7 +118,6 @@ function Shell() {
         <div className="route-body" key={hash.route}>
           {hash.route === "check" && <CheckView types={typeList} health={health.data} onOpenClause={openClause} />}
           {hash.route === "rules" && <RegulationView focusClause={hash.clause} editable={editable} />}
-          {hash.route === "types" && <TypesView types={typeList} editable={editable} onChanged={types.reload} />}
         </div>
       </main>
 

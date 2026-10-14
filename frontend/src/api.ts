@@ -12,7 +12,6 @@ import type {
   SubmissionPreview,
   SubmitResult,
   Suggestion,
-  TypeValidation,
 } from "./types";
 
 export class ApiError extends Error {
@@ -74,18 +73,6 @@ export const api = {
     form.append("file", file, file.name);
     return request("/api/regulation", { method: "PUT", body: form });
   },
-
-  typeYaml: (id: string) => request<string>(`/api/doctypes/${encodeURIComponent(id)}/yaml`, undefined, "text"),
-  typeTemplate: () => request<string>("/api/doctypes/template", undefined, "text"),
-  validateType: (yaml: string) =>
-    request<TypeValidation>("/api/doctypes/validate", { method: "POST", headers: { "Content-Type": "text/plain; charset=utf-8" }, body: yaml }),
-  saveType: (id: string, yaml: string) =>
-    request<{ ok: boolean; id: string; title: string }>(`/api/doctypes/${encodeURIComponent(id)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-      body: yaml,
-    }),
-  deleteType: (id: string) => request<{ ok: boolean }>(`/api/doctypes/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   /** Анкета, документ сессии, DOCX и отправка в деканат. Сессия анонимная: HttpOnly-cookie, данные хранит сервер. */
   assistant: {

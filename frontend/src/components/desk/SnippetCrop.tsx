@@ -24,7 +24,8 @@ export function SnippetCrop({ src, width, height, boxes, label, onOpen }: Props)
         onClick={onOpen}
         title="Показать на снимке"
         aria-label={`Фрагмент снимка: ${label}. Показать на снимке`}
-        style={{ aspectRatio: `${g.w} / ${g.h}`, backgroundImage: `url(${src})`, backgroundSize: `${(width / g.w) * 100}% ${(height / g.h) * 100}%`, backgroundPosition: `${g.px}% ${g.py}%` }}
+        // размер коробки считается по соотношению сторон вырезки (--r), поэтому снимок не растягивается ни при какой ширине
+        style={{ ["--r" as string]: g.w / g.h, backgroundImage: `url(${src})`, backgroundSize: `${(width / g.w) * 100}% ${(height / g.h) * 100}%`, backgroundPosition: `${g.px}% ${g.py}%` }}
       >
         {own.map((b, i) => (
           <span

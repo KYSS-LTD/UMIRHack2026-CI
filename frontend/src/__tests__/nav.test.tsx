@@ -28,10 +28,11 @@ describe("activity store", () => {
 });
 
 describe("NavBar", () => {
-  it("shows the three sections without counters and marks the current one", () => {
+  it("shows the two sections without counters and marks the current one", () => {
     render(<NavBar {...props} route="rules" />);
     const nav = screen.getByRole("navigation", { name: "Разделы" });
-    expect(within(nav).getAllByRole("link")).toHaveLength(3);
+    expect(within(nav).getAllByRole("link")).toHaveLength(2); // «Типы документов» из интерфейса убраны
+    expect(within(nav).queryByRole("link", { name: /Типы документов/ })).not.toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: /Положение/ })).toHaveAttribute("aria-current", "page");
     expect(within(nav).getByRole("link", { name: /Стол/ })).not.toHaveAttribute("aria-current");
     expect(within(nav).queryByText("25")).not.toBeInTheDocument();

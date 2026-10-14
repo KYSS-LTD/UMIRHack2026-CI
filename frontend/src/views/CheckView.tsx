@@ -451,8 +451,6 @@ export function CheckView({ types, health, onOpenClause }: Props) {
             onGenerate={generate}
             editableId={busy ? null : editableId}
             onCorrect={correct}
-            session={assistant.ready}
-            onForget={() => setForgetting(true)}
             sweeping={sweeping}
           />
         </div>

@@ -187,6 +187,7 @@ button:active:not(:disabled), .btn:active { transform: scale(.96); }
 button:disabled { opacity: .5; cursor: not-allowed; }
 button.primary, .btn.primary { background: var(--btn); border-color: var(--btn); color: var(--btn-ink); box-shadow: var(--shadow-2); }
 button.primary:hover:not(:disabled), .btn.primary:hover { background: color-mix(in srgb, var(--btn) 88%, var(--lamp)); }
+button.primary:disabled { background: var(--surface-3); border-color: var(--line); color: var(--ink-3); box-shadow: none; opacity: 1; }
 button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: var(--surface); }
 button.danger:hover:not(:disabled) { background: var(--danger-soft); }
 button.ghost, .btn.ghost { background: transparent; border-color: transparent; box-shadow: none; }
@@ -196,21 +197,31 @@ button.small, .btn.small { padding: 5px 12px; font-size: 13px; }
 .link-btn:hover:not(:disabled) { background: none; transform: none; box-shadow: none; color: var(--ink); }
 .actions { display: flex; flex-wrap: wrap; gap: 6px; }
 input[type=text], input[type=password], input[type=date], textarea, select {
-  width: 100%; font: inherit; padding: 10px 13px; border-radius: var(--r-md); border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--ink);
+  width: 100%; font: inherit; font-size: 14.5px; line-height: 1.35; min-height: 44px; padding: 10px 13px; border-radius: var(--r-md); border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--ink);
   transition: border-color 160ms, box-shadow 220ms var(--ease), background 160ms;
 }
 input[type=text]:focus, input[type=password]:focus, input[type=date]:focus, textarea:focus, select:focus { outline: none; border-color: color-mix(in srgb, var(--lamp) 70%, var(--line-strong)); box-shadow: 0 0 0 4px var(--lamp-soft); background: var(--surface); }
 textarea { resize: vertical; min-height: 84px; }
+select { padding-right: 32px; text-overflow: ellipsis; }
 label { display: block; margin: 12px 0 5px; font-weight: 600; font-size: 13px; color: var(--ink-2); }
 label small { color: var(--ink-3); font-weight: 400; }
 .form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
+.form-actions.block { display: grid; gap: 8px; margin-top: 16px; }
+.form-actions.block button { width: 100%; padding: 11px 16px; }
+.form-actions.block .hint { text-align: center; }
 .hint { color: var(--ink-3); font-size: 12.5px; line-height: 1.5; }
 
 /* выбор файла: большая зона, файл можно перетащить; выбранный файл — с названием и размером */
-.filepick { position: relative; display: grid; gap: 2px; justify-items: center; margin: 0; padding: 18px 14px; border: 1.5px dashed var(--line-strong); border-radius: var(--r-md); background: var(--surface-2); color: var(--ink-2); font-weight: 400; text-align: center; cursor: pointer; transition: border-color 160ms, background 160ms; }
+.filepick { position: relative; display: grid; gap: 3px; justify-items: center; margin: 16px 0 0; padding: 22px 14px 18px; border: 1.5px dashed var(--line-strong); border-radius: var(--r-md); background: var(--surface-2); color: var(--ink-2); font-weight: 400; text-align: center; cursor: pointer; transition: border-color 160ms, background 160ms; }
 .filepick:hover, .filepick.over { border-color: var(--lamp); background: color-mix(in srgb, var(--lamp-soft) 50%, var(--surface-2)); }
 .filepick input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-.filepick strong { color: var(--ink); font-size: 14px; }
+.filepick strong { color: var(--ink); font-size: 14px; overflow-wrap: anywhere; }
+.fp-icon { display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: 6px; border-radius: 50%; background: var(--surface-3); color: var(--ink-2); transition: background 200ms, color 200ms, transform 420ms var(--spring); }
+.fp-icon .icon { width: 18px; height: 18px; }
+.filepick:hover .fp-icon, .filepick.over .fp-icon { transform: translateY(-2px); color: var(--ink); }
+.filepick.chosen .fp-icon { background: var(--ok); color: #fff; animation: icon-pop 420ms var(--spring); }
+.filepick:focus-within { border-color: var(--lamp); }
+@keyframes icon-pop { from { transform: scale(.5) rotate(-40deg); } }
 .filepick small { color: var(--ink-3); font-size: 12px; }
 .filepick.chosen { border-style: solid; border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); background: color-mix(in srgb, var(--ok-soft) 60%, var(--surface)); }
 

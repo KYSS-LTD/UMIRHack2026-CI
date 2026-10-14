@@ -7,12 +7,11 @@ import { pct } from "../lib/format";
 import { Icon, type IconName } from "../ui/Icon";
 import { Logo } from "../ui/Logo";
 
-export type Route = "check" | "rules" | "types";
+export type Route = "check" | "rules";
 
 const TABS: { id: Route; title: string; icon: IconName }[] = [
   { id: "check", title: "Стол", icon: "doc" },
   { id: "rules", title: "Положение", icon: "book" },
-  { id: "types", title: "Типы документов", icon: "layers" },
 ];
 
 const THEMES: { id: Theme; label: string; short: string; icon: IconName }[] = [

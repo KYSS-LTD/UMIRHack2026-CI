@@ -28,16 +28,23 @@ export function cropAround(boxes: Box[], iw: number, ih: number): CropGeometry |
   const y1 = Math.max(...boxes.map((b) => b.y1));
   const bh = Math.max(1, y1 - y0);
   const padX = 36;
-  const padY = Math.max(bh * 0.9, 44);
+  const padY = Math.max(bh * 0.5, 44);
   let x = Math.max(0, x0 - padX);
   let y = Math.max(0, y0 - padY);
   let w = Math.min(iw - x, x1 - x0 + 2 * padX);
   let h = Math.min(ih - y, bh + 2 * padY);
-  // слишком узкая вырезка плохо читается — расширяем до разумной ширины
-  const minW = Math.min(iw, 380);
+  // слишком узкая вырезка плохо читается: фрагмент делаем шире высоты (печать — крупное поле, высота у неё немалая)
+  const minW = Math.min(iw, Math.max(380, h * 1.6));
   if (w < minW) {
     x = Math.max(0, Math.min(iw - minW, x - (minW - w) / 2));
     w = minW;
+  }
+  // снимок узкий, а фрагмент всё равно выше, чем шире, — подрезаем по высоте вокруг поля
+  const maxH = w / 1.2;
+  if (h > maxH) {
+    const nh = Math.max(bh + 24, maxH);
+    y = Math.max(0, Math.min(ih - nh, (y0 + y1) / 2 - nh / 2));
+    h = nh;
   }
   const px = iw - w < 1 ? 0 : (x / (iw - w)) * 100;
   const py = ih - h < 1 ? 0 : (y / (ih - h)) * 100;
