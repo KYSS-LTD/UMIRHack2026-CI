@@ -1,6 +1,6 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { parseHash } from "../App";
+import { parseHash, staffCanEdit } from "../App";
 import { ChatBar } from "../components/desk/ChatBar";
 import { Composer } from "../components/desk/Composer";
 import { FieldsCard } from "../components/desk/FieldsCard";
@@ -8,7 +8,7 @@ import { TypeRail } from "../components/desk/TypeRail";
 import { VerdictCard } from "../components/desk/VerdictCard";
 import { useDesk } from "../hooks/useDesk";
 import { suggestionsFor } from "../lib/suggestions";
-import type { Answer, DocTypeInfo, DocTypeSummary, FieldResult, PagePreview } from "../types";
+import type { Answer, DocTypeInfo, DocTypeSummary, FieldResult, Health, PagePreview } from "../types";
 import { filterClauses, groupSections, highlightText } from "../views/RegulationView";
 
 const answer = (over: Partial<Answer> = {}): Answer => ({
@@ -139,6 +139,22 @@ describe("Composer", () => {
     render(<Composer {...base} question="x" busy onCancel={onCancel} />);
     await userEvent.click(screen.getByRole("button", { name: "Остановить проверку" }));
     expect(onCancel).toHaveBeenCalled();
+  });
+});
+
+describe("staffCanEdit", () => {
+  const health = (over: Partial<Health>): Health => ({ version: "1", allow_edit: true, max_upload_mb: 25, ocr: {}, doc_types: [], regulation: { name: "", clauses: 0 }, llm: { backend: "none" }, ...over });
+
+  it("shows the replace-regulation button only to a logged-in member of staff", () => {
+    expect(staffCanEdit(health({ can_edit: true, admin: { authenticated: true } }))).toBe(true);
+    expect(staffCanEdit(health({ can_edit: false, admin: { authenticated: false } }))).toBe(false);
+    expect(staffCanEdit(health({ allow_edit: true }))).toBe(false);
+    expect(staffCanEdit(null)).toBe(false);
+  });
+
+  it("stays hidden for everyone in the open (legacy) mode and when editing is switched off", () => {
+    expect(staffCanEdit(health({ can_edit: true, admin: { authenticated: false, protect_edit: false } }))).toBe(false);
+    expect(staffCanEdit(health({ can_edit: false, allow_edit: false, admin: { authenticated: true } }))).toBe(false);
   });
 });
 

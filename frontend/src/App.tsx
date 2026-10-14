@@ -7,6 +7,7 @@ import { useTheme } from "./hooks/useTheme";
 import { useBus } from "./lib/bus";
 import { useActivity } from "./lib/activity";
 import { pct } from "./lib/format";
+import type { Health } from "./types";
 import { Dialog } from "./ui/Dialog";
 import { LogoDefs } from "./ui/Logo";
 import { ToastProvider } from "./ui/Toasts";
@@ -30,6 +31,9 @@ const SHORTCUTS: [string, string][] = [
   ["Двойной щелчок", "Снимок: приблизить место (повторный — вернуть лист)"],
   ["?", "Показать эту подсказку"],
 ];
+
+/** «Заменить Положение» видит только вошедший сотрудник: обычному посетителю кнопка не нужна, даже если сервер запущен в открытом режиме. */
+export const staffCanEdit = (h: Health | null | undefined): boolean => !!h?.admin?.authenticated && (h.can_edit ?? h.allow_edit ?? false);
 
 function Shell() {
   const theme = useTheme();
@@ -78,7 +82,7 @@ function Shell() {
   const openClause = useCallback((ref: string) => navigate("rules", ref), [navigate]);
 
   const typeList = types.data ?? [];
-  const editable = health.data?.can_edit ?? health.data?.allow_edit ?? true;
+  const editable = staffCanEdit(health.data);
   const ocrDown = health.data?.ocr?.available === false;
 
   return (
