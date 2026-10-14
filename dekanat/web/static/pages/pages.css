@@ -6,33 +6,33 @@
 :root {
   color-scheme: light dark;
 
-  --bg: light-dark(#ece5d6, #090f1b);
-  --bg-2: light-dark(#e3dac6, #0e1626);
-  --surface: light-dark(#fffdf8, #121a2c);
-  --surface-2: light-dark(#f8f3e6, #18223a);
-  --surface-3: light-dark(#efe7d4, #202c49);
-  --glass: light-dark(rgb(255 253 248 / .72), rgb(18 26 44 / .66));
+  --bg: light-dark(#ece5d6, #0e1428);
+  --bg-2: light-dark(#e3dac6, #131b34);
+  --surface: light-dark(#fffdf8, #18203c);
+  --surface-2: light-dark(#f8f3e6, #202a4a);
+  --surface-3: light-dark(#efe7d4, #2a3560);
+  --glass: light-dark(rgb(255 253 248 / .72), rgb(24 32 60 / .72));
   --paper: #fffdf8;
-  --ink: light-dark(#14213a, #eaeef7);
-  --ink-2: light-dark(#44506a, #b0bacf);
-  --ink-3: light-dark(#667290, #8793ae);
-  --line: light-dark(rgb(20 33 58 / .12), rgb(255 255 255 / .09));
-  --line-strong: light-dark(rgb(20 33 58 / .26), rgb(255 255 255 / .2));
-  --stamp: light-dark(#c63a25, #ff7b63);
-  --stamp-soft: light-dark(rgb(198 58 37 / .1), rgb(255 123 99 / .14));
-  --lamp: light-dark(#e08a0b, #f6b24c);
-  --lamp-soft: light-dark(rgb(224 138 11 / .16), rgb(246 178 76 / .18));
-  --link: light-dark(#255fa8, #86b4f2);
-  --ok: light-dark(#18764a, #5ad69b);
-  --ok-soft: light-dark(#e2f3e9, #11301f);
-  --warn: light-dark(#bf5f16, #f5a463);
-  --warn-soft: light-dark(#fbeada, #36230f);
-  --none: light-dark(#42587f, #9db3dc);
-  --none-soft: light-dark(#e4e9f3, #1a2540);
-  --danger: light-dark(#b8321f, #ff8672);
-  --danger-soft: light-dark(#fbe6e1, #3a1913);
+  --ink: light-dark(#14213a, #f5f0e6);
+  --ink-2: light-dark(#44506a, #c8c9dc);
+  --ink-3: light-dark(#667290, #9ba3c3);
+  --line: light-dark(rgb(20 33 58 / .12), rgb(255 240 210 / .1));
+  --line-strong: light-dark(rgb(20 33 58 / .26), rgb(255 240 210 / .22));
+  --stamp: light-dark(#c63a25, #ff8468);
+  --stamp-soft: light-dark(rgb(198 58 37 / .1), rgb(255 132 104 / .16));
+  --lamp: light-dark(#e08a0b, #ffb84d);
+  --lamp-soft: light-dark(rgb(224 138 11 / .16), rgb(255 184 77 / .2));
+  --link: light-dark(#255fa8, #8fb9ff);
+  --ok: light-dark(#18764a, #62e2a4);
+  --ok-soft: light-dark(#e2f3e9, #123629);
+  --warn: light-dark(#bf5f16, #ffae6b);
+  --warn-soft: light-dark(#fbeada, #402c14);
+  --none: light-dark(#42587f, #a4bcf0);
+  --none-soft: light-dark(#e4e9f3, #1f2c56);
+  --danger: light-dark(#b8321f, #ff8e7a);
+  --danger-soft: light-dark(#fbe6e1, #43211f);
   --btn: var(--ink);
-  --btn-ink: light-dark(#fffdf8, #0a1020);
+  --btn-ink: light-dark(#fffdf8, #0e1428);
   --shadow-1: 0 1px 2px light-dark(rgb(20 33 58 / .08), rgb(0 0 0 / .4));
   --shadow-2: 0 1px 2px light-dark(rgb(20 33 58 / .06), rgb(0 0 0 / .4)), 0 10px 28px light-dark(rgb(20 33 58 / .1), rgb(0 0 0 / .42));
   --shadow-3: 0 2px 4px light-dark(rgb(20 33 58 / .06), rgb(0 0 0 / .45)), 0 28px 70px light-dark(rgb(20 33 58 / .22), rgb(0 0 0 / .62));
@@ -82,9 +82,9 @@ code { font-family: var(--mono); background: var(--surface-3); padding: 1px 6px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.45 0 0 0 0 0.4 0 0 0 .35 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 .blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .6; }
-.b1 { width: 52vw; height: 52vw; left: -14vw; top: -22vw; background: light-dark(rgb(255 200 120 / .55), rgb(246 178 76 / .13)); }
-.b2 { width: 46vw; height: 46vw; right: -16vw; top: 12vh; background: light-dark(rgb(198 58 37 / .13), rgb(90 130 230 / .16)); display: none; }
-.b3 { width: 40vw; height: 40vw; left: 28vw; bottom: -24vw; background: light-dark(rgb(120 150 210 / .22), rgb(198 58 37 / .1)); display: none; }
+.b1 { width: 52vw; height: 52vw; left: -14vw; top: -22vw; background: light-dark(rgb(255 200 120 / .55), rgb(255 184 77 / .2)); }
+.b2 { width: 46vw; height: 46vw; right: -16vw; top: 12vh; background: light-dark(transparent, rgb(118 98 235 / .26)); }
+.b3 { width: 40vw; height: 40vw; left: 28vw; bottom: -24vw; background: light-dark(transparent, rgb(255 132 104 / .1)); }
 
 /* ====================================================================== верхняя панель — «остров» */
 header.top { position: sticky; top: 12px; z-index: 40; padding: 0 12px; margin-bottom: 22px; }

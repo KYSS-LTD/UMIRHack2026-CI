@@ -7,42 +7,42 @@
     color-scheme: light dark;
 
     /* стол и поверхности */
-    --bg: light-dark(#ece5d6, #090f1b);
-    --bg-2: light-dark(#e3dac6, #0e1626);
-    --surface: light-dark(#fffdf8, #121a2c);
-    --surface-2: light-dark(#f8f3e6, #18223a);
-    --surface-3: light-dark(#efe7d4, #202c49);
-    --glass: light-dark(rgb(255 253 248 / .72), rgb(18 26 44 / .66));
+    --bg: light-dark(#ece5d6, #0e1428);
+    --bg-2: light-dark(#e3dac6, #131b34);
+    --surface: light-dark(#fffdf8, #18203c);
+    --surface-2: light-dark(#f8f3e6, #202a4a);
+    --surface-3: light-dark(#efe7d4, #2a3560);
+    --glass: light-dark(rgb(255 253 248 / .72), rgb(24 32 60 / .72));
     --paper: #fffdf8; /* бумага документа — светлая в любой теме */
     --paper-line: #d8d1bf;
 
     /* чернила */
-    --ink: light-dark(#14213a, #eaeef7);
-    --ink-2: light-dark(#44506a, #b0bacf);
-    --ink-3: light-dark(#667290, #8793ae);
-    --line: light-dark(rgb(20 33 58 / .12), rgb(255 255 255 / .09));
-    --line-strong: light-dark(rgb(20 33 58 / .26), rgb(255 255 255 / .2));
+    --ink: light-dark(#14213a, #f5f0e6);
+    --ink-2: light-dark(#44506a, #c8c9dc);
+    --ink-3: light-dark(#667290, #9ba3c3);
+    --line: light-dark(rgb(20 33 58 / .12), rgb(255 240 210 / .1));
+    --line-strong: light-dark(rgb(20 33 58 / .26), rgb(255 240 210 / .22));
 
     /* акценты: штамп (киноварь) и лампа (янтарь) */
-    --stamp: light-dark(#c63a25, #ff7b63);
-    --stamp-soft: light-dark(rgb(198 58 37 / .1), rgb(255 123 99 / .14));
-    --lamp: light-dark(#e08a0b, #f6b24c);
-    --lamp-soft: light-dark(rgb(224 138 11 / .16), rgb(246 178 76 / .18));
-    --link: light-dark(#255fa8, #86b4f2);
+    --stamp: light-dark(#c63a25, #ff8468);
+    --stamp-soft: light-dark(rgb(198 58 37 / .1), rgb(255 132 104 / .16));
+    --lamp: light-dark(#e08a0b, #ffb84d);
+    --lamp-soft: light-dark(rgb(224 138 11 / .16), rgb(255 184 77 / .2));
+    --link: light-dark(#255fa8, #8fb9ff);
 
     /* вердикты */
-    --ok: light-dark(#18764a, #5ad69b);
-    --ok-soft: light-dark(#e2f3e9, #11301f);
-    --warn: light-dark(#bf5f16, #f5a463);
-    --warn-soft: light-dark(#fbeada, #36230f);
-    --none: light-dark(#42587f, #9db3dc);
-    --none-soft: light-dark(#e4e9f3, #1a2540);
-    --danger: light-dark(#b8321f, #ff8672);
-    --danger-soft: light-dark(#fbe6e1, #3a1913);
+    --ok: light-dark(#18764a, #62e2a4);
+    --ok-soft: light-dark(#e2f3e9, #123629);
+    --warn: light-dark(#bf5f16, #ffae6b);
+    --warn-soft: light-dark(#fbeada, #402c14);
+    --none: light-dark(#42587f, #a4bcf0);
+    --none-soft: light-dark(#e4e9f3, #1f2c56);
+    --danger: light-dark(#b8321f, #ff8e7a);
+    --danger-soft: light-dark(#fbe6e1, #43211f);
 
     /* кнопки */
     --btn: var(--ink);
-    --btn-ink: light-dark(#fffdf8, #0a1020);
+    --btn-ink: light-dark(#fffdf8, #0e1428);
 
     /* тени */
     --shadow-1: 0 1px 2px light-dark(rgb(20 33 58 / .08), rgb(0 0 0 / .4));

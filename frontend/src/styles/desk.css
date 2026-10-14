@@ -11,10 +11,11 @@
   .desk-stage {
     position: relative; min-height: 0; border-radius: var(--r-xl); overflow: hidden; border: 1px solid var(--line);
     background:
-      radial-gradient(120% 90% at 20% 0%, light-dark(rgb(255 214 150 / .55), rgb(246 178 76 / .13)), transparent 60%),
-      repeating-linear-gradient(0deg, transparent 0 31px, light-dark(rgb(20 33 58 / .045), rgb(255 255 255 / .03)) 31px 32px),
-      repeating-linear-gradient(90deg, transparent 0 31px, light-dark(rgb(20 33 58 / .045), rgb(255 255 255 / .03)) 31px 32px),
-      light-dark(#dcd2bc, #070b15);
+      radial-gradient(120% 90% at 20% 0%, light-dark(rgb(255 214 150 / .55), rgb(255 184 77 / .2)), transparent 60%),
+      radial-gradient(90% 80% at 100% 100%, light-dark(transparent, rgb(110 92 225 / .22)), transparent 62%),
+      repeating-linear-gradient(0deg, transparent 0 31px, light-dark(rgb(20 33 58 / .045), rgb(255 240 210 / .04)) 31px 32px),
+      repeating-linear-gradient(90deg, transparent 0 31px, light-dark(rgb(20 33 58 / .045), rgb(255 240 210 / .04)) 31px 32px),
+      light-dark(#dcd2bc, #0b1230);
     box-shadow: var(--shadow-2), inset 0 0 90px light-dark(rgb(20 33 58 / .08), rgb(0 0 0 / .45));
     animation: panel-in 700ms 90ms var(--ease) both;
   }
