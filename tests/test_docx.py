@@ -18,7 +18,7 @@ from dekanat.templates import (
     find_placeholders,
     validate_docx,
 )
-from dekanat.templates.sample import build_sample_template
+from dekanat.templates.sample import build_enrollment_template, build_sample_template
 
 DATA = {
     "student_name": "Иванов Иван Иванович", "passport_data": "серия 1234 № 567890", "current_university": "Южный федеральный университет", "current_course": "2",
@@ -52,6 +52,36 @@ def all_text(doc) -> str:
 @pytest.fixture()
 def sample(tmp_path):
     return build_sample_template(tmp_path / "sample.docx")
+
+
+# ============================================================================ образец «Заявление о зачислении»
+def test_enrollment_sample_uses_only_the_questionnaire_keys_and_fills_completely(tmp_path):
+    src = build_enrollment_template(tmp_path / "enroll.docx")
+    assert validate_docx(src) is not None
+    found = find_placeholders(src)
+    assert {p.key for p in found} == set(STANDARD_KEYS) and all(p.known for p in found)
+    res = fill_docx(src, DATA, tmp_path / "out")
+    text = all_text(Document(str(res.path)))
+    assert res.complete and "{{" not in text
+    for value in ("Иванов Иван Иванович", "09.03.04 Программная инженерия", "очная", "Южный федеральный университет", "серия 1234 № 567890", "отсутствуют", "13.10.2026"):
+        assert value in text
+    assert "Прошу зачислить меня" in text
+
+
+def test_enrollment_example_file_in_the_repo_is_the_builders_output(tmp_path):
+    """Файл examples/templates/zayavlenie_o_zachislenii.docx — то, что записывает `template-sample --kind enrollment`: образец не расходится с кодом."""
+    shipped = Path(__file__).resolve().parent.parent / "examples" / "templates" / "zayavlenie_o_zachislenii.docx"
+    assert validate_docx(shipped) is not None
+    built = build_enrollment_template(tmp_path / "built.docx")
+    assert all_text(Document(str(shipped))) == all_text(Document(str(built)))
+    assert {p.key for p in find_placeholders(shipped)} == set(STANDARD_KEYS)
+
+
+def test_enrollment_sample_without_passport_leaves_a_blank_line(tmp_path):
+    src = build_enrollment_template(tmp_path / "enroll.docx")
+    res = fill_docx(src, {**DATA, "passport_data": None}, tmp_path / "out", blank_unfilled=True)
+    text = all_text(Document(str(res.path)))
+    assert "{{" not in text and "________" in text and res.unfilled == ["passport_data"]
 
 
 # ============================================================================ плейсхолдеры

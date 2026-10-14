@@ -198,9 +198,10 @@ def cmd_template_add(args) -> int:
 
 
 def cmd_template_sample(args) -> int:
-    from .templates.sample import build_sample_template
+    from .templates.sample import build_enrollment_template, build_sample_template
 
-    print(f"Учебный шаблон записан: {build_sample_template(args.out)}")
+    build, default_name = (build_enrollment_template, "zayavlenie_o_zachislenii.docx") if args.kind == "enrollment" else (build_sample_template, "zayavlenie_o_perevode.docx")
+    print(f"Учебный шаблон записан: {build(args.out or default_name)}")
     return 0
 
 
@@ -295,8 +296,9 @@ def build_parser() -> argparse.ArgumentParser:
     ta.add_argument("--replace", action="store_true", help="явно разрешить замену существующего шаблона с этим --id")
     ta.set_defaults(func=cmd_template_add)
 
-    ts = sub.add_parser("template-sample", help="записать учебный образец шаблона «Заявление о переводе»")
-    ts.add_argument("out", nargs="?", default="zayavlenie_o_perevode.docx")
+    ts = sub.add_parser("template-sample", help="записать учебный образец шаблона: «Заявление о переводе» (по умолчанию) или «Заявление о зачислении» (--kind enrollment)")
+    ts.add_argument("out", nargs="?", default=None)
+    ts.add_argument("--kind", choices=("transfer", "enrollment"), default="transfer", help="какой образец записать")
     ts.set_defaults(func=cmd_template_sample)
 
     pg = sub.add_parser("purge", help="удалить просроченные данные (сессии, готовые документы, старые обращения) по настройкам privacy.*")
