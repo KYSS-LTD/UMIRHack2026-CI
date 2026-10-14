@@ -241,7 +241,8 @@ def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_by
         if status and status not in TICKET_STATUSES:
             raise HTTPException(400, f"status: одно из {list(TICKET_STATUSES)}")
         rows, total = storage.tickets.list(_day(date_from), _day(date_to, end=True), type or None, status or None, topic or None, limit, offset)
-        return {"items": rows, "total": total, "statuses": list(TICKET_STATUSES), "types": list(TICKET_TYPES), "topics": sorted(set(storage.tickets.topics()) | set(all_topics()))}
+        counts = storage.tickets.status_counts(_day(date_from), _day(date_to, end=True), type or None, topic or None)
+        return {"items": rows, "total": total, "counts": counts, "statuses": list(TICKET_STATUSES), "types": list(TICKET_TYPES), "topics": sorted(set(storage.tickets.topics()) | set(all_topics()))}
 
     @router.get("/tickets/{ticket_id}")
     def get_ticket(ticket_id: int, who: dict = admin):

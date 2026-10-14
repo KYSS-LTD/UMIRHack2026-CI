@@ -120,7 +120,7 @@ function Shell() {
           </p>
         )}
         <div className="route-body" key={hash.route}>
-          {hash.route === "check" && <CheckView types={typeList} health={health.data} onOpenClause={openClause} />}
+          {hash.route === "check" && <CheckView types={typeList} samples={samples.data ?? []} health={health.data} onOpenClause={openClause} />}
           {hash.route === "rules" && <RegulationView focusClause={hash.clause} editable={editable} />}
         </div>
       </main>

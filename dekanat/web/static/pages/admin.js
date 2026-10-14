@@ -649,7 +649,7 @@ async function viewTickets(panel) {
       fill(type, res.types, TYPE_TITLES, ticketFilter.type);
       fill(topic, res.topics, null, ticketFilter.topic);
     }
-    const per = await Promise.all(meta.statuses.map((x) => api("GET", "/api/admin/tickets?" + query({ status: x, limit: "1" })).then((r) => [x, r.total])));
+    const per = meta.statuses.map((x) => [x, (res.counts || {})[x] || 0]); // счётчики приходят вместе со списком: один запрос вместо пяти
     const all = per.reduce((n, [, c]) => n + c, 0);
     clear(tally).appendChild(seg([["", `Все · ${all}`], ...per.map(([x, c]) => [x, `${STATUS_PLURAL[x]} · ${c}`])], ticketFilter.status, (v) => { ticketFilter.status = v; load(); }, "Статус"));
     // «Сбросить» появляется только когда что-то отфильтровано

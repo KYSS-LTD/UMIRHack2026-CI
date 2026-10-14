@@ -27,18 +27,19 @@ import { useToast } from "../ui/Toasts";
 
 interface Props {
   types: DocTypeSummary[];
+  /** примеры со стола: загружает оболочка один раз (их же показывает палитра команд) */
+  samples: SampleItem[];
   health: Health | null;
   onOpenClause: (ref: string) => void;
 }
 
 const isNarrow = () => typeof matchMedia === "function" && matchMedia("(max-width: 1099px)").matches;
 
-export function CheckView({ types, health, onOpenClause }: Props) {
+export function CheckView({ types, samples, health, onOpenClause }: Props) {
   const toast = useToast();
   const desk = useDesk();
   const assistant = useAssistant();
   const history = useHistory();
-  const samples = useFetch<SampleItem[]>(api.samples);
   const rules = useFetch(api.ruleSuggestions);
   const composer = useRef<ComposerHandle>(null);
   const stageRef = useRef<HTMLElement>(null);
@@ -508,7 +509,7 @@ export function CheckView({ types, health, onOpenClause }: Props) {
             cta={composerFileIsNew && !busy ? { label: question.trim() ? "Проверить с моим вопросом" : "Проверить документ целиком", onClick: () => void submit() } : null}
           />
         ) : (
-          <Tray maxMb={maxMb} samples={samples.data ?? []} dragging={dragging} busy={busy} onFile={setFile} onSample={(s) => void loadSample(s)} onError={(m) => toast.show(m, "error")} />
+          <Tray maxMb={maxMb} samples={samples} dragging={dragging} busy={busy} onFile={setFile} onSample={(s) => void loadSample(s)} onError={(m) => toast.show(m, "error")} />
         )}
       </section>
 

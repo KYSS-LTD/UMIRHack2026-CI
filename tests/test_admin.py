@@ -290,6 +290,9 @@ def test_tickets_filters_and_status_changes(app, admin):
     assert [t["id"] for t in admin.get("/api/admin/tickets?type=enrollment").json()["items"]] == [b["id"]]
     assert [t["id"] for t in admin.get("/api/admin/tickets?status=in_progress").json()["items"]] == [a["id"]]
     assert [t["id"] for t in admin.get("/api/admin/tickets?topic=Поступление и зачисление").json()["items"]] == [b["id"]]
+    assert res["counts"] == {"new": 1, "in_progress": 1, "done": 0, "rejected": 0}
+    only = admin.get("/api/admin/tickets?status=in_progress").json()  # счётчики не зависят от выбранного статуса, но учитывают остальные фильтры
+    assert only["counts"] == res["counts"] and admin.get("/api/admin/tickets?type=enrollment").json()["counts"]["new"] == 1
     assert admin.get("/api/admin/tickets?date_from=2999-01-01").json()["total"] == 0
     assert admin.get("/api/admin/tickets?date_from=2000-01-01&date_to=2999-01-01").json()["total"] == 2
     assert admin.get("/api/admin/tickets?date_from=вчера").status_code == 400

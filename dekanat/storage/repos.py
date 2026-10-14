@@ -346,8 +346,8 @@ class TicketRepo:
         r = self.db.one("SELECT * FROM tickets WHERE idem_key=?", (idem_key,))
         return self._row(r, True) if r else None
 
-    def list(self, date_from: Optional[float] = None, date_to: Optional[float] = None, type_: Optional[str] = None, status: Optional[str] = None,
-             topic: Optional[str] = None, limit: int = 50, offset: int = 0) -> tuple[list[dict], int]:
+    @staticmethod
+    def _where(date_from, date_to, type_, status, topic) -> tuple[str, list]:
         where, params = ["1=1"], []
         if date_from is not None:
             where.append("created_at>=?")
@@ -364,7 +364,19 @@ class TicketRepo:
         if topic:
             where.append("topic=?")
             params.append(topic)
-        w = " AND ".join(where)
+        return " AND ".join(where), params
+
+    def status_counts(self, date_from: Optional[float] = None, date_to: Optional[float] = None, type_: Optional[str] = None, topic: Optional[str] = None) -> dict:
+        """Сколько обращений в каждом статусе при тех же фильтрах (без фильтра по статусу): счётчики над списком одним запросом."""
+        w, params = self._where(date_from, date_to, type_, None, topic)
+        counts = {s: 0 for s in TICKET_STATUSES}
+        for r in self.db.query(f"SELECT status, COUNT(*) AS n FROM tickets WHERE {w} GROUP BY status", params):
+            counts[r["status"]] = int(r["n"])
+        return counts
+
+    def list(self, date_from: Optional[float] = None, date_to: Optional[float] = None, type_: Optional[str] = None, status: Optional[str] = None,
+             topic: Optional[str] = None, limit: int = 50, offset: int = 0) -> tuple[list[dict], int]:
+        w, params = self._where(date_from, date_to, type_, status, topic)
         total = int(self.db.one(f"SELECT COUNT(*) AS n FROM tickets WHERE {w}", params)["n"])
         rows = self.db.query(f"SELECT * FROM tickets WHERE {w} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?", [*params, max(1, min(500, limit)), max(0, offset)])
         return [self._row(r, False) for r in rows], total
