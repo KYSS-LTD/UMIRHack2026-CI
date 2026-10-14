@@ -222,19 +222,6 @@ function tick(input) {
   return label;
 }
 
-/** Инициалы для кружка: «Иванов Иван Иванович» -> «ИИ»; без имени — знак номера. */
-function initials(name) {
-  const words = String(name || "").trim().split(" ").filter(Boolean);
-  return words.length ? (words[0][0] + (words[1] ? words[1][0] : "")).toUpperCase() : "№";
-}
-
-/** Цвет кружка зависит только от имени: один и тот же студент всегда одного цвета. */
-function tone(key) {
-  let h = 0;
-  for (const ch of String(key)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return h % 6;
-}
-
 const foldText = (x) => String(x || "").toLowerCase().replace(/ё/g, "е");
 
 function empty(title, text) {
@@ -655,22 +642,22 @@ async function viewOverview(panel) {
 
 // ---------------------------------------------------------------- обращения
 async function viewTickets(panel) {
+  // одна «бумага»: слева спокойный список, справа карточка обращения
   const app = el("div", "t-app");
-  const inbox = el("section", "sheet t-inbox");
-  const rightBox = el("section", "sheet t-case");
+  const inbox = el("section", "t-inbox");
+  const rightBox = el("section", "t-case");
   app.append(inbox, rightBox);
   panel.appendChild(app);
 
-  // шапка списка: заголовок, сводка и выгрузка
-  const csvLink = el("a", "icon-btn", null, { href: "#", download: "", title: "Выгрузить CSV (с текущими фильтрами)", "aria-label": "Выгрузить CSV" });
-  csvLink.appendChild(icon("download"));
+  // ---- шапка списка: заголовок, сводка и режим выбора
   const headSub = el("p", "t-sub", "");
   const headTitle = el("div");
   headTitle.append(el("h2", null, "Обращения"), headSub);
+  const selectBtn = el("button", "t-link", "Выбрать", { type: "button", "aria-pressed": "false" });
   const inboxHead = el("div", "t-head");
-  inboxHead.append(headTitle, csvLink);
+  inboxHead.append(headTitle, selectBtn);
 
-  // фильтры живут в окошке под кнопкой: список начинается сразу под поиском
+  // ---- фильтры живут в окошке под кнопкой: список начинается сразу
   const filters = el("div", "filters");
   const mk = (label, node) => { filters.appendChild(field(label, node)); return node; };
   const from = mk("С даты", el("input", null, null, { type: "date" }));
@@ -679,18 +666,19 @@ async function viewTickets(panel) {
   const topic = mk("Тема", el("select"));
   from.value = ticketFilter.from;
   to.value = ticketFilter.to;
-  const filterBadge = el("em", "badge hidden", "0");
-  const filterBtn = el("button", "t-filter", null, { type: "button", "aria-haspopup": "dialog", "aria-expanded": "false" });
-  filterBtn.append(icon("filter"), document.createTextNode("Фильтры"), filterBadge);
-  const filterPop = el("div", "filter-pop hidden", null, { role: "dialog", "aria-label": "Фильтры обращений" });
+  const csvLink = el("a", "t-link", "Выгрузить CSV", { href: "#", download: "" });
   const resetBtn = button("Сбросить", () => {
     Object.assign(ticketFilter, { from: "", to: "", type: "", status: "", topic: "" });
     from.value = to.value = type.value = topic.value = "";
     load();
-  }, "link-btn");
+  }, "t-link");
   const popActions = el("div", "filter-pop-actions");
-  popActions.append(resetBtn, el("span", "hint", "Esc — закрыть"));
+  popActions.append(resetBtn, csvLink);
+  const filterPop = el("div", "filter-pop hidden", null, { role: "dialog", "aria-label": "Фильтры обращений" });
   filterPop.append(filters, popActions);
+  const filterDot = el("i", "badge-dot hidden", null, { "aria-hidden": "true" });
+  const filterBtn = el("button", "t-iconbtn", null, { type: "button", title: "Фильтры", "aria-label": "Фильтры", "aria-haspopup": "dialog", "aria-expanded": "false" });
+  filterBtn.append(icon("filter"), filterDot);
   const closePop = () => {
     filterPop.classList.add("hidden");
     filterBtn.setAttribute("aria-expanded", "false");
@@ -710,22 +698,24 @@ async function viewTickets(panel) {
   const filterCount = () => [ticketFilter.from, ticketFilter.to, ticketFilter.type, ticketFilter.topic].filter(Boolean).length;
   const updateFilterBadge = () => {
     const n = filterCount();
-    filterBadge.textContent = String(n);
-    filterBadge.classList.toggle("hidden", !n);
-    filterBtn.classList.toggle("on", n > 0);
+    filterDot.classList.toggle("hidden", !n);
+    filterBtn.setAttribute("aria-label", n ? `Фильтры (включено: ${n})` : "Фильтры");
   };
 
-  const tally = el("div", "status-tally");
-  const searchInput = el("input", null, null, { type: "search", placeholder: "Найти по имени, номеру или теме", "aria-label": "Найти обращение по имени, номеру или теме", autocomplete: "off" });
+  const searchInput = el("input", null, null, { type: "search", placeholder: "Имя, номер или тема", "aria-label": "Найти обращение по имени, номеру или теме", autocomplete: "off" });
   const searchBox = el("label", "t-search");
   searchBox.append(icon("search"), searchInput);
   const toolbar = el("div", "t-toolbar");
   toolbar.append(searchBox, filterBtn, filterPop);
+
+  const tally = el("div", "t-tabs", null, { role: "group", "aria-label": "Статус" });
   const list = el("div", "items", null, { role: "listbox", "aria-label": "Обращения" });
-  // выбор нескольких обращений: один статус (и, если нужно, один ответ) сразу для всех выбранных
+
+  // ---- выбор нескольких обращений: один статус (и, если нужно, один ответ) сразу для всех выбранных
   const picked = new Set();
   const byId = new Map(); // последние загруженные обращения: поиск и отмена берут данные отсюда
   let needle = "";
+  let selecting = false;
   const bulkBar = el("div", "bulk-bar hidden");
   const bulkReply = el("textarea", "bulk-reply", null, { rows: "2", maxlength: "2000", placeholder: "Один ответ всем выбранным студентам (необязательно)", "aria-label": "Ответ студентам выбранных обращений" });
   const bulkReplyRow = el("div", "bulk-reply-row hidden");
@@ -755,6 +745,20 @@ async function viewTickets(panel) {
     }
     drawBulk();
   };
+  /** Режим выбора: флажки у строк и полоса действий появляются только в нём (или когда отметили первую строку). */
+  const setSelecting = (on) => {
+    selecting = on;
+    list.classList.toggle("selecting", on);
+    selectBtn.setAttribute("aria-pressed", String(on));
+    selectBtn.textContent = on ? "Готово" : "Выбрать";
+    if (!on) {
+      picked.clear();
+      bulkReply.value = "";
+      bulkReplyRow.classList.add("hidden");
+    }
+    syncPicks();
+  };
+  selectBtn.addEventListener("click", () => setSelecting(!selecting));
   /** Поиск работает по уже загруженным обращениям; скрытые поиском из выбора выпадают, чтобы массовое действие не задело невидимое. */
   function applySearch() {
     let shown = 0;
@@ -772,28 +776,31 @@ async function viewTickets(panel) {
   searchInput.addEventListener("input", () => { needle = foldText(searchInput.value.trim()); applySearch(); });
   searchInput.addEventListener("keydown", (e) => { if (e.key === "Escape" && searchInput.value) { searchInput.value = ""; needle = ""; applySearch(); } });
 
+  /** Статусы — тихие вкладки с подчёркиванием: слово и число, без цветных плашек. */
   function drawTally(per, all) {
     clear(tally);
-    const group = el("div", "seg tally", null, { role: "group", "aria-label": "Статус" });
     const add = (value, label, n) => {
-      const b = el("button", n ? null : "zero", null, { type: "button", "aria-pressed": String(value === ticketFilter.status) });
-      if (value) b.appendChild(el("i", `dot ${value}`, null, { "aria-hidden": "true" }));
-      b.append(document.createTextNode(label), el("em", "n", String(n)));
+      const on = value === ticketFilter.status;
+      const b = el("button", n || on ? null : "zero", null, { type: "button", "aria-pressed": String(on), title: `${label}: ${n}` });
+      b.appendChild(document.createTextNode(label));
+      // число — только у того, что требует действий; итог по закрытым — в подсказке, общий — в шапке списка
+      if ((value === "new" || value === "in_progress") && n) b.appendChild(el("span", "n", String(n)));
       b.addEventListener("click", () => { ticketFilter.status = value; load(); });
-      group.appendChild(b);
+      tally.appendChild(b);
     };
     add("", "Все", all);
     for (const [x, c] of per) add(x, STATUS_PLURAL[x], c);
-    tally.appendChild(group);
+    // если вкладки не помещаются, правый край мягко затухает: видно, что их можно прокрутить
+    requestAnimationFrame(() => tally.classList.toggle("scrolls", tally.scrollWidth > tally.clientWidth + 1));
   }
 
-  /** Полоса над списком: без выбора — тонкая строка «Выбрать все», с выбором — плавающая тёмная панель с действиями. */
+  /** Полоса выбора: пока ничего не отмечено — тонкая строка «Выбрать все», с выбором — тёмная панель с действиями. */
   function drawBulk() {
     const ids = visibleIds();
     clear(bulkBar);
-    bulkBar.classList.toggle("hidden", !ids.length);
+    bulkBar.classList.toggle("hidden", !selecting || !ids.length);
     bulkBar.classList.toggle("active", picked.size > 0);
-    if (!ids.length) return;
+    if (!selecting || !ids.length) return;
     const all = el("input", null, null, { type: "checkbox", "aria-label": "Выбрать все обращения в списке" });
     all.checked = ids.every((i) => picked.has(i));
     all.indeterminate = !all.checked && ids.some((i) => picked.has(i));
@@ -805,22 +812,22 @@ async function viewTickets(panel) {
       bulkBar.appendChild(head);
       return;
     }
+    // два спокойных ряда: «Выбрано: N» и крестик, ниже четыре равные кнопки
+    const drop = el("button", "bulk-aux icon-only", null, { type: "button", "aria-label": "Снять выбор", title: "Снять выбор" });
+    drop.appendChild(icon("x"));
+    drop.addEventListener("click", () => { picked.clear(); syncPicks(); });
+    head.appendChild(drop);
     const actions = el("div", "bulk-actions", null, { role: "group", "aria-label": "Статус для выбранных" });
     for (const st of ["in_progress", "done", "rejected"]) {
-      const b = el("button", "bulk-st", null, { type: "button" });
-      b.append(el("i", `dot ${st}`, null, { "aria-hidden": "true" }), document.createTextNode(STATUS_LABEL[st]));
+      const b = el("button", "bulk-st", STATUS_LABEL[st], { type: "button" });
       b.addEventListener("click", () => applyBulk(st));
       actions.appendChild(b);
     }
     const replyOpen = !bulkReplyRow.classList.contains("hidden");
-    const replyBtn = el("button", "bulk-aux", null, { type: "button", "aria-expanded": String(replyOpen), title: "Один ответ всем выбранным студентам" });
-    replyBtn.append(icon("doc"), document.createTextNode("Ответ"));
+    const replyBtn = el("button", "bulk-st", "Ответ", { type: "button", "aria-expanded": String(replyOpen), title: "Один ответ всем выбранным студентам" });
     replyBtn.addEventListener("click", () => { bulkReplyRow.classList.toggle("hidden"); drawBulk(); if (!bulkReplyRow.classList.contains("hidden")) bulkReply.focus(); });
-    const drop = el("button", "bulk-aux icon-only", null, { type: "button", "aria-label": "Снять выбор", title: "Снять выбор" });
-    drop.appendChild(icon("x"));
-    drop.addEventListener("click", () => { picked.clear(); syncPicks(); });
-    head.append(actions, replyBtn, drop);
-    bulkBar.append(head, bulkReplyRow);
+    actions.appendChild(replyBtn);
+    bulkBar.append(head, actions, bulkReplyRow);
   }
 
   const afterChange = async (id) => {
@@ -845,9 +852,7 @@ async function viewTickets(panel) {
     const before = ids.map((id) => [id, (byId.get(id) || {}).status]);
     const res = await guarded(() => api("POST", "/api/admin/tickets/bulk", { ids, status, ...(reply ? { reply } : {}) }));
     if (!res) return;
-    picked.clear();
-    bulkReply.value = "";
-    bulkReplyRow.classList.add("hidden");
+    setSelecting(false);
     const n = res.updated.length;
     const text = res.missing.length ? `Обновлено: ${n}, не найдено: ${res.missing.length}` : `«${STATUS_LABEL[status]}»: ${n} ${plural(n, ["обращение", "обращения", "обращений"])}`;
     // отмена возвращает прежние статусы; общий ответ студентам уже ушёл, поэтому после него отмены нет
@@ -907,39 +912,34 @@ async function viewTickets(panel) {
       const name = t.student || "";
       const topicText = t.topic || TYPE_TITLES[t.type] || t.type;
       const it = el("div", `item ticket${t.status === "new" ? " is-new" : ""}${closed ? " closed" : ""}${t.id === openTicketId ? " on" : ""}${picked.has(t.id) ? " picked" : ""}`, null, { role: "option", tabindex: "0", "aria-selected": String(t.id === openTicketId), "data-id": String(t.id) });
-      it.style.animationDelay = `${Math.min(i * 35, 500)}ms`;
+      it.style.animationDelay = `${Math.min(i, 8) * 30}ms`;
       const pick = el("input", "t-pick", null, { type: "checkbox", "aria-label": `Выбрать обращение № ${t.id}${name ? `, ${name}` : ""}` });
       pick.checked = picked.has(t.id);
       pick.addEventListener("keydown", (e) => e.stopPropagation()); // пробел в флажке не открывает обращение
-      pick.addEventListener("change", () => { (pick.checked ? picked.add(t.id) : picked.delete(t.id)); it.classList.toggle("picked", pick.checked); drawBulk(); });
-      // как в почтовом клиенте: сверху имя и время, ниже суть и номер, справа статус; ответ и заметка — значками.
+      pick.addEventListener("change", () => {
+        (pick.checked ? picked.add(t.id) : picked.delete(t.id));
+        if (!selecting) setSelecting(true); // отметили первую строку — включается режим выбора
+        else { it.classList.toggle("picked", pick.checked); drawBulk(); }
+      });
+      // слева точка статуса (при наведении и в режиме выбора — флажок), в центре имя и суть, справа время.
       // Без имени (анкета без ФИО) заголовком идёт тема.
-      const flag = (ic, cls, title) => {
-        const f = el("span", `t-ico ${cls}`, null, { role: "img", title, "aria-label": title });
-        f.appendChild(icon(ic));
-        return f;
-      };
+      const lead = el("span", "t-lead");
+      lead.append(el("i", `dot ${t.status}`, null, { "aria-hidden": "true" }), tick(pick));
+      const h = el("h3", null, name || topicText);
+      h.appendChild(el("span", "sr", ` — ${STATUS_TITLES[t.status] || t.status}`));
       const main = el("div", "t-main");
-      const line = el("div", "t-line");
-      line.appendChild(el("h3", null, name || topicText));
-      if (t.reply) line.appendChild(flag("check", "ok", "Ответ студенту отправлен"));
-      if (t.note) line.appendChild(flag("doc", "", "Есть заметка сотрудника"));
-      main.append(line, el("p", "item-meta", [name ? topicText : "", `№ ${t.id}`].filter(Boolean).join(" · ")));
-      const pill = el("span", `pill ${t.status}`);
-      pill.append(el("i", null, null, { "aria-hidden": "true" }), document.createTextNode(STATUS_TITLES[t.status] || t.status));
-      // справа время и статус; при наведении на место статуса встаёт «Обработано» — строка не меняет высоту
-      const state = el("div", `t-state${closed ? "" : " has-quick"}`);
-      state.appendChild(pill);
+      main.append(h, el("p", "item-meta", [name ? topicText : "", `№ ${t.id}`].filter(Boolean).join(" · ")));
+      // при наведении на место времени встаёт «Обработано»: строка не меняет высоту
+      const side = el("div", `t-side${closed ? "" : " has-quick"}`);
+      side.appendChild(el("time", "t-time", relTime(t.created_at), { title: fmtWhen(t.created_at) }));
       if (!closed) {
         const quick = el("button", "t-quick", null, { type: "button", title: "Отметить обработанным", "aria-label": `Отметить обработанным: обращение № ${t.id}` });
-        quick.append(icon("check"), document.createTextNode("Обработано"));
+        quick.appendChild(icon("check"));
         quick.addEventListener("click", (e) => { e.stopPropagation(); quickDone(t); });
         quick.addEventListener("keydown", (e) => e.stopPropagation());
-        state.appendChild(quick);
+        side.appendChild(quick);
       }
-      const side = el("div", "t-side");
-      side.append(el("time", "t-time", relTime(t.created_at), { title: fmtWhen(t.created_at) }), state);
-      it.append(tick(pick), el("span", `t-avatar tone-${tone(name || t.id)}`, initials(name), { "aria-hidden": "true" }), main, side);
+      it.append(lead, main, side);
       it.addEventListener("click", () => select(it, t.id, true));
       it.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(it, t.id, true); return; }
@@ -970,15 +970,10 @@ async function viewTickets(panel) {
     const name = String(fieldsMap["ФИО"] || "").trim();
     const topicText = t.topic || TYPE_TITLES[t.type] || t.type;
 
-    // шапка: кто, с чем, статус и переход к соседним обращениям
+    // шапка: кто и с чем; справа — переход к соседним обращениям
     const head = el("header", "case-head");
-    const who = el("div", "case-who");
-    const titles = el("div");
+    const titles = el("div", "case-titles");
     titles.append(el("h2", null, name || `Обращение № ${t.id}`), el("p", "case-sub", [`№ ${t.id}`, topicText, fmtWhen(t.created_at)].join(" · ")));
-    who.append(el("span", `t-avatar big tone-${tone(name || t.id)}`, initials(name), { "aria-hidden": "true" }), titles);
-    const headChip = el("span", `pill ${t.status}`);
-    const setChip = (st) => { headChip.className = `pill ${st}`; clear(headChip).append(el("i", null, null, { "aria-hidden": "true" }), document.createTextNode(STATUS_TITLES[st] || st)); };
-    setChip(t.status);
     const vis = visibleRows();
     const at = vis.findIndex((x) => Number(x.dataset.id) === t.id);
     const nav = el("div", "case-nav", null, { role: "group", "aria-label": "Соседние обращения" });
@@ -989,45 +984,27 @@ async function viewTickets(panel) {
       b.addEventListener("click", () => vis[at + d] && vis[at + d].click());
       return b;
     };
-    nav.append(step(-1, "Предыдущее (↑)", "up"), el("span", "pos tabnum", at >= 0 ? `${at + 1} из ${vis.length}` : ""), step(1, "Следующее (↓)", "down"));
-    head.append(who, headChip, nav);
+    nav.append(step(-1, "Предыдущее (↑)", "up"), el("span", "pos tabnum", at >= 0 ? `${at + 1} / ${vis.length}` : ""), step(1, "Следующее (↓)", "down"));
+    head.append(titles, nav);
 
     const body = el("div", "case-body");
-    if (t.similar && t.similar.length) {
-      body.appendChild(el("p", "dup-note", `Этот студент уже обращался: ${t.similar.map((s) => `№ ${s.id} (${STATUS_TITLES[s.status] || s.status})`).join(", ")}.`));
-    }
-
-    // заявка: что нужно и данные из анкеты
-    const requestSec = el("section", "case-sec");
-    const requestHead = el("p", "eyebrow");
-    requestHead.appendChild(el("span", null, "Заявка"));
-    if (t.has_attachment) {
-      const a = el("a", "btn small", null, { href: `/api/admin/tickets/${t.id}/attachment` });
-      a.append(icon("download"), document.createTextNode("Скачать заявление"));
-      requestHead.appendChild(a);
-    }
-    requestSec.appendChild(requestHead);
-    if ((t.payload || {}).request || fieldsEntries.length) {
-      const kv = el("dl", "kv");
-      if ((t.payload || {}).request) kv.append(el("dt", null, "Что нужно"), el("dd", null, t.payload.request));
-      for (const [k, v] of fieldsEntries) kv.append(el("dt", null, k), el("dd", null, v));
-      const card = el("div", "case-card");
-      card.appendChild(kv);
-      requestSec.appendChild(card);
-    }
-    if (!fieldsEntries.length) requestSec.appendChild(el("p", "hint", "Студент не передал личные данные: в обращение попал только его документ."));
-    body.appendChild(requestSec);
+    /** Раздел карточки: тихий заголовок, справа необязательная пометка. */
+    const section = (title, aside, ...nodes) => {
+      const sec = el("section", "case-sec");
+      const line = el("div", "sec-line");
+      line.appendChild(el("h3", "sec-title", title));
+      if (aside) line.appendChild(el("span", "sec-aside", aside));
+      sec.append(line, ...nodes);
+      return sec;
+    };
 
     // статус: один щелчок, «Отменить» в сообщении возвращает прежний
     let status = t.status;
-    const statusSec = el("section", "case-sec");
-    statusSec.appendChild(el("p", "eyebrow", "Статус"));
-    const segBox = el("div");
+    const segBox = el("div", "case-status");
     const drawSeg = () => {
-      const group = el("div", "seg tally", null, { role: "group", "aria-label": "Статус обращения" });
+      const group = el("div", "seg calm", null, { role: "group", "aria-label": "Статус обращения" });
       for (const st of meta.statuses) {
-        const b = el("button", null, null, { type: "button", "aria-pressed": String(st === status) });
-        b.append(el("i", `dot ${st}`, null, { "aria-hidden": "true" }), document.createTextNode(STATUS_LABEL[st]));
+        const b = el("button", null, STATUS_LABEL[st], { type: "button", "aria-pressed": String(st === status) });
         b.addEventListener("click", () => setStatus(st));
         group.appendChild(b);
       }
@@ -1040,23 +1017,42 @@ async function viewTickets(panel) {
       drawSeg();
       const ok = await guarded(async () => { await api("PATCH", `/api/admin/tickets/${t.id}`, { status: v }); return true; });
       if (!ok) { status = before; drawSeg(); return; }
-      setChip(v);
       if (!quiet) toast(`Статус: ${STATUS_TITLES[v]}`, () => { setStatus(before, true); toast("Статус возвращён"); });
       load();
       refreshHistory();
       refreshCounts();
     }
     drawSeg();
-    statusSec.appendChild(segBox);
-    body.appendChild(statusSec);
+    body.appendChild(segBox);
+    if (t.similar && t.similar.length) {
+      body.appendChild(el("p", "dup-note", `Этот студент уже обращался: ${t.similar.map((s) => `№ ${s.id} (${STATUS_TITLES[s.status] || s.status})`).join(", ")}.`));
+    }
 
-    // история: лента событий, новые сверху; обновляется после каждого сохранения
-    const historyBox = el("section", "case-sec");
+    // заявка: что нужно и данные из анкеты
+    const requestNodes = [];
+    if ((t.payload || {}).request || fieldsEntries.length) {
+      const kv = el("dl", "kv");
+      if ((t.payload || {}).request) kv.append(el("dt", null, "Что нужно"), el("dd", null, t.payload.request));
+      for (const [k, v] of fieldsEntries) kv.append(el("dt", null, k), el("dd", null, v));
+      requestNodes.push(kv);
+    }
+    if (!fieldsEntries.length) requestNodes.push(el("p", "hint", "Студент не передал личные данные: в обращение попал только его документ."));
+    if (t.has_attachment) {
+      const a = el("a", "t-link attach", null, { href: `/api/admin/tickets/${t.id}/attachment` });
+      a.append(icon("download"), document.createTextNode("Скачать заявление"));
+      requestNodes.push(a);
+    }
+    body.appendChild(section("Заявка", null, ...requestNodes));
+
+    // история: лента событий, новые сверху; по умолчанию три последних
+    const historyBox = el("div");
+    let historyItems = t.history || [];
+    let showAll = false;
     const drawHistory = (items) => {
+      historyItems = items;
       clear(historyBox);
-      historyBox.appendChild(el("p", "eyebrow", "История"));
       const ul = el("ul", "timeline");
-      for (const h of items) {
+      for (const h of showAll ? items : items.slice(0, 3)) {
         const li = el("li");
         const text = el("span", "t-text");
         text.append(el("b", null, h.actor === "student" ? "Студент" : (ACTOR_TITLES[h.actor] || h.actor)), document.createTextNode(` · ${h.text}`));
@@ -1064,13 +1060,14 @@ async function viewTickets(panel) {
         ul.appendChild(li);
       }
       historyBox.appendChild(ul);
+      if (items.length > 3) historyBox.appendChild(button(showAll ? "Свернуть" : `Показать ещё ${items.length - 3}`, () => { showAll = !showAll; drawHistory(historyItems); }, "t-link"));
     };
-    drawHistory(t.history || []);
+    drawHistory(historyItems);
     const refreshHistory = () => api("GET", `/api/admin/tickets/${t.id}`).then((r) => drawHistory(r.history || [])).catch(() => undefined);
 
     /** Текстовое поле обращения: кнопка «Сохранить» появляется только при изменении, Ctrl + Enter тоже сохраняет. */
     const savedText = (label, id, value, placeholder, apiField, saveLabel, done, presets = []) => {
-      const area = el("textarea", null, null, { id, rows: "3", maxlength: "2000", placeholder });
+      const area = el("textarea", null, null, { id, rows: "4", maxlength: "2000", placeholder });
       area.value = value || "";
       let saved = area.value;
       const actions = el("div", "form-actions hidden");
@@ -1086,9 +1083,8 @@ async function viewTickets(panel) {
       actions.append(save, el("span", "hint", "Ctrl + Enter — сохранить"));
       area.addEventListener("input", () => actions.classList.toggle("hidden", area.value === saved));
       area.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && area.value !== saved) save.click(); });
-      let node = area;
+      const nodes = [el("label", "sr", label, { for: id })];
       if (presets.length) {  // заготовки: нажатие вставляет текст (к уже написанному — с новой строки), его можно править до сохранения
-        node = el("div");
         const row = el("div", "preset-row");
         for (const p of presets) {
           const b = el("button", "chip-btn", p.title, { type: "button", title: p.text });
@@ -1099,21 +1095,26 @@ async function viewTickets(panel) {
           });
           row.appendChild(b);
         }
-        node.append(row, area);
+        nodes.push(row);
       }
-      return [field(label, node, id), actions];
+      nodes.push(area, actions);
+      return nodes;
     };
-    const section = (title, ...nodes) => {
-      const sec = el("section", "case-sec");
-      sec.appendChild(el("p", "eyebrow", title));
-      sec.append(...nodes);
-      return sec;
-    };
-    const replyNodes = savedText("Текст ответа", "t-reply", t.reply, "Студент увидит это на странице «Статус обращения» по своему коду", "reply", "Отправить ответ", `Ответ сохранён. Студент увидит его на странице «Статус обращения» по номеру ${t.id} и своему коду.`, replyPresets);
-    const replyHead = t.reply_at ? [el("p", "hint", `Ответ отправлен: ${fmtWhen(t.reply_at)}`)] : [];
-    body.appendChild(section("Ответ студенту", ...replyHead, ...replyNodes));
-    body.appendChild(section("Заметка сотрудника", ...savedText("Только для сотрудников", "t-note", t.note, "Что сделано, кому передано — видно только сотрудникам", "note", "Сохранить заметку", "Заметка сохранена")));
-    body.appendChild(historyBox);
+    const replyNodes = savedText("Текст ответа студенту", "t-reply", t.reply, "Студент увидит это на странице «Статус обращения» по своему коду", "reply", "Отправить ответ", `Ответ сохранён. Студент увидит его на странице «Статус обращения» по номеру ${t.id} и своему коду.`, replyPresets);
+    body.appendChild(section("Ответ студенту", t.reply_at ? `отправлен ${fmtWhen(t.reply_at)}` : "", ...replyNodes));
+
+    // заметка: если её нет, скрыта за ссылкой — карточка не перегружена
+    const noteNodes = savedText("Заметка сотрудника", "t-note", t.note, "Что сделано, кому передано — видно только сотрудникам", "note", "Сохранить заметку", "Заметка сохранена");
+    if (t.note) {
+      body.appendChild(section("Заметка", "видна только сотрудникам", ...noteNodes));
+    } else {
+      const holder = el("div", "hidden");
+      holder.append(...noteNodes);
+      const add = button("Добавить заметку", () => { holder.classList.remove("hidden"); add.classList.add("hidden"); holder.querySelector("textarea").focus(); }, "t-link");
+      const sec = section("Заметка", "", add, holder);
+      body.appendChild(sec);
+    }
+    body.appendChild(section("История", "", historyBox));
     rightBox.append(head, body);
   }
 
