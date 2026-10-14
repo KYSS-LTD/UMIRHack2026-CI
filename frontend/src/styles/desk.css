@@ -25,7 +25,6 @@
   .chat-bar { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 18px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, var(--surface-2), var(--surface)); animation: bar-in 520ms var(--spring) both; }
   @keyframes bar-in { from { opacity: 0; transform: translateY(-100%); } }
   .chat-live { position: relative; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
-  .chat-live.quiz { background: var(--lamp); }
   .chat-live.busy { background: var(--lamp); animation: node-pulse 1.4s var(--ease) infinite; }
   .chat-bar-title { display: grid; flex: 1; min-width: 0; line-height: 1.2; }
   .chat-bar-title strong { font-family: var(--serif); font-size: var(--fs-base); font-weight: 600; }
@@ -34,21 +33,18 @@
   .chat-clear:hover { border-color: color-mix(in srgb, var(--stamp) 45%, var(--line)); color: var(--stamp); transform: translateY(-1px); }
   .chat-clear:hover svg { animation: sweep-wiggle 620ms var(--ease); transform-origin: 80% 20%; }
   .chat-clear:active { transform: scale(.96); }
-  .chat-stop, .chat-stop-yes, .chat-stop-no { display: inline-flex; align-items: center; gap: 7px; flex: none; padding: 6px 12px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-size: var(--fs-sm); font-weight: 600; transition: border-color var(--t-fast), color var(--t-fast), background var(--t-fast), transform var(--t-base) var(--spring); }
-  .chat-stop:hover:not(:disabled), .chat-stop-no:hover { border-color: var(--line-strong); color: var(--ink); transform: translateY(-1px); }
-  .chat-stop:active, .chat-stop-yes:active, .chat-stop-no:active { transform: scale(.96); }
-  .chat-stop:disabled, .chat-stop-yes:disabled { opacity: .5; cursor: default; }
-  .chat-stop svg { transition: transform var(--t-base) var(--spring); }
-  .chat-stop:hover:not(:disabled) svg { transform: rotate(90deg); }
-  .chat-stop-ask { display: inline-flex; align-items: center; gap: 8px; flex: none; color: var(--ink-3); font-size: var(--fs-xs); animation: chip-in 320ms var(--spring) both; }
-  .chat-stop-yes { border-color: color-mix(in srgb, var(--stamp) 55%, var(--line)); background: color-mix(in srgb, var(--stamp) 9%, var(--surface)); color: var(--stamp); }
-  .chat-stop-yes:hover:not(:disabled) { background: color-mix(in srgb, var(--stamp) 16%, var(--surface)); transform: translateY(-1px); }
-  @media (max-width: 640px) {
-    .chat-bar { flex-wrap: wrap; row-gap: 8px; }
-    .chat-bar-title { flex-basis: 100%; }
-    .chat-stop-ask { flex: 1 1 100%; flex-wrap: wrap; row-gap: 6px; }
-    .chat-stop-ask > span { flex-basis: 100%; }
-  }
+  /* ---------- полоса «Идёт анкета» под шапкой: одно действие, подтверждение — на том же месте ---------- */
+  .quiz-strip { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 42px; padding: 6px 12px 6px 18px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--lamp) 9%, var(--surface)); font-size: var(--fs-sm); animation: strip-in 420ms var(--spring) both; }
+  @keyframes strip-in { from { opacity: 0; transform: translateY(-8px); } }
+  .quiz-strip-text { display: inline-flex; align-items: center; gap: 9px; min-width: 0; color: var(--ink-2); font-weight: 600; animation: fact-in 320ms var(--ease) both; }
+  .quiz-strip-text i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--lamp); animation: node-pulse 1.6s var(--ease) infinite; }
+  .quiz-strip-actions { display: inline-flex; align-items: center; gap: 4px; flex: none; animation: chip-in 320ms var(--spring) both; }
+  .strip-btn { padding: 5px 11px; border-radius: var(--r-pill); border: 1px solid transparent; background: transparent; color: var(--ink-2); font-size: var(--fs-sm); font-weight: 600; transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast), transform var(--t-base) var(--spring); }
+  .strip-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+  .strip-btn:active:not(:disabled) { transform: scale(.96); }
+  .strip-btn:disabled { opacity: .5; cursor: default; }
+  .strip-btn.danger { border-color: color-mix(in srgb, var(--stamp) 50%, var(--line)); background: color-mix(in srgb, var(--stamp) 10%, var(--surface)); color: var(--stamp); }
+  .strip-btn.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--stamp) 18%, var(--surface)); color: var(--stamp); }
   @keyframes sweep-wiggle { 25% { transform: rotate(-16deg) translateX(-2px); } 55% { transform: rotate(10deg) translateX(1px); } 80% { transform: rotate(-5deg); } }
 
   /* ---------- к последнему сообщению ---------- */

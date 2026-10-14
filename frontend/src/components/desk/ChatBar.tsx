@@ -11,15 +11,10 @@ interface Props {
   onStop: () => void;
 }
 
-/** Шапка диалога: что сейчас происходит, «Прекратить анкету» (пока она идёт) и «Очистить чат». Появляется, как только в ленте есть реплики. */
-export function ChatBar({ count, busy, quiz, onClear, onStop }: Props) {
+/** Полоса «Идёт анкета» под шапкой: одно действие, подтверждение меняется на месте — полоса не меняет высоту и не сдвигает ленту. */
+function QuizStrip({ busy, onStop }: { busy: boolean; onStop: () => void }) {
   const [asking, setAsking] = useState(false);
-  const status = busy ? "секретарь отвечает…" : quiz ? "идёт анкета" : `${count} ${plural(count, ["обмен", "обмена", "обменов"])}`;
 
-  // анкета кончилась (или её прекратили) — вопрос о подтверждении снимается; Esc тоже его снимает
-  useEffect(() => {
-    if (!quiz) setAsking(false);
-  }, [quiz]);
   useEffect(() => {
     if (!asking) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setAsking(false);
@@ -28,44 +23,59 @@ export function ChatBar({ count, busy, quiz, onClear, onStop }: Props) {
   }, [asking]);
 
   return (
-    <header className="chat-bar">
-      <span className={`chat-live ${busy ? "busy" : quiz ? "quiz" : ""}`} aria-hidden="true" />
-      <span className="chat-bar-title">
-        <strong>Диалог с секретарём</strong>
-        <small key={status} aria-live="polite">
-          {status}
-        </small>
+    <div className="quiz-strip" role="group" aria-label="Анкета">
+      <span className="quiz-strip-text" key={asking ? "ask" : "run"}>
+        <i aria-hidden="true" />
+        {asking ? "Ответы удалятся." : "Идёт анкета"}
       </span>
-      {quiz &&
-        (asking ? (
-          <span className="chat-stop-ask" role="group" aria-label="Прекратить анкету?">
-            <span>Ответы анкеты удалятся.</span>
-            <button
-              type="button"
-              className="chat-stop-yes"
-              disabled={busy}
-              onClick={() => {
-                setAsking(false);
-                onStop();
-              }}
-              autoFocus
-            >
-              Прекратить
-            </button>
-            <button type="button" className="chat-stop-no" onClick={() => setAsking(false)}>
-              Нет
-            </button>
-          </span>
-        ) : (
-          <button type="button" className="chat-stop" disabled={busy} onClick={() => setAsking(true)} title="Прекратить заполнение анкеты">
-            <Icon name="x" size={15} />
-            <span>Прекратить анкету</span>
+      {asking ? (
+        <span className="quiz-strip-actions" key="ask-actions">
+          <button
+            type="button"
+            className="strip-btn danger"
+            disabled={busy}
+            autoFocus
+            onClick={() => {
+              setAsking(false);
+              onStop();
+            }}
+          >
+            Прекратить
           </button>
-        ))}
-      <button type="button" className="chat-clear" onClick={onClear} title="Очистить чат и начать заново">
-        <Icon name="broom" size={15} />
-        <span>Очистить чат</span>
-      </button>
-    </header>
+          <button type="button" className="strip-btn" onClick={() => setAsking(false)}>
+            Нет
+          </button>
+        </span>
+      ) : (
+        <span className="quiz-strip-actions" key="run-actions">
+          <button type="button" className="strip-btn" disabled={busy} onClick={() => setAsking(true)} title="Прекратить заполнение анкеты">
+            Прекратить анкету
+          </button>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Шапка диалога: что сейчас происходит и «Очистить чат»; пока идёт анкета, под ней полоса с «Прекратить анкету». Появляется, как только в ленте есть реплики. */
+export function ChatBar({ count, busy, quiz, onClear, onStop }: Props) {
+  const status = busy ? "секретарь отвечает…" : `${count} ${plural(count, ["обмен", "обмена", "обменов"])}`;
+  return (
+    <>
+      <header className="chat-bar">
+        <span className={`chat-live ${busy ? "busy" : ""}`} aria-hidden="true" />
+        <span className="chat-bar-title">
+          <strong>Диалог с секретарём</strong>
+          <small key={status} aria-live="polite">
+            {status}
+          </small>
+        </span>
+        <button type="button" className="chat-clear" onClick={onClear} title="Очистить чат и начать заново">
+          <Icon name="broom" size={15} />
+          <span>Очистить чат</span>
+        </button>
+      </header>
+      {quiz && <QuizStrip busy={busy} onStop={onStop} />}
+    </>
   );
 }
