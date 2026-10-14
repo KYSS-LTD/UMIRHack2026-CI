@@ -181,3 +181,20 @@ def test_template_with_split_and_custom_keys_through_the_whole_questionnaire(app
     # студент видит читаемые названия, а не имена переменных
     assert set(g["unfilled"]) == {"номер зачётки", "record book"}
     assert "record_book" not in g["reply"]["text"] and "номер зачётки" in g["reply"]["text"]
+
+
+def fake_docx() -> bytes:
+    """Похоже на .docx (zip с нужными именами), но Word-документом не является: читалка падает на разборе."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("[Content_Types].xml", "<x/>")
+        z.writestr("word/document.xml", "<x/>")
+    return buf.getvalue()
+
+
+def test_a_broken_word_file_is_refused_with_a_message_not_a_server_error(admin):
+    """На Windows временный файл после ошибки чтения оставался занятым, и вместо 400 приходило 500."""
+    kb = admin.post("/api/admin/kb", files={"file": ("broken.docx", fake_docx(), "application/octet-stream")}, data={"name": "Сломанный"})
+    assert kb.status_code == 400 and "прочитать" in kb.json()["detail"]
+    tpl = admin.post("/api/admin/templates", files={"file": ("broken.docx", fake_docx(), "application/octet-stream")}, data={"name": "Сломанный", "template_id": "", "replace": "false"})
+    assert tpl.status_code == 400 and "прочитать" in tpl.json()["detail"]

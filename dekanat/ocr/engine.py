@@ -69,7 +69,7 @@ class TesseractEngine:
                 "Tesseract не найден. Установите его (Windows: https://github.com/UB-Mannheim/tesseract/wiki, "
                 "Linux: apt install tesseract-ocr tesseract-ocr-rus) или укажите путь в TESSERACT_CMD / config/settings.yaml."
             )
-        with tempfile.TemporaryDirectory(prefix="dekanat_") as tmp:
+        with tempfile.TemporaryDirectory(prefix="dekanat_", ignore_cleanup_errors=True) as tmp:
             cmd = [self.cmd]
             if image is not None:
                 path = Path(tmp) / "page.png"

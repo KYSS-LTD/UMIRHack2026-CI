@@ -108,7 +108,7 @@ def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_by
     def _upload_to_template(file: UploadFile, data: bytes, **kwargs) -> dict:
         if len(data) > MAX_TEMPLATE_BYTES:
             raise HTTPException(413, f"Файл больше {MAX_TEMPLATE_BYTES // (1024 * 1024)} МБ")
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:  # Windows может ещё держать файл после ошибки чтения: это не должно давать 500
             path = Path(tmp) / "upload.docx"  # имя файла от пользователя на диск не попадает
             path.write_bytes(data)
             original = Path(file.filename or "шаблон.docx").name

@@ -39,7 +39,7 @@ def read_upload(data: bytes, filename: str, max_bytes: int) -> str:
         raise KnowledgeBaseError("Файл с расширением .docx не является документом Word")
     if suffix == ".pdf" and not data.startswith(b"%PDF"):
         raise KnowledgeBaseError("Файл с расширением .pdf не является PDF")
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:  # Windows может ещё держать файл после ошибки чтения: это не должно давать 500
         path = Path(tmp) / f"doc{suffix}"
         path.write_bytes(data)
         try:
