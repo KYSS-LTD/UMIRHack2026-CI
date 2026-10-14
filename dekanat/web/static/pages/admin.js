@@ -597,7 +597,9 @@ async function viewTickets(panel) {
   wrap.append(left, rightBox);
   panel.appendChild(wrap);
 
+  const filtersBox = el("div", "filters-box");
   const filters = el("div", "filters");
+  filtersBox.appendChild(filters);
   const mk = (label, node) => { filters.appendChild(field(label, node)); return node; };
   const from = mk("С даты", el("input", null, null, { type: "date" }));
   const to = mk("По дату", el("input", null, null, { type: "date" }));
@@ -607,7 +609,7 @@ async function viewTickets(panel) {
   to.value = ticketFilter.to;
   const tally = el("div", "status-tally");
   const list = el("div", "items", null, { role: "listbox", "aria-label": "Обращения" });
-  left.append(filters, tally, list);
+  left.append(filtersBox, tally, list);
 
   let meta = null;
   let firstLoad = true;
@@ -643,12 +645,14 @@ async function viewTickets(panel) {
     clear(list);
     if (!res.items.length) list.appendChild(empty("Обращений нет", ticketFilter.status || ticketFilter.from || ticketFilter.to || ticketFilter.type || ticketFilter.topic ? "По этим условиям ничего не нашлось — попробуйте убрать часть фильтров." : "Когда студент передаст обращение из анкеты, оно появится здесь."));
     res.items.forEach((t, i) => {
-      const it = el("div", `item ticket${t.id === openTicketId ? " on" : ""}`, null, { role: "option", tabindex: "0", "aria-selected": String(t.id === openTicketId) });
+      const closed = t.status === "done" || t.status === "rejected";
+      const it = el("div", `item ticket${closed ? " closed" : ""}${t.id === openTicketId ? " on" : ""}`, null, { role: "option", tabindex: "0", "aria-selected": String(t.id === openTicketId) });
       it.style.animationDelay = `${Math.min(i * 35, 500)}ms`;
-      const main = el("div");
-      main.appendChild(el("h3", null, `№ ${t.id} · ${TYPE_TITLES[t.type] || t.type}`));
-      main.appendChild(el("p", "item-meta", `${relTime(t.created_at)} · ${t.topic || "без темы"}${t.note ? " · есть заметка" : ""}`));
-      it.append(main, el("span", `status ${t.status}`, STATUS_TITLES[t.status] || t.status));
+      // журнал входящих: номер — тема — когда — статус; тип в заголовок идёт, только если темы нет (иначе «Перевод · Перевод из другого вуза»)
+      const main = el("div", "t-main");
+      main.appendChild(el("h3", null, t.topic || TYPE_TITLES[t.type] || t.type));
+      main.appendChild(el("p", "item-meta", [relTime(t.created_at), t.note ? "есть заметка" : ""].filter(Boolean).join(" · "), { title: fmtWhen(t.created_at) }));
+      it.append(el("span", "t-no", `№ ${t.id}`), main, el("span", `status ${t.status}`, STATUS_TITLES[t.status] || t.status));
       it.addEventListener("click", () => select(it, t.id));
       it.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(it, t.id); return; }

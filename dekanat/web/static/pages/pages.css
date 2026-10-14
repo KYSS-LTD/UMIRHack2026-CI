@@ -340,19 +340,27 @@ label small { color: var(--ink-3); font-weight: 400; }
 .chip.ok { background: var(--ok-soft); color: var(--ok); }
 .chip.off { background: var(--surface-3); color: var(--ink-3); }
 
-/* статусы обращений: цвет + слово, не только цвет */
-.status { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 650; white-space: nowrap; }
-.status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-.status.new { color: var(--stamp); } .status.in_progress { color: var(--lamp); } .status.done { color: var(--ok); } .status.rejected { color: var(--none); }
+/* статусы обращений: штамп-ярлык — рамка и слово цветом статуса (цвет не единственный признак: читается и слово) */
+.status { display: inline-block; padding: 2px 7px 1px; border: 1px solid currentColor; border-radius: 3px; font-size: 10.5px; font-weight: 700; letter-spacing: .07em; line-height: 1.5; text-transform: uppercase; white-space: nowrap; }
+.status.new { color: var(--stamp); } .status.in_progress { color: var(--warn); } .status.done { color: var(--ok); } .status.rejected { color: var(--none); }
 .status-tally { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 16px 0 6px; padding-top: 14px; border-top: 1px solid var(--line); }
-.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 12px; }
-@media (max-width: 560px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.ticket { cursor: pointer; border-radius: 10px; padding-left: 8px; padding-right: 8px; transition: background 140ms; }
-.ticket:hover, .ticket.on { background: var(--surface-2); }
-.ticket.on { box-shadow: inset 3px 0 0 var(--ink); }
-.ticket h3 { font-family: var(--font); font-size: 14.5px; font-weight: 650; }
-.seg { display: inline-flex; flex-wrap: nowrap; max-width: 100%; gap: 2px; padding: 3px; overflow-x: auto; scrollbar-width: none; border-radius: var(--r-pill); background: var(--surface-3); }
-.seg::-webkit-scrollbar { display: none; }
+/* фильтры: четыре поля в ряд, пока хватает ширины колонки, иначе два на два (без одинокого поля на второй строке) */
+.filters-box { container-type: inline-size; }
+.filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 12px; }
+@container (max-width: 560px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* обращения — журнал входящих: номер, тема, когда, статус; выбранная строка — прямая полоса слева, без скруглённых плашек */
+.ticket { grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 0 12px; padding: 12px 10px 12px 12px; border-radius: 0; cursor: pointer; transition: background 140ms; }
+.ticket:hover { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.ticket.on { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--stamp); }
+.t-no { color: var(--ink-3); font-family: var(--serif); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ticket.on .t-no { color: var(--ink); }
+.t-main { min-width: 0; }
+.ticket h3 { font-size: 15.5px; font-weight: 600; line-height: 1.25; }
+.ticket .item-meta { margin-top: 3px; }
+.ticket.closed h3 { color: var(--ink-2); }
+@media (max-width: 720px) { .ticket { grid-template-columns: 46px minmax(0, 1fr) auto; } }
+@media (max-width: 440px) { .ticket { grid-template-columns: 46px minmax(0, 1fr); row-gap: 6px; } .ticket .status { grid-column: 2; justify-self: start; } }
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; gap: 2px; padding: 3px; border-radius: 18px; background: var(--surface-3); }
 .seg button { flex: none; }
 .seg button { padding: 6px 12px; border: 0; background: none; box-shadow: none; color: var(--ink-2); font-size: 13px; }
 .seg button:hover:not(:disabled) { background: var(--surface); transform: none; box-shadow: none; }
