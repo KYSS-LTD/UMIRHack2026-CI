@@ -241,8 +241,10 @@ class Dekanat:
 
     # ------------------------------------------------------------------ анализ
     def analyze(self, data: Optional[bytes], filename: str = "", question: str = "", doc_type: Optional[str] = None,
-                progress: Optional[Progress] = None) -> AnalysisResult:
-        """progress(этап, подпись, доля) можно использовать для индикатора; исключение из него (Cancelled) прерывает проверку."""
+                progress: Optional[Progress] = None, document_first: bool = False) -> AnalysisResult:
+        """progress(этап, подпись, доля) можно использовать для индикатора; исключение из него (Cancelled) прерывает проверку.
+        document_first — режим стола: с загруженным документом отвечаем по документу, по Положению — только если оно упомянуто
+        (пакетный режим и CLI работают как в кейсе: по полям документа и пунктам Положения)."""
         report = progress or (lambda *_: None)
         t0 = time.time()
         timings: dict[str, float] = {}
@@ -307,27 +309,35 @@ class Dekanat:
         if data is None and self.qa.needs_document(question):
             answer = Answer("no_answer", NEED_DOCUMENT_TEXT, "no_document", confidence=1.0)
         elif data and spec is None:
-            answer = self._answer_unsupported(question, pages, how == "generic", ocr_notes)
+            answer = self._answer_unsupported(question, pages, how == "generic", ocr_notes, document_first)
         else:
-            answer = self.qa.answer(question, spec, fields or None, ocr_notes)
+            text_qa = (lambda q: self.docqa.answer(q, pages)) if (document_first and any(p.words for p in pages)) else None
+            answer = self.qa.answer(question, spec, fields or None, ocr_notes, document_first=document_first, document_text=text_qa)
         self._attach_explanation(question, answer)
         timings["answer"] = round(time.time() - t2, 2)
         timings["total"] = round(time.time() - t0, 2)
         report("done", "Готово", 1.0)
         return AnalysisResult(spec, how, cls, pages, fields, answer, timings, warnings, originals, titles)
 
-    def answer_for_fields(self, question: str, doc_type_id: Optional[str], fields: list[FieldResult]) -> Answer:
+    def answer_for_fields(self, question: str, doc_type_id: Optional[str], fields: list[FieldResult], document_first: bool = False) -> Answer:
         """Ответ по уже готовой карточке (например, исправленной пользователем) без повторного OCR."""
         spec = self.doc_types.get(doc_type_id or "")
         if spec is None or not fields:
             return self.analyze(None, "", question).answer
-        answer = self.qa.answer(question, spec, fields)
+        answer = self.qa.answer(question, spec, fields, document_first=document_first)
         self._attach_explanation(question, answer)
         return answer
 
-    def _answer_unsupported(self, question: str, pages: list[OcrPage], chosen_generic: bool, ocr_notes: list[str]) -> Answer:
+    def _answer_unsupported(self, question: str, pages: list[OcrPage], chosen_generic: bool, ocr_notes: list[str], document_first: bool = False) -> Answer:
         """Тип документа не определён (или выбран «другой документ»): отвечаем по тексту документа и по Положению."""
         q = question.strip()
+        if document_first and q and any(p.words for p in pages) and not self.qa.needs_document(q):
+            # режим стола: по Положению — только если оно упомянуто, иначе только по тексту документа
+            if self.qa.regulation_mentioned(q):
+                return self.qa.answer_rules(q)
+            ans = self.qa.from_document(q, lambda x: self.docqa.answer(x, pages))
+            ans.notes += ([] if chosen_generic else [UNSUPPORTED_NOTE]) + ocr_notes
+            return ans
         needs_check = self.qa.needs_document(q)
         rule = self.qa.answer(q, None, None) if q and not needs_check else None
         doc = self.docqa.answer(q, pages) if (q and not needs_check) and any(p.words for p in pages) else None

@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 from ..config import DocTypeSpec, FieldSpec, PartSpec
 from ..extract.labels import label_stems
@@ -65,7 +65,15 @@ _WH_KINDS = {
 }
 _GENERIC_STEMS = frozenset(stem(w) for w in "студент студентка студента студенты обучающийся справка справки документ документы заявление заявления".split())
 _WH = frozenset("кто кого кому какой какая какое какие каких какого какую какому каком какими когда сколько где куда чей чья чьё".split())
-_ASK_VERB = re.compile(r"\b(?:укажи\w*|назови\w*|покажи\w*|скажи\w*)\b|как зовут")
+_ASK_VERB = re.compile(r"\b(?:укажи\w*|назови\w*|покажи\w*|скажи\w*|найди\w*|выдели\w*|подсвет\w*|отметь\w*)\b|как зовут")
+# Прямое упоминание Положения (правил, регламента, пункта): вопрос о правилах, даже если загружен документ
+_REG_MENTION = re.compile(r"положени|регламент|\bправил(?:а|ам|ами|ах)?\b|\bпункт\w*\s+\d|\bп\.\s*\d")
+# само упоминание в поиск не идёт: «Сколько дней рассматривается заявление по Положению?» ищется как обычный вопрос
+_REG_PHRASE = re.compile(r"(?:\b(?:по|в|во|из|согласно)\s+)?(?:настоящ\w+\s+)?(?:положени\w*|регламент\w*|правил(?:а|ам|ами|ах)?)\b\s*[:,—–-]?", re.IGNORECASE)
+_CLAUSE_REF = re.compile(r"(?:\bпункт\w*|\bп\.)\s*(\d+(?:\.\d+)+)")
+# «Кто студент?», «Покажи студента», «Чья справка?» — это ФИО студента
+_WHO_STUDENT = re.compile(r"как зовут|фамили|имя\b|\bкто\b[^?]*\bстудент|\b(?:покажи|укажи|назови|найди|выдели)\w*\s+студент|\bчь(?:я|е|ё|и)\b")
+_MARK_WORDS = re.compile(r"печат|подпис|штамп")
 _DOC_WORDS = frozenset("справка справки справку справке справкой документ документа документы документе заявление заявления заявлению заявлении заявлением бумага бумаги фото снимок скан".split())
 _CUE_WORDS = frozenset(
     "хватит хватает достаточно достаточна достаточен подойдет подойдёт подходит годится годен пригодна пригоден порядке примет примут принимается принимают принять ошибки ошибок ошибка верно правильно оформлена оформлено оформлен заполнено заполнена нужно можно".split()
@@ -221,11 +229,15 @@ class QAEngine:
             # узкие синонимы полей («начинается» ~ «начало»); общие синонимы Положения тут вредны («дней» ~ «период»)
             return stem_eq(q, p) or p in self._fsyn.get(q, ())
 
-        if wh_word in ("где", "куда") and not any(w in self._NOT_PLACE for w in raw):
+        nq = normalize(question)
+        marks_asked = bool(_MARK_WORDS.search(nq))
+        if marks_asked and wh_word in ("где", "куда"):
+            accepted_kinds = None  # «где печать?» — отметка на документе, а не место
+        if wh_word in ("где", "куда") and not marks_asked and not any(w in self._NOT_PLACE for w in raw):
             orgs = [unit_id(f, p) for f, p in dt.iter_units() if (p.kind if p else f.kind) == "org" and unit_id(f, p) in units]
             if len(orgs) == 1:
                 return orgs[0], True, 2, "org", 1.0
-        if re.search(r"как зовут|фамили|имя\b", normalize(question)):
+        if _WHO_STUDENT.search(nq):
             for f, p in dt.iter_units():
                 if f.kind == "person" and unit_id(f, p) in units and f.title.lower().startswith("фио"):
                     return unit_id(f, p), True, 2, f.kind, 1.0
@@ -265,7 +277,15 @@ class QAEngine:
         return (best[1], best[2], best[3], best[4], best[5]) if best else None
 
     # ------------------------------------------------------------------ намерение
-    def classify_intent(self, question: str, dt: Optional[DocTypeSpec], units: dict[str, UnitView]) -> tuple[str, Optional[str]]:
+    @staticmethod
+    def regulation_mentioned(question: str) -> bool:
+        """В вопросе прямо названо Положение (правила, регламент, пункт): отвечаем по нему, даже если загружен документ."""
+        return bool(_REG_MENTION.search(normalize(question or "")))
+
+    def classify_intent(self, question: str, dt: Optional[DocTypeSpec], units: dict[str, UnitView],
+                        document_first: bool = False) -> tuple[str, Optional[str]]:
+        """document_first — режим стола: документ загружен, значит отвечаем по документу; Положение — только если оно упомянуто.
+        Проверка комплектности остаётся проверкой документа (требования к нему и есть пункты Положения)."""
         t = normalize(question)
         if dt is None or not units:
             return "rule", None
@@ -273,8 +293,12 @@ class QAEngine:
             return "completeness", None
         if _COMPLETE_WEAK.search(t) and (_DOC_REF.search(t) or _DOC_SINGULAR.search(t)):
             return "completeness", None
+        if _REG_MENTION.search(t):
+            return "rule", None
         has_wh = any(w in _WH for w in tokenize(question)) or bool(_ASK_VERB.search(t))
         target = None if re.search(r"может быть|могут быть|должен быть|должна быть|должны быть|можно быть", t) else self._fact_target(question, dt, units)
+        if document_first:
+            return ("fact", target[0]) if target else ("document", None)
         if target and (has_wh or len(tokenize(question, drop_stop=True)) <= 4):
             uid, is_title, n_stems, kind, label_cover = target
             if not self._unexplained(question):
@@ -290,7 +314,9 @@ class QAEngine:
         return "rule", None
 
     # ------------------------------------------------------------------ главный вход
-    def answer(self, question: str, dt: Optional[DocTypeSpec], fields: Optional[list[FieldResult]], ocr_notes: Optional[list[str]] = None) -> Answer:
+    def answer(self, question: str, dt: Optional[DocTypeSpec], fields: Optional[list[FieldResult]], ocr_notes: Optional[list[str]] = None,
+               document_first: bool = False, document_text: Optional[Callable[[str], Answer]] = None) -> Answer:
+        """document_first — режим стола (см. classify_intent); document_text(вопрос) — ответ по распознанному тексту документа."""
         question = (question or "").strip()
         units = build_units(dt, fields) if (dt and fields) else {}
         if not question:
@@ -298,11 +324,13 @@ class QAEngine:
                 question = "Всё ли в порядке с документом?"
             else:
                 return Answer("no_answer", "Задайте вопрос по документу или по Положению.", "empty", confidence=1.0)
-        intent, uid = self.classify_intent(question, dt, units)
+        intent, uid = self.classify_intent(question, dt, units, document_first)
         if intent == "completeness" and dt and units:
             ans = self._completeness(question, dt, units)
         elif intent == "fact" and dt and units and uid:
             ans = self._fact(question, dt, units, uid)
+        elif intent == "document":
+            ans = self.from_document(question, document_text)
         else:
             ans = self._rule(question)
         ans.intent = intent if intent != "rule" or ans.verdict != "no_answer" else "rule"
@@ -448,6 +476,27 @@ class QAEngine:
         ans.facts = [self._fact_row(u)]
         return ans
 
+    # ------------------------------------------------------------------ только по документу
+    def from_document(self, question: str, document_text: Optional[Callable[[str], Answer]] = None) -> Answer:
+        """Документ загружен, Положение не упомянуто, ни одно поле не подошло: ищем ответ в тексте документа.
+        Не нашли — так и говорим; если ответ есть в Положении, подсказываем, как спросить по нему (но не отвечаем за документ)."""
+        found = document_text(question) if document_text else None
+        if found is not None and found.verdict == "ok" and found.sources:
+            found.intent = "document"
+            return found
+        q = question.strip().rstrip("?").strip()
+        if self._rule(question).verdict == "ok":
+            ask = f"{q} — по Положению?"
+            return Answer("no_answer", f"В загруженном документе нет ответа на вопрос «{q}?». Ответ есть в Положении — чтобы получить его, спросите: «{ask}»",
+                          "document", confidence=0.8, debug={"regulation_question": ask})
+        ans = self._no_answer(question)
+        ans.intent = "document"
+        return ans
+
+    def answer_rules(self, question: str) -> Answer:
+        """Ответ только по Положению (вопрос без документа или с прямым упоминанием Положения)."""
+        return self._rule(question)
+
     # ------------------------------------------------------------------ вопрос о правилах
     def _best_sentences(self, clause: Clause, qterms: list[str]) -> str:
         sents = sentences(clause.text)
@@ -461,14 +510,20 @@ class QAEngine:
         top = sorted(scored, key=lambda x: -x[0])[:2]
         return " ".join(s for _, _, s in sorted(top, key=lambda x: x[1]))
 
-    def _rule(self, question: str) -> Answer:
+    def _rule(self, original: str) -> Answer:
+        ref = _CLAUSE_REF.search(original.lower())
+        clause = next((c for c in self.clauses if ref and c.number == ref.group(1)), None)
+        if clause is not None:  # «Что сказано в пункте 3.4?» — сам пункт, без поиска
+            return Answer("ok", f"{clause.text} ({clause.cite})", "rule", [self._clause_source(clause)], confidence=0.95)
+        stripped = re.sub(r"\s+", " ", _REG_PHRASE.sub(" ", original)).strip(" :,—–-")
+        question = stripped if self.index.query_terms(stripped) else original
         qterms = self.index.query_terms(question)
         if not qterms:
-            return self._no_answer(question, "в вопросе нет предметных слов")
+            return self._no_answer(original, "в вопросе нет предметных слов")
         mods = self._modifier_stems(question)
         hits = self.index.search(question, 5, qterms, mods)
         if not hits:
-            return self._no_answer(question)
+            return self._no_answer(original)
         top = hits[0]
         rare = [m for m in top.unmatched if (self.index.idf(m) if self.index.df_of(m) else self.index.max_idf) >= self.index.rare_threshold()]
         answerable = top.coverage >= self.min_coverage and not (rare and top.coverage < 0.75)
@@ -484,7 +539,7 @@ class QAEngine:
                 if judged.clause_number:
                     top = next((h for h in hits if h.clause.number == judged.clause_number), top)
         if not answerable:
-            ans = self._no_answer(question, note)
+            ans = self._no_answer(original, note)
             ans.debug = {"top": top.clause.number, "coverage": round(top.coverage, 2), "unmatched": top.unmatched}
             return ans
         sentence = self._best_sentences(top.clause, qterms)

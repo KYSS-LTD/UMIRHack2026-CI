@@ -18,7 +18,7 @@ import { isQuizState, mergeCorrection, optionText } from "../lib/dialog";
 import { fileFromClipboard, isPdf, validateFile } from "../lib/files";
 import { fieldBoxes } from "../lib/format";
 import { STAGES, stageIndex } from "../lib/stages";
-import { suggestionsFor } from "../lib/suggestions";
+import { aboutRegulation, suggestionsFor } from "../lib/suggestions";
 import { AUTO_TYPE, type Box, type DialogState, type DocTypeSummary, type FieldResult, GENERIC_TYPE, type Health, type PartResult, type SampleItem, type Source } from "../types";
 import { ConfirmDialog } from "../ui/Dialog";
 import { Icon } from "../ui/Icon";
@@ -395,7 +395,8 @@ export function CheckView({ types, health, onOpenClause }: Props) {
     setHover(null);
     setActiveField(null);
   };
-  const suggestions = quiz ? [] : suggestionsFor(types, docType, deskTurn?.result?.doc_type.id, rules.data?.rules ?? [], assistant.ready);
+  const suggestions = quiz ? [] : aboutRegulation(suggestionsFor(types, docType, deskTurn?.result?.doc_type.id, rules.data?.rules ?? [], assistant.ready), !!file);
+  const ruleTexts = useMemo(() => new Set((rules.data?.rules ?? []).map((r) => r.text)), [rules.data]);
 
   return (
     <div className="desk">
@@ -435,7 +436,8 @@ export function CheckView({ types, health, onOpenClause }: Props) {
             }}
             onClearHistory={history.clear}
             rules={(rules.data?.rules ?? []).map((r) => r.text)}
-            onAsk={(t, q) => void submit({ file: t.file as File | null, question: q, docType: t.docType, direct: true })}
+            // подсказка о правилах — вопрос к Положению, без документа; остальное — по тому же документу
+            onAsk={(t, q) => void submit({ file: ruleTexts.has(q) ? null : (t.file as File | null), question: q, docType: t.docType, direct: true })}
             onEdit={(t) => {
               setQuestion(t.question);
               setDocType(t.docType);

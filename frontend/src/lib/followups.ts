@@ -13,6 +13,9 @@ export function followUps(result: AnalysisResult, asked: string, rules: string[]
   const push = (q: string) => {
     if (norm(q) !== norm(asked) && !out.some((x) => norm(x) === norm(q))) out.push(q);
   };
+  // в документе ответа нет, а в Положении есть: первым предлагаем тот же вопрос «по Положению»
+  const regulation = result.answer.debug?.regulation_question;
+  if (typeof regulation === "string" && regulation) push(regulation);
 
   if (!result.doc_type.id) {
     ["О чём документ?", "Какая дата документа?", "Какой номер документа?", "Что указано в п. 1?"].forEach(push);

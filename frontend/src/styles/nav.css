@@ -65,6 +65,13 @@
   .tab-ind { position: absolute; z-index: 0; left: 0; top: 4px; bottom: 4px; border-radius: 13px; background: linear-gradient(180deg, color-mix(in srgb, var(--btn) 90%, #fff), var(--btn)); box-shadow: 0 10px 20px -10px color-mix(in srgb, var(--btn) 75%, transparent), inset 0 1px 0 rgb(255 255 255 / .22); transition: transform 600ms var(--spring), width 600ms var(--spring), opacity 260ms; }
   .tab-ind::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 16px; height: 3px; translate: -50% 0; border-radius: 3px; background: var(--lamp); box-shadow: 0 0 10px 1px var(--lamp); }
 
+  /* ---------- переключатель для сотрудника: тот же, что на странице сотрудников ---------- */
+  .staff-switch { display: flex; gap: 2px; padding: 4px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--ink) 6%, transparent); box-shadow: inset 0 1px 2px light-dark(rgb(20 33 58 / .09), rgb(0 0 0 / .4)); animation: tab-in 600ms var(--spring) both; }
+  .staff-switch a { padding: 6px 13px; border-radius: var(--r-pill); color: var(--ink-2); font-size: var(--fs-sm); font-weight: 650; text-decoration: none; white-space: nowrap; transition: color var(--t-fast), background var(--t-fast); }
+  .staff-switch a:hover { color: var(--ink); }
+  .staff-switch a[aria-current="page"] { background: var(--btn); color: var(--btn-ink); box-shadow: var(--shadow-1); }
+  @media (max-width: 900px) { .staff-switch a:not([aria-current]) { padding: 6px 10px; } .staff-switch a[aria-current] { display: none; } }
+
   /* ---------- правая часть: поиск и одно меню ---------- */
   .tools { display: flex; align-items: center; gap: 8px; flex: none; }
   .search-pill { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 7px 0 13px; border-radius: 14px; background: color-mix(in srgb, var(--ink) 5%, transparent); border: 1px solid var(--line); color: var(--ink-3); font-size: var(--fs-sm); font-weight: 600; transition: border-color 200ms, background 200ms, color 200ms, transform 460ms var(--spring), box-shadow 300ms; }

@@ -117,6 +117,54 @@ function fmtDate(iso) {
   return isNaN(d) ? iso : d.toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
 }
 
+// ---------------------------------------------------------------- даты и числа по-русски
+const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+const WEEKDAYS = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
+
+function plural(n, forms) {
+  const a = Math.abs(n) % 100;
+  const b = a % 10;
+  return forms[a > 10 && a < 20 ? 2 : b === 1 ? 0 : b >= 2 && b <= 4 ? 1 : 2];
+}
+
+function fmtNum(n) {
+  return Number(n || 0).toLocaleString("ru-RU");
+}
+
+/** «2026-10-14» → «14 окт» (long: «вторник, 14 октября»). День статистики — дата в UTC. */
+function fmtDay(day, long) {
+  const d = new Date(`${day}T00:00:00Z`);
+  if (isNaN(d)) return day;
+  return long ? `${WEEKDAYS[d.getUTCDay()]}, ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}` : `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}`;
+}
+
+/** «сегодня, 10:32» · «вчера, 18:05» · «12 окт, 09:10» · «12 окт 2025, 09:10». */
+function fmtWhen(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d)) return String(iso);
+  const time = d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  const today = new Date();
+  const start = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((start(today) - start(d)) / 86400000);
+  if (days === 0) return `сегодня, ${time}`;
+  if (days === 1) return `вчера, ${time}`;
+  const year = d.getFullYear() === today.getFullYear() ? "" : ` ${d.getFullYear()}`;
+  return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}${year}, ${time}`;
+}
+
+/** «только что» · «5 мин назад» · «2 ч назад» · дальше — дата. */
+function relTime(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return fmtWhen(iso);
+  const min = Math.round((Date.now() - d.getTime()) / 60000);
+  if (min < 1) return "только что";
+  if (min < 60) return `${min} мин назад`;
+  if (min < 24 * 60) return `${Math.round(min / 60)} ч назад`;
+  return fmtWhen(iso);
+}
+
 function showBanner(container, kind, text) {
   clear(container);
   if (!text) return;

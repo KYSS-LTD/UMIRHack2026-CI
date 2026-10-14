@@ -166,6 +166,8 @@ export interface Health {
   doc_types: { id: string; title: string; fields: number }[];
   regulation: { name: string; clauses: number };
   llm: { backend: string; [k: string]: unknown };
+  /** вошёл ли сотрудник деканата (для переключателя «Стол декана | Сотрудникам») */
+  admin?: { authenticated?: boolean; configured?: boolean; protect_edit?: boolean };
 }
 
 export interface SampleItem {

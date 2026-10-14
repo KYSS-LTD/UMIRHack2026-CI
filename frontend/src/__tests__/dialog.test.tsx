@@ -7,7 +7,8 @@ import { Thread } from "../components/desk/Thread";
 import { NavBar } from "../components/NavBar";
 import { cardOwners, trimTurns, type Turn, useDesk } from "../hooks/useDesk";
 import { isQuizState, markCorrected, mergeCorrection, optionText, parseReview, splitQuestion } from "../lib/dialog";
-import { suggestionsFor } from "../lib/suggestions";
+import { followUps } from "../lib/followups";
+import { aboutRegulation, suggestionsFor } from "../lib/suggestions";
 import type { AnalysisResult, DialogInfo, DialogReply, FieldResult } from "../types";
 
 const noop = () => {};
@@ -388,5 +389,31 @@ describe("document card is shown once per file", () => {
   it("keeps the card on the first answer about the file", () => {
     render(<AnswerTurn {...props} />);
     expect(screen.getByText("Что найдено в документе")).toBeInTheDocument();
+  });
+});
+
+describe("answers by the document, regulation only when named", () => {
+  const rules = [
+    { kind: "rules" as const, text: "Сколько дней рассматривается заявление?" },
+    { kind: "rules" as const, text: "Что сказано в Положении о справке?" },
+    { kind: "check" as const, text: "Чего не хватает в документе?" },
+  ];
+
+  it("names the regulation in rule suggestions while a document is on the desk", () => {
+    const out = aboutRegulation(rules, true);
+    expect(out[0]!.text).toBe("По Положению: сколько дней рассматривается заявление?");
+    expect(out[1]!.text).toBe("Что сказано в Положении о справке?"); // уже называет Положение
+    expect(out[2]!.text).toBe("Чего не хватает в документе?"); // вопрос о документе не меняется
+  });
+
+  it("leaves suggestions alone when there is no document", () => {
+    expect(aboutRegulation(rules, false)).toBe(rules);
+  });
+
+  it("offers the same question «по Положению» first when the document has no answer", () => {
+    const r = result({ answer: { ...result().answer, verdict: "no_answer", intent: "document", text: "В загруженном документе нет ответа", debug: { regulation_question: "Сколько дней рассматривается заявление — по Положению?" } } });
+    const list = followUps(r, "Сколько дней рассматривается заявление?", []);
+    expect(list[0]).toBe("Сколько дней рассматривается заявление — по Положению?");
+    expect(followUps(result(), "Что-то", [])[0]).not.toContain("по Положению");
   });
 });

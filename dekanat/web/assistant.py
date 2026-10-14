@@ -210,7 +210,7 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
     # ------------------------------------------------------------------ вопросы вне анкеты
     def answer_question(sid: str, text: str, record: Optional[dict]) -> dict:
         if record and record["doc_type"]["id"]:
-            ans = svc.answer_for_fields(text, record["doc_type"]["id"], restore_fields(record))
+            ans = svc.answer_for_fields(text, record["doc_type"]["id"], restore_fields(record), document_first=True)
         else:
             ans = svc.analyze(None, "", text).answer
         storage.events.log("question", classify_topic(text), ans.verdict, sid)
@@ -379,7 +379,7 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
                 raise HTTPException(400, error)
             storage.sessions.save_document(sid, record)
         fields = restore_fields(record)
-        ans = svc.answer_for_fields(body.question.strip(), record["doc_type"]["id"], fields) if record["doc_type"]["id"] else None
+        ans = svc.answer_for_fields(body.question.strip(), record["doc_type"]["id"], fields, document_first=True) if record["doc_type"]["id"] else None
         # fields — карточка в том же виде, что в ответе проверки (без рамок): интерфейс стола обновляет её на месте
         return {"document": public_doc(record), "fields": [f.to_dict() for f in fields], "answer": ans.to_dict() if ans else None}
 

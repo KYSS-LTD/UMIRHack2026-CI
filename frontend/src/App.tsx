@@ -100,7 +100,7 @@ function Shell() {
       <a className="skip" href="#main">
         К содержимому
       </a>
-      <NavBar route={hash.route} onRoute={(r) => setHash({ route: r, clause: null })} theme={theme.theme} onThemeSet={theme.set} onPalette={() => setPalette(true)} onHelp={() => setHelp(true)} />
+      <NavBar route={hash.route} onRoute={(r) => setHash({ route: r, clause: null })} theme={theme.theme} onThemeSet={theme.set} staff={!!health.data?.admin?.authenticated} onPalette={() => setPalette(true)} onHelp={() => setHelp(true)} />
 
       <main id="main" tabIndex={-1} className={`route route-${hash.route}`}>
         {health.error && (

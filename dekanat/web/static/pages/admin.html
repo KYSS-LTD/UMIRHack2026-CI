@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Администратор — Онлайн-деканат</title>
+  <title>Кабинет сотрудника — Онлайн-деканат</title>
   <link rel="icon" href="/static/pages/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/pages/pages.css">
 </head>
@@ -12,26 +12,27 @@
 
   <header class="top">
     <div class="island">
-      <a class="brand" href="/" aria-label="Онлайн-деканат — на стол">
+      <a class="brand" href="/" aria-label="Онлайн-деканат — на стол декана">
         <img src="/static/pages/logo.svg" alt="" width="40" height="40">
-        <span class="brand-text"><strong>Онлайн-деканат</strong><small>Для сотрудников деканата</small></span>
+        <span class="brand-text"><strong>Онлайн-деканат</strong><small>кабинет сотрудника</small></span>
       </a>
-      <nav aria-label="Разделы">
+      <nav class="mode-switch" aria-label="Стол или кабинет сотрудника">
         <a href="/">Стол декана</a>
         <a href="/admin" aria-current="page">Сотрудникам</a>
       </nav>
-      <span id="who"></span>
-      <button id="btn-logout" type="button" class="small hidden">Выйти</button>
+      <span id="who" class="who hidden"></span>
+      <button id="btn-logout" type="button" class="small ghost hidden" aria-label="Выйти из кабинета"><span>Выйти</span></button>
       <button id="theme-btn" class="round-btn" type="button" aria-label="Сменить тему" title="Сменить тему"></button>
     </div>
   </header>
 
   <main>
-    <div id="banner"></div>
+    <div id="banner" aria-live="polite"></div>
 
-    <section id="login" class="card login hidden" aria-labelledby="login-title">
+    <section id="login" class="login hidden" aria-labelledby="login-title">
       <div class="seal"><img src="/static/pages/logo.svg" alt="" width="56" height="56"></div>
-      <h2 id="login-title">Вход для сотрудников</h2>
+      <p class="eyebrow">Онлайн-деканат</p>
+      <h1 id="login-title">Вход для сотрудников</h1>
       <form id="login-form" autocomplete="on">
         <label for="u">Логин</label>
         <input id="u" type="text" autocomplete="username" required>
@@ -39,11 +40,18 @@
         <input id="p" type="password" autocomplete="current-password" required>
         <button class="primary" type="submit">Войти</button>
       </form>
-      <p class="muted">Учётную запись администратора создаёт ответственный за сервер командой <code>python -m dekanat create-admin</code>. Пароля по умолчанию не существует.</p>
+      <p class="login-note">Учётную запись выдаёт ответственный за сервер. Общего пароля «по умолчанию» нет.</p>
     </section>
 
     <div id="app" class="hidden">
-      <div class="tabs" role="tablist" aria-label="Разделы администратора" id="tabs"></div>
+      <header class="page-head">
+        <div>
+          <p class="eyebrow" id="today"></p>
+          <h1>Кабинет сотрудника</h1>
+        </div>
+        <p class="page-summary" id="summary"></p>
+      </header>
+      <div class="ledger-tabs" role="tablist" aria-label="Разделы кабинета" id="tabs"></div>
       <div id="panel"></div>
     </div>
   </main>

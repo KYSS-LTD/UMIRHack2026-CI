@@ -220,15 +220,15 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             raise HTTPException(400, "Загрузите документ или задайте вопрос по Положению")
         return data, name
 
-    def _payload(data, name, question, doc_type, progress=None, sid: str = "") -> dict:
-        res = svc.analyze(data, name, question, doc_type, progress=progress)
+    def _payload(data, name, question, doc_type, progress=None, sid: str = "", document_first: bool = False) -> dict:
+        res = svc.analyze(data, name, question, doc_type, progress=progress, document_first=document_first)
         corrected: list[str] = []
         if data and sid:
             try:  # карточка полей проверенного документа нужна анкете и правке полей на столе; без сессии проверка работает как прежде
                 corrected = remember_document(storage, session_locks, sid, res, Path(name or "документ").name, hashlib.sha256(data).hexdigest())
                 if corrected:  # тот же файл, поля исправлены пользователем: ответ — по исправленной карточке
                     notes = res.answer.notes
-                    res.answer = svc.answer_for_fields(question, res.doc_type.id, res.fields)
+                    res.answer = svc.answer_for_fields(question, res.doc_type.id, res.fields, document_first=document_first)
                     res.answer.notes += [n for n in notes if n not in res.answer.notes]
             except Exception:
                 log.exception("Не удалось сохранить документ сессии")
@@ -269,7 +269,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     async def create_job(request: Request, file: Optional[UploadFile] = File(None), question: str = Form(""), doc_type: str = Form("auto")):
         data, name = await _read_upload(file, question)
         sid = request.cookies.get(COOKIE_SID, "")
-        job = jobs.submit(lambda progress: _payload(data, name, question, doc_type, progress, sid), describe_error)
+        # стол: с документом — ответ по документу, по Положению — если оно упомянуто в вопросе
+        job = jobs.submit(lambda progress: _payload(data, name, question, doc_type, progress, sid, document_first=True), describe_error)
         return {"id": job.id}
 
     @app.get("/api/jobs/{job_id}")

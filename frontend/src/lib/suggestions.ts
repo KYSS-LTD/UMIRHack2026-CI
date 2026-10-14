@@ -22,6 +22,17 @@ export const SUGGESTION_TITLES: Record<Suggestion["kind"], string> = {
   form: "Анкета и готовое заявление",
 };
 
+const lcFirst = (s: string) => (!s || /^[А-ЯЁA-Z]{2}/.test(s) ? s : s[0]!.toLowerCase() + s.slice(1));
+
+/**
+ * С документом на столе секретарь отвечает по документу, а по Положению — только если оно упомянуто.
+ * Поэтому подсказки о правилах при загруженном документе явно называют Положение.
+ */
+export function aboutRegulation(list: Suggestion[], documentLoaded: boolean): Suggestion[] {
+  if (!documentLoaded) return list;
+  return list.map((s) => (s.kind === "rules" && !/положени/i.test(s.text) ? { ...s, text: `По Положению: ${lcFirst(s.text)}` } : s));
+}
+
 /** Подсказки вопросов для выбранного (или уже определённого) типа: проверка, значение поля, правила; withForm — и анкета. */
 export function suggestionsFor(types: DocTypeSummary[], docType: string, detectedId: string | null | undefined, rules: Suggestion[], withForm = false): Suggestion[] {
   const form = withForm ? [FORM_SUGGESTION] : [];

@@ -28,6 +28,8 @@ interface Props {
   onThemeSet: (t: Theme) => void;
   onPalette: () => void;
   onHelp: () => void;
+  /** сотрудник вошёл: переключатель «Стол декана | Сотрудникам», как на странице сотрудников */
+  staff?: boolean;
 }
 
 function ThemeSwitch({ theme, onSet }: { theme: Theme; onSet: (t: Theme) => void }) {
@@ -97,7 +99,7 @@ function Menu({ theme, onThemeSet, onHelp, onForget }: { theme: Theme; onThemeSe
   );
 }
 
-export function NavBar({ route, onRoute, theme, onThemeSet, onPalette, onHelp }: Props) {
+export function NavBar({ route, onRoute, theme, onThemeSet, onPalette, onHelp, staff = false }: Props) {
   const { hidden, compact } = useNavScroll();
   const activity = useActivity();
   const island = useRef<HTMLDivElement>(null);
@@ -163,6 +165,14 @@ export function NavBar({ route, onRoute, theme, onThemeSet, onPalette, onHelp }:
         </nav>
 
         <div className="tools">
+          {staff && (
+            <nav className="staff-switch" aria-label="Стол или страница сотрудников">
+              <a href="#/check" aria-current="page" onClick={() => onRoute("check")}>
+                Стол декана
+              </a>
+              <a href="/admin">Сотрудникам</a>
+            </nav>
+          )}
           <button type="button" className="search-pill" onClick={onPalette} aria-label="Поиск и команды (Ctrl+K)">
             <Icon name="search" size={16} />
             <span className="search-label">Поиск</span>
