@@ -31,6 +31,8 @@ async function errorMessage(res: Response): Promise<string> {
   try {
     const body = await res.json();
     const d = body?.detail;
+    // стандартные английские тексты FastAPI — не для людей: «Not Found» бывает, когда сервер запущен со старой версией проекта
+    if (d === "Not Found" || d === "Method Not Allowed") return "Сервер не знает этого действия: скорее всего, он запущен со старой версией проекта. Остановите сервер, запустите его заново и обновите страницу.";
     if (typeof d === "string") return d;
     if (Array.isArray(d)) return d.map((x) => x?.msg ?? String(x)).join("; ");
   } catch {

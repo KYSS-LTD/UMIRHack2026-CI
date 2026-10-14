@@ -88,6 +88,10 @@ class ApiError extends Error {
   }
 }
 
+// стандартные английские тексты FastAPI («Not Found» для неизвестного адреса) — не для людей: такое бывает, когда сервер запущен со старой версией проекта
+const STALE_SERVER = "Сервер не знает этого действия: скорее всего, он запущен со старой версией проекта. Остановите сервер, запустите его заново и обновите страницу.";
+const DEFAULT_DETAILS = { "Not Found": STALE_SERVER, "Method Not Allowed": STALE_SERVER };
+
 async function api(method, path, body) {
   const init = { method, credentials: "same-origin", headers: {} };
   if (body instanceof FormData) init.body = body;
@@ -107,6 +111,7 @@ async function api(method, path, body) {
   if (!res.ok) {
     let msg = data && data.detail ? data.detail : `Ошибка ${res.status}`;
     if (Array.isArray(msg)) msg = msg.map((m) => m.msg || String(m)).join("; ");
+    if (DEFAULT_DETAILS[msg]) msg = DEFAULT_DETAILS[msg];
     throw new ApiError(res.status, String(msg));
   }
   return data;

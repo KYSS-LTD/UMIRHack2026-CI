@@ -632,7 +632,7 @@ async function viewTickets(panel) {
 
   let meta = null;
   let firstLoad = true;
-  const replyPresets = ((await guarded(() => api("GET", "/api/admin/reply-templates"))) || {}).templates || [];
+  const replyPresets = await api("GET", "/api/admin/reply-templates").then((r) => r.templates || []).catch(() => []); // заготовки необязательны: без них страница работает
   const fill = (sel, values, titles, current_) => {
     clear(sel);
     sel.appendChild(el("option", null, "все", { value: "" }));
@@ -739,7 +739,8 @@ async function viewTickets(panel) {
       let saved = area.value;
       const actions = el("div", "form-actions hidden");
       const save = button(saveLabel, () => guarded(async () => {
-        await api("PATCH", `/api/admin/tickets/${t.id}`, { [apiField]: area.value });
+        const res = await api("PATCH", `/api/admin/tickets/${t.id}`, { [apiField]: area.value });
+        if (apiField === "reply" && res && !("reply" in res)) throw new Error("Сервер не умеет сохранять ответ студенту: он запущен со старой версией проекта. Остановите сервер, запустите его заново и повторите.");
         saved = area.value;
         actions.classList.add("hidden");
         toast(done);
@@ -767,7 +768,7 @@ async function viewTickets(panel) {
     };
     body.append(
       field("Статус", segBox),
-      ...savedText("Ответ студенту", "t-reply", t.reply, "Студент увидит это на странице «Статус обращения» по своему коду", "reply", "Отправить ответ", "Ответ сохранён: студент увидит его по своему коду", replyPresets),
+      ...savedText("Ответ студенту", "t-reply", t.reply, "Студент увидит это на странице «Статус обращения» по своему коду", "reply", "Отправить ответ", `Ответ сохранён. Студент увидит его на странице «Статус обращения» по номеру ${t.id} и своему коду.`, replyPresets),
       ...savedText("Заметка сотрудника", "t-note", t.note, "Что сделано, кому передано — видно только сотрудникам", "note", "Сохранить заметку", "Заметка сохранена"),
     );
     rightBox.appendChild(sheet(`Обращение № ${t.id}`, headChip, body));

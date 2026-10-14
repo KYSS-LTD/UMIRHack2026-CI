@@ -46,6 +46,15 @@ describe("api errors", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(json({ detail: "Файл пустой" }, 400));
     await expect(api.health()).rejects.toMatchObject({ message: "Файл пустой", status: 400 });
   });
+  it("does not show FastAPI's English 'Not Found' but says the server is probably out of date", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(json({ detail: "Not Found" }, 404));
+    const err = await api.health().catch((e) => e);
+    expect(err.status).toBe(404);
+    expect(err.message).toMatch(/запущен со старой версией/);
+    expect(err.message).not.toMatch(/Not Found/);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(json({ detail: "Обращение не найдено" }, 404));
+    await expect(api.health()).rejects.toMatchObject({ message: "Обращение не найдено" }); // свои тексты сервера не затрагиваются
+  });
   it("explains a dead server", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
     const err = await api.health().catch((e) => e);
