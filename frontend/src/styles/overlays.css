@@ -58,7 +58,7 @@
     .desk-chat { border: 0; box-shadow: none; overflow: visible; }
     .chat-scroll { overflow: visible; padding: 0; }
     .verdict, .fields, .details { box-shadow: none; break-inside: avoid; }
-    .turn, .frow, .stamp { animation: none !important; opacity: 1 !important; filter: none !important; }
+    .turn, .frow, .reveal .w, .stamp { animation: none !important; opacity: 1 !important; filter: none !important; }
     .fold { grid-template-rows: 1fr !important; opacity: 1 !important; }
     .details[open] .ocr-text { max-height: none; }
   }

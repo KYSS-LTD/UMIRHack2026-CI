@@ -254,6 +254,8 @@
   .quiz-ticks { display: flex; gap: 4px; }
   .quiz-ticks i { width: 16px; height: 4px; border-radius: 2px; background: var(--line-strong); animation: chip-in 400ms var(--spring) both; animation-delay: calc(var(--i) * 40ms); transition: background var(--t-slow) var(--ease); }
   .quiz-ticks i.done { background: var(--ok); }
+  .reveal .w { display: inline-block; opacity: 0; animation: word-in 520ms var(--ease) forwards; }
+  @keyframes word-in { from { opacity: 0; transform: translateY(7px); filter: blur(5px); } to { opacity: 1; transform: none; filter: none; } }
   .quiz-ticks i.now { background: var(--lamp); animation: chip-in 400ms var(--spring) both; }
 
   .replies { display: flex; flex-wrap: wrap; gap: 6px; }
