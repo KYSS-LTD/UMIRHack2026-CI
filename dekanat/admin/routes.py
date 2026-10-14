@@ -37,6 +37,7 @@ class PasswordIn(BaseModel):
 class TicketPatch(BaseModel):
     status: Optional[str] = None
     note: Optional[str] = Field(default=None, max_length=2000)
+    reply: Optional[str] = Field(default=None, max_length=2000)  # ответ студенту: виден ему на странице статуса
 
 
 class KbPatch(BaseModel):
@@ -256,9 +257,9 @@ def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_by
     def patch_ticket(ticket_id: int, body: TicketPatch, who: dict = admin):
         if body.status is not None and body.status not in TICKET_STATUSES:
             raise HTTPException(400, f"status: одно из {list(TICKET_STATUSES)}")
-        if not storage.tickets.update(ticket_id, body.status, body.note):
+        if not storage.tickets.update(ticket_id, body.status, body.note, body.reply):
             raise HTTPException(404, "Обращение не найдено")
-        storage.audit.log(who["username"], "ticket.update", "ticket", str(ticket_id), {"status": body.status, "note": bool(body.note)})
+        storage.audit.log(who["username"], "ticket.update", "ticket", str(ticket_id), {"status": body.status, "note": bool(body.note), "reply": bool(body.reply)})
         return storage.tickets.get(ticket_id)
 
     @router.get("/tickets/{ticket_id}/attachment")

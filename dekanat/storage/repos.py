@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+import re
 import secrets
 import sqlite3
 from typing import Any, Optional
@@ -312,6 +314,17 @@ class KBRepo:
 # ====================================================================== обращения в деканат
 TICKET_STATUSES = ("new", "in_progress", "done", "rejected")
 TICKET_TYPES = ("transfer", "enrollment", "other")
+# код статуса: 8 знаков без похожих (0/O, 1/I), показывается студенту один раз; в базе — только хэш вместе с номером обращения
+_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def new_public_code() -> str:
+    raw = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(8))
+    return f"{raw[:4]}-{raw[4:]}"
+
+
+def _code_hash(ticket_id: int, code: str) -> str:
+    return hashlib.sha256(f"{ticket_id}:{re.sub(r'[^A-Z0-9]', '', str(code).upper())}".encode("utf-8")).hexdigest()
 
 
 class TicketRepo:
@@ -321,7 +334,7 @@ class TicketRepo:
     @staticmethod
     def _row(r: sqlite3.Row, with_payload: bool) -> dict:
         out = {"id": r["id"], "created_at": iso(r["created_at"]), "updated_at": iso(r["updated_at"]), "type": r["type"], "status": r["status"],
-               "topic": r["topic"], "channel": r["channel"], "note": r["note"]}
+               "topic": r["topic"], "channel": r["channel"], "note": r["note"], "reply": r["reply"], "reply_at": iso(r["reply_at"])}
         if with_payload:
             out["payload"] = _loads(r["payload_json"], {})
         return out
@@ -381,7 +394,17 @@ class TicketRepo:
         rows = self.db.query(f"SELECT * FROM tickets WHERE {w} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?", [*params, max(1, min(500, limit)), max(0, offset)])
         return [self._row(r, False) for r in rows], total
 
-    def update(self, ticket_id: int, status: Optional[str] = None, note: Optional[str] = None) -> bool:
+    def attach_code(self, ticket_id: int, code: str) -> None:
+        self.db.execute("UPDATE tickets SET public_hash=? WHERE id=?", (_code_hash(ticket_id, code), ticket_id))
+
+    def check_code(self, ticket_id: int, code: str) -> Optional[dict]:
+        """Обращение, если номер и код верны (сравнение без утечки по времени); иначе None."""
+        r = self.db.one("SELECT * FROM tickets WHERE id=?", (ticket_id,))
+        if r is None or not r["public_hash"] or not hmac.compare_digest(r["public_hash"], _code_hash(ticket_id, code)):
+            return None
+        return self._row(r, False)
+
+    def update(self, ticket_id: int, status: Optional[str] = None, note: Optional[str] = None, reply: Optional[str] = None) -> bool:
         sets, params = ["updated_at=?"], [now()]
         if status is not None:
             sets.append("status=?")
@@ -389,6 +412,11 @@ class TicketRepo:
         if note is not None:
             sets.append("note=?")
             params.append(note)
+        if reply is not None:  # ответ студенту; пустой — снимает ответ
+            sets.append("reply=?")
+            params.append(reply.strip() or None)
+            sets.append("reply_at=?")
+            params.append(now() if reply.strip() else None)
         return self.db.execute(f"UPDATE tickets SET {', '.join(sets)} WHERE id=?", [*params, ticket_id]).rowcount > 0
 
     def purge_older_than(self, days: float) -> list[int]:

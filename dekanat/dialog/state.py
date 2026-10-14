@@ -24,6 +24,7 @@ class DialogContext:
     suggestions: dict = field(default_factory=dict)  # подсказки из загруженного документа: ключ анкеты -> значение
     case_id: int = 1  # номер сценария в сессии (для идемпотентной отправки обращения)
     ticket_id: Optional[int] = None  # обращение, отправленное по этой анкете
+    ticket_code: str = ""  # код для проверки статуса этого обращения (виден студенту, пока жива сессия)
     generated: list = field(default_factory=list)  # id готовых документов этой анкеты
     gen_cache: dict = field(default_factory=dict)  # отпечаток (шаблон + данные) -> id документа: повторное нажатие не плодит файлы
     version: int = 0  # растёт при каждом изменении (защита от устаревших действий)
@@ -57,7 +58,7 @@ class DialogContext:
         """Новый сценарий: данные прошлой анкеты стираются, номер сценария растёт."""
         self.state, self.scenario, self.data, self.skipped = IDLE, "", {}, []
         self.current, self.editing, self.resume, self.pick_fix, self.pending_offer = None, False, None, False, ""
-        self.attempts, self.ticket_id, self.generated, self.gen_cache, self.passport_at = {}, None, [], {}, 0.0
+        self.attempts, self.ticket_id, self.ticket_code, self.generated, self.gen_cache, self.passport_at = {}, None, "", [], {}, 0.0
         self.case_id += 1
 
     def public(self) -> dict[str, Any]:

@@ -10,6 +10,7 @@ import copy
 import hashlib
 import json
 import logging
+import re
 import shutil
 import threading
 import time
@@ -28,6 +29,7 @@ from ..dialog.docstate import apply_correction, make_record, public_fields, rest
 from ..dialog.questions import REQUEST_TYPES
 from ..templates import TemplateError, TemplateNotFound, TemplateStore, fill_docx
 from ..storage import session_ref
+from ..storage.repos import new_public_code
 from ..storage.topics import classify_topic
 from ..ocr.engine import OcrUnavailable
 from ..ocr.preprocess import UnsupportedFile
@@ -75,6 +77,56 @@ class GenerateIn(BaseModel):
 class SubmitIn(BaseModel):
     confirm: bool = False
     include_passport: bool = False
+    contact: str = Field(default="", max_length=120)  # как связаться (по желанию): почта, телефон или Telegram
+
+
+class StatusIn(BaseModel):
+    id: int = Field(ge=1, le=10**9)
+    code: str = Field(max_length=40)
+
+
+STATUS_TITLES = {"new": "Принято, ждёт рассмотрения", "in_progress": "Рассматривается", "done": "Рассмотрено", "rejected": "Отклонено"}
+_EMAIL = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
+_TELEGRAM = re.compile(r"^@[A-Za-z0-9_]{4,32}$")
+
+
+def clean_contact(raw: str) -> str:
+    """Контакт по желанию: пусто — можно; иначе почта, телефон (10–15 цифр) или Telegram (@имя). Остальное не принимается."""
+    text = (raw or "").strip()
+    if not text:
+        return ""
+    digits = re.sub(r"\D", "", text)
+    phone = re.fullmatch(r"\+?[\d\s\-()]{10,24}", text) is not None and 10 <= len(digits) <= 15
+    if _EMAIL.match(text) or _TELEGRAM.match(text) or phone:
+        return text
+    raise HTTPException(400, "Контакт: укажите почту, телефон или Telegram (@имя) — или оставьте поле пустым.")
+
+
+class AttemptLimiter:
+    """Не даёт перебирать коды статуса: не больше `limit` неудачных попыток с одного адреса за окно."""
+
+    def __init__(self, limit: int = 8, window: float = 600.0):
+        self.limit, self.window = limit, window
+        self._fails: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
+
+    def _recent(self, key: str) -> list[float]:
+        cutoff = time.time() - self.window
+        keep = [t for t in self._fails.get(key, []) if t > cutoff]
+        if keep:
+            self._fails[key] = keep
+        else:
+            self._fails.pop(key, None)
+        return keep
+
+    def allowed(self, key: str) -> bool:
+        with self._lock:
+            return len(self._recent(key)) < self.limit
+
+    def fail(self, key: str) -> None:
+        with self._lock:
+            self._recent(key)
+            self._fails.setdefault(key, []).append(time.time())
 
 
 class SessionLocks:
@@ -396,7 +448,9 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
         return {"document": public_doc(record), "fields": [f.to_dict() for f in fields], "answer": ans.to_dict() if ans else None}
 
     # ---- отправка обращения
-    def build_payload(ctx: DialogContext, include_passport: bool) -> tuple[dict, list]:
+    status_limiter = AttemptLimiter()
+
+    def build_payload(ctx: DialogContext, include_passport: bool, contact: str = "") -> tuple[dict, list]:
         data = DialogMachine.template_data(ctx)
         titles = {"student_name": "ФИО", "current_university": "Текущий вуз", "current_course": "Текущий курс", "current_specialty": "Направление (текущее)",
                   "education_form": "Форма обучения", "debts": "Академические задолженности", "target_specialty": "Целевое направление",
@@ -408,6 +462,8 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
                 fields["Паспортные данные"] = data["passport_data"]
             else:
                 excluded.append("Паспортные данные")
+        if contact:
+            fields["Контакт"] = contact
         return {"request": REQUEST_TYPES.get(ctx.scenario, "не указано"), "fields": fields}, excluded
 
     @router.get("/submission")
@@ -416,7 +472,7 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
         ctx = load_ctx(sid)
         payload, excluded = build_payload(ctx, include_passport)
         return {"delivery": delivery_status(), "payload": payload, "excluded": excluded, "attachment": bool(ctx.generated), "state": ctx.state,
-                "already_sent": ctx.ticket_id, "blocked": check_submission(ctx, svc.settings.get)}
+                "already_sent": ctx.ticket_id, "ticket_code": ctx.ticket_code if ctx.ticket_id else "", "blocked": check_submission(ctx, svc.settings.get)}
 
     @router.post("/submission")
     def submit(body: SubmitIn, request: Request):
@@ -432,12 +488,13 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
             if ctx.state != COMPLETED:
                 raise HTTPException(409, "Сначала пройдите анкету, подтвердите данные и сформируйте документ.")
             if ctx.ticket_id:
-                return {"sent": True, "duplicate": True, "ticket_id": ctx.ticket_id, "message": "Обращение уже отправлено ранее."}
+                return {"sent": True, "duplicate": True, "ticket_id": ctx.ticket_id, "code": ctx.ticket_code, "message": "Обращение уже отправлено ранее."}
             blocked = check_submission(ctx, svc.settings.get)
             if blocked:
                 storage.events.log("ticket", SCENARIO_TOPICS.get(ctx.scenario, "Анкета"), "blocked", sid)
                 raise HTTPException(409, "Обращение не отправлено. " + " ".join(blocked))
-            payload, excluded = build_payload(ctx, body.include_passport)
+            contact = clean_contact(body.contact)
+            payload, excluded = build_payload(ctx, body.include_passport, contact)
             ref = session_ref(sid)
             topic = SCENARIO_TOPICS.get(ctx.scenario, "Анкета")
             ticket, created = storage.tickets.create(ref, ctx.scenario if ctx.scenario in REQUEST_TYPES else "other", topic, payload, "queue", f"{ref}:{ctx.case_id}")
@@ -448,11 +505,27 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
                     target.mkdir(parents=True, exist_ok=True)
                     shutil.copyfile(last["path"], target / "application.docx")
             ctx.ticket_id = ticket["id"]
+            if created:
+                ctx.ticket_code = new_public_code()
+                storage.tickets.attach_code(ticket["id"], ctx.ticket_code)
             save_ctx(sid, ctx)
             if created:
                 storage.events.log("ticket", topic, "sent", sid)
-        return {"sent": True, "duplicate": not created, "ticket_id": ticket["id"], "excluded": excluded,
+        return {"sent": True, "duplicate": not created, "ticket_id": ticket["id"], "code": ctx.ticket_code, "excluded": excluded,
                 "message": "Обращение передано в очередь деканата. Окончательное решение принимает сотрудник деканата."}
+
+    # ---- статус обращения по номеру и коду (без входа и без сессии)
+    @router.post("/status")
+    def ticket_status(body: StatusIn, request: Request):
+        key = request.client.host if request.client else "?"
+        if not status_limiter.allowed(key):
+            raise HTTPException(429, "Слишком много неверных попыток. Подождите несколько минут и попробуйте снова.")
+        row = storage.tickets.check_code(body.id, body.code)
+        if row is None:  # одинаковый ответ на «нет такого номера» и «неверный код»: номера нельзя перебирать
+            status_limiter.fail(key)
+            raise HTTPException(404, "Обращение с таким номером и кодом не найдено. Проверьте номер и код.")
+        return {"id": row["id"], "status": row["status"], "status_title": STATUS_TITLES.get(row["status"], row["status"]), "topic": row["topic"],
+                "created_at": row["created_at"], "updated_at": row["updated_at"], "reply": row["reply"], "reply_at": row["reply_at"]}
 
     # ---- удаление данных и новая анкета
     @router.delete("/data")

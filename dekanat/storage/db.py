@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS kb_versions(
 CREATE TABLE IF NOT EXISTS tickets(
     id INTEGER PRIMARY KEY AUTOINCREMENT, created_at REAL NOT NULL, updated_at REAL NOT NULL, session_ref TEXT NOT NULL,
     type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'new', topic TEXT, payload_json TEXT NOT NULL, channel TEXT, note TEXT,
-    idem_key TEXT UNIQUE);
+    idem_key TEXT UNIQUE, public_hash TEXT, reply TEXT, reply_at REAL);
 CREATE TABLE IF NOT EXISTS events(
     id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, session_ref TEXT, category TEXT, scenario TEXT, status TEXT, flags TEXT);
 CREATE TABLE IF NOT EXISTS audit_log(
@@ -81,7 +81,15 @@ class Database:
             if self.path != ":memory:":
                 self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.executescript(SCHEMA)
+            # базы, созданные до появления кода статуса и ответа студенту, дополняются столбцами
+            self._add_missing_columns("tickets", {"public_hash": "TEXT", "reply": "TEXT", "reply_at": "REAL"})
             self._conn.execute("INSERT OR IGNORE INTO meta(key, value) VALUES('schema_version', ?)", (str(SCHEMA_VERSION),))
+
+    def _add_missing_columns(self, table: str, columns: dict) -> None:
+        have = {r["name"] for r in self._conn.execute(f"PRAGMA table_info({table})")}
+        for name, kind in columns.items():
+            if name not in have:
+                self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {kind}")
 
     def execute(self, sql: str, params: Sequence[Any] = ()) -> sqlite3.Cursor:
         with self._lock:

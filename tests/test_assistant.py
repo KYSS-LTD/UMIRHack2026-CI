@@ -574,3 +574,56 @@ def test_review_warns_about_the_blocked_submission_while_answers_can_still_be_fi
     clean = TestClient(app)
     ok = say(clean, "Я хочу перевестись", "да", *ANSWERS, "Прикладная информатика", "пропустить")
     assert ok["reply"]["kind"] == "review" and "на отправку в деканат" not in ok["reply"]["text"]
+
+
+# ============================================================================ статус обращения по номеру и коду
+def send(c, **body):
+    complete(c)
+    return c.post("/api/assistant/submission", json={"confirm": True, **body})
+
+
+def check_status(client, tid, code):
+    return client.post("/api/assistant/status", json={"id": tid, "code": code})
+
+
+def test_submission_gives_a_status_code_and_the_student_sees_the_staff_reply(app, admin, template):
+    c = TestClient(app)
+    r = send(c, contact="ivan@example.com").json()
+    code, tid = r["code"], r["ticket_id"]
+    assert r["sent"] and len(code) == 9 and code[4] == "-"
+    assert c.post("/api/assistant/submission", json={"confirm": True}).json()["code"] == code  # повторное нажатие в сессии показывает тот же код
+    assert c.get("/api/assistant/submission").json()["ticket_code"] == code
+    stored = app.state.storage.db.one("SELECT public_hash FROM tickets WHERE id=?", (tid,))["public_hash"]
+    assert stored and code.replace("-", "") not in stored  # в базе только хэш, не сам код
+
+    stranger = TestClient(app)  # без сессии и без входа: достаточно номера и кода
+    st = check_status(stranger, tid, code.lower().replace("-", " ")).json()  # регистр и разделитель не важны
+    assert st["status"] == "new" and st["reply"] is None and "Принято" in st["status_title"]
+    assert admin.patch(f"/api/admin/tickets/{tid}", json={"status": "in_progress", "reply": "Приходите в кабинет 214 в среду"}).status_code == 200
+    st = check_status(stranger, tid, code).json()
+    assert st["status"] == "in_progress" and st["reply"] == "Приходите в кабинет 214 в среду" and st["reply_at"]
+    assert not {"note", "payload", "channel"} & set(st)  # заметки сотрудника и данные анкеты наружу не уходят
+    assert admin.patch(f"/api/admin/tickets/{tid}", json={"reply": "  "}).status_code == 200
+    assert check_status(stranger, tid, code).json()["reply"] is None  # пустой ответ снимает ответ
+    assert admin.get(f"/api/admin/tickets/{tid}").json()["payload"]["fields"]["Контакт"] == "ivan@example.com"
+
+
+def test_status_does_not_reveal_whether_the_number_exists_and_blocks_guessing(app, admin, template):
+    c = TestClient(app)
+    r = send(c).json()
+    bad_code = check_status(TestClient(app), r["ticket_id"], "AAAA-BBBB")
+    no_ticket = check_status(TestClient(app), 9999, "AAAA-BBBB")
+    assert bad_code.status_code == no_ticket.status_code == 404 and bad_code.json() == no_ticket.json()
+    guesser = TestClient(app)
+    codes = [check_status(guesser, r["ticket_id"], f"AAAA-BB{i:02d}").status_code for i in range(12)]
+    assert codes[:6] == [404] * 6 and set(codes[6:]) == {429}  # два неверных запроса выше тоже с этого адреса: всего 8 попыток
+    assert check_status(guesser, r["ticket_id"], r["code"]).status_code == 429  # пока окно не прошло, и верный код не принимается с этого адреса
+
+
+@pytest.mark.parametrize("contact, ok", [("", True), ("ivan@example.com", True), ("+7 (900) 123-45-67", True), ("89001234567", True), ("@ivan_ivanov", True),
+                                          ("привет", False), ("123", False), ("ivan@", False), ("@a", False), ("x" * 200, False)])
+def test_contact_is_optional_but_must_look_like_a_contact(app, admin, template, contact, ok):
+    c = TestClient(app)
+    r = send(c, contact=contact)
+    assert r.status_code == (200 if ok else (400 if len(contact) <= 120 else 422))
+    assert admin.get("/api/admin/tickets").json()["total"] == (1 if ok else 0)
