@@ -46,6 +46,7 @@ export function CommandPalette({ open, onClose, samples, onNavigate, onTheme }: 
     return [
       { id: "go-check", title: "Перейти на стол", group: "Перейти", icon: "doc", keywords: "проверка документ главная", run: go("check") },
       { id: "go-rules", title: "Открыть Положение", group: "Перейти", icon: "book", keywords: "правила пункты", run: go("rules") },
+      { id: "go-status", title: "Статус обращения", group: "Перейти", icon: "inbox", keywords: "обращение номер код ответ деканата", run: go("status") },
       { id: "new", title: "Очистить чат и стол", group: "Действия", icon: "broom", keywords: "сбросить очистить заново новый вопрос диалог", run: act(() => (onNavigate("check"), emit("new-desk"))) },
       { id: "pick", title: "Выбрать файл с документом", group: "Действия", icon: "inbox", keywords: "загрузить файл фото скан pdf", run: act(() => (onNavigate("check"), setTimeout(() => emit("pick-file"), 60))) },
       { id: "ask", title: "Задать вопрос", group: "Действия", icon: "question", keywords: "ввод фокус", run: act(() => (onNavigate("check"), setTimeout(() => emit("focus-question"), 60))) },

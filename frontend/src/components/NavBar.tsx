@@ -7,7 +7,7 @@ import { pct } from "../lib/format";
 import { Icon, type IconName } from "../ui/Icon";
 import { Logo } from "../ui/Logo";
 
-export type Route = "check" | "rules";
+export type Route = "check" | "rules" | "status";
 
 const TABS: { id: Route; title: string }[] = [
   { id: "check", title: "Стол" },
@@ -87,6 +87,11 @@ function Menu({ theme, onThemeSet, onHelp, onForget }: { theme: Theme; onThemeSe
             <Icon name="trash" size={16} />
             <span>Удалить мои данные</span>
           </button>
+          <a href="#/status" onClick={() => setOpen(false)}>
+            <Icon name="inbox" size={16} />
+            <span>Статус обращения</span>
+            <Icon name="arrowRight" size={14} className="menu-go" />
+          </a>
           <a href="/admin" onClick={() => setOpen(false)}>
             <Icon name="key" size={16} />
             <span>Вход для сотрудников</span>

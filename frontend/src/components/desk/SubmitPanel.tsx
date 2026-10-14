@@ -12,6 +12,8 @@ export function SubmitPanel({ delivery }: { delivery: Delivery | null }) {
   const [open, setOpen] = useState(false);
   const [withPassport, setWithPassport] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [contact, setContact] = useState("");
+  const [copied, setCopied] = useState(false);
   const [preview, setPreview] = useState<SubmissionPreview | null>(null);
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState<SubmitResult | null>(null);
@@ -32,7 +34,7 @@ export function SubmitPanel({ delivery }: { delivery: Delivery | null }) {
   const send = async (confirm: boolean) => {
     setSending(true);
     try {
-      setDone(await api.assistant.submit(confirm, withPassport));
+      setDone(await api.assistant.submit(confirm, withPassport, contact.trim()));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -40,15 +42,44 @@ export function SubmitPanel({ delivery }: { delivery: Delivery | null }) {
     }
   };
 
+  const copy = (text: string) => {
+    void navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    });
+  };
+
+  /** Номер и код статуса: по ним студент без входа узнаёт, что решил деканат. Код виден, пока жива сессия. */
+  const statusCode = (ticketId: number, code: string) => (
+    <div className="submit-code">
+      <div>
+        <span className="eyebrow">Номер и код статуса</span>
+        <strong className="tabnum">
+          № {ticketId} · {code}
+        </strong>
+        <small>Сохраните их: по ним на странице «Статус обращения» видно, что решил деканат.</small>
+      </div>
+      <button type="button" className="btn small" onClick={() => copy(`№ ${ticketId}, код ${code}`)}>
+        <Icon name={copied ? "check" : "copy"} size={14} /> {copied ? "Скопировано" : "Копировать"}
+      </button>
+      <a className="btn small" href={`#/status/${ticketId}`}>
+        Проверить статус
+      </a>
+    </div>
+  );
+
   if (done) {
     return (
-      <p className={`submit-done ${done.sent ? "ok" : ""}`} role="status">
-        <Icon name={done.sent ? "check" : "alert"} size={15} />
-        <span>
-          {done.message}
-          {done.ticket_id ? ` Номер обращения: ${done.ticket_id}.` : ""}
-        </span>
-      </p>
+      <>
+        <p className={`submit-done ${done.sent ? "ok" : ""}`} role="status">
+          <Icon name={done.sent ? "check" : "alert"} size={15} />
+          <span>
+            {done.message}
+            {done.ticket_id ? ` Номер обращения: ${done.ticket_id}.` : ""}
+          </span>
+        </p>
+        {done.ticket_id && done.code ? statusCode(done.ticket_id, done.code) : null}
+      </>
     );
   }
 
@@ -79,7 +110,7 @@ export function SubmitPanel({ delivery }: { delivery: Delivery | null }) {
     );
   }
 
-  const fields = Object.entries(preview?.payload.fields ?? {});
+  const fields = Object.entries({ ...(preview?.payload.fields ?? {}), ...(contact.trim() ? { Контакт: contact.trim() } : {}) });
   const ready = !!preview && preview.delivery.available && !preview.already_sent;
   return (
     <section className="submit-sheet" aria-labelledby={titleId}>
@@ -94,6 +125,7 @@ export function SubmitPanel({ delivery }: { delivery: Delivery | null }) {
       )}
       {preview && !preview.delivery.available && <p className="faint">Автоматическая отправка пока недоступна: {preview.delivery.reason}. Скачайте документ и передайте его лично.</p>}
       {preview?.already_sent && <p className="faint">Обращение уже отправлено (№ {preview.already_sent}).</p>}
+      {preview?.already_sent && preview.ticket_code ? statusCode(preview.already_sent, preview.ticket_code) : null}
       {ready && (
         <>
           <dl className="submit-fields">
@@ -105,6 +137,11 @@ export function SubmitPanel({ delivery }: { delivery: Delivery | null }) {
             ))}
           </dl>
           <p className="faint">{preview.attachment ? "К обращению приложится сформированный документ (DOCX)." : "Документ не приложен."}</p>
+          <label className="contact-field">
+            <span>Как с вами связаться (по желанию)</span>
+            <input type="text" value={contact} maxLength={120} onChange={(e) => setContact(e.target.value)} placeholder="почта, телефон или @telegram" autoComplete="off" />
+            <small>Деканат увидит это в обращении. Статус вы всё равно узнаете по номеру и коду.</small>
+          </label>
           {(preview.excluded.length > 0 || withPassport) && (
             <label className="check-line">
               <input type="checkbox" checked={withPassport} onChange={(e) => setWithPassport(e.target.checked)} />

@@ -13,11 +13,12 @@ import { LogoDefs } from "./ui/Logo";
 import { ToastProvider } from "./ui/Toasts";
 import { CheckView } from "./views/CheckView";
 import { RegulationView } from "./views/RegulationView";
+import { StatusView } from "./views/StatusView";
 
 export function parseHash(hash: string): { route: Route; clause: string | null } {
   const m = hash.replace(/^#\/?/, "").split("/");
-  const route = m[0] === "rules" ? "rules" : "check";
-  return { route, clause: route === "rules" && m[1] ? decodeURIComponent(m[1]) : null };
+  const route = m[0] === "rules" ? "rules" : m[0] === "status" ? "status" : "check";
+  return { route, clause: (route === "rules" || route === "status") && m[1] ? decodeURIComponent(m[1]) : null }; // у «status» второй сегмент — номер обращения
 }
 
 const SHORTCUTS: [string, string][] = [
@@ -122,6 +123,7 @@ function Shell() {
         <div className="route-body" key={hash.route}>
           {hash.route === "check" && <CheckView types={typeList} samples={samples.data ?? []} health={health.data} onOpenClause={openClause} />}
           {hash.route === "rules" && <RegulationView focusClause={hash.clause} editable={editable} />}
+          {hash.route === "status" && <StatusView initialId={hash.clause} />}
         </div>
       </main>
 

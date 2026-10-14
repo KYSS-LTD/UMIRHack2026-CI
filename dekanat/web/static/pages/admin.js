@@ -610,7 +610,8 @@ async function viewOverview(panel) {
 // ---------------------------------------------------------------- обращения
 async function viewTickets(panel) {
   const wrap = el("div", "grid-2");
-  const left = sheet("Обращения по переводу и зачислению", null);
+  const csvLink = el("a", "link-btn", "Выгрузить CSV", { href: "#", download: "" });
+  const left = sheet("Обращения по переводу и зачислению", csvLink);
   const rightBox = el("div", "stack sticky");
   wrap.append(left, rightBox);
   panel.appendChild(wrap);
@@ -649,6 +650,7 @@ async function viewTickets(panel) {
       fill(type, res.types, TYPE_TITLES, ticketFilter.type);
       fill(topic, res.topics, null, ticketFilter.topic);
     }
+    csvLink.href = "/api/admin/tickets/export.csv?" + query(); // выгрузка с теми же фильтрами, что в списке
     const per = meta.statuses.map((x) => [x, (res.counts || {})[x] || 0]); // счётчики приходят вместе со списком: один запрос вместо пяти
     const all = per.reduce((n, [, c]) => n + c, 0);
     clear(tally).appendChild(seg([["", `Все · ${all}`], ...per.map(([x, c]) => [x, `${STATUS_PLURAL[x]} · ${c}`])], ticketFilter.status, (v) => { ticketFilter.status = v; load(); }, "Статус"));
@@ -726,24 +728,29 @@ async function viewTickets(panel) {
       refreshCounts();
     }, "Статус обращения"));
     drawSeg();
-    const note = el("textarea", null, null, { id: "t-note", rows: "3", maxlength: "2000", placeholder: "Что сделано, кому передано — видно только сотрудникам" });
-    note.value = t.note || "";
-    let saved = note.value;
-    const saveNote = button("Сохранить заметку", () => guarded(async () => {
-      await api("PATCH", `/api/admin/tickets/${t.id}`, { note: note.value });
-      saved = note.value;
-      saveNote.classList.add("hidden");
-      toast("Заметка сохранена");
-      load();
-    }), "small primary", "check");
-    saveNote.classList.add("hidden");
-    note.addEventListener("input", () => saveNote.classList.toggle("hidden", note.value === saved));
-    note.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && note.value !== saved) saveNote.click(); });
-    const noteActions = el("div", "form-actions");
-    noteActions.append(saveNote, el("span", "hint", "Ctrl + Enter — сохранить"));
-    noteActions.lastChild.classList.add("hidden");
-    note.addEventListener("input", () => noteActions.lastChild.classList.toggle("hidden", note.value === saved));
-    body.append(field("Статус", segBox), field("Заметка сотрудника", note, "t-note"), noteActions);
+    /** Текстовое поле обращения: кнопка «Сохранить» появляется только при изменении, Ctrl + Enter тоже сохраняет. */
+    const savedText = (label, id, value, placeholder, apiField, saveLabel, done) => {
+      const area = el("textarea", null, null, { id, rows: "3", maxlength: "2000", placeholder });
+      area.value = value || "";
+      let saved = area.value;
+      const actions = el("div", "form-actions hidden");
+      const save = button(saveLabel, () => guarded(async () => {
+        await api("PATCH", `/api/admin/tickets/${t.id}`, { [apiField]: area.value });
+        saved = area.value;
+        actions.classList.add("hidden");
+        toast(done);
+        load();
+      }), "small primary", "check");
+      actions.append(save, el("span", "hint", "Ctrl + Enter — сохранить"));
+      area.addEventListener("input", () => actions.classList.toggle("hidden", area.value === saved));
+      area.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && area.value !== saved) save.click(); });
+      return [field(label, area, id), actions];
+    };
+    body.append(
+      field("Статус", segBox),
+      ...savedText("Ответ студенту", "t-reply", t.reply, "Студент увидит это на странице «Статус обращения» по своему коду", "reply", "Отправить ответ", "Ответ сохранён: студент увидит его по своему коду"),
+      ...savedText("Заметка сотрудника", "t-note", t.note, "Что сделано, кому передано — видно только сотрудникам", "note", "Сохранить заметку", "Заметка сохранена"),
+    );
     rightBox.appendChild(sheet(`Обращение № ${t.id}`, headChip, body));
   }
 

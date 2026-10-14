@@ -303,6 +303,15 @@
   .submit-done { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-3); font-size: var(--fs-sm); animation: chip-in 420ms var(--spring) both; }
   .submit-done.ok { background: var(--ok-soft); color: var(--ok); }
   .submit-done svg { flex: none; margin-top: 2px; }
+  .submit-code { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 12px 14px; border-radius: var(--r-md); border: 1px dashed var(--line-strong); background: var(--surface); animation: row-in 420ms var(--ease) both; }
+  .submit-code > div { display: grid; gap: 2px; flex: 1 1 220px; min-width: 0; }
+  .submit-code strong { font-family: var(--serif); font-size: var(--fs-lg); letter-spacing: .02em; overflow-wrap: anywhere; }
+  .submit-code small { color: var(--ink-3); font-size: var(--fs-xs); }
+  .contact-field { display: grid; gap: 4px; font-size: var(--fs-sm); }
+  .contact-field > span { font-weight: 650; color: var(--ink-2); }
+  .contact-field input { padding: 8px 12px; border-radius: var(--r-md); border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); }
+  .contact-field input:focus { outline: none; border-color: var(--lamp); box-shadow: 0 0 0 3px var(--lamp-soft); }
+  .contact-field small { color: var(--ink-3); font-size: var(--fs-xs); }
 
   @media (max-width: 560px) {
     .start-line { grid-template-columns: minmax(0, 1fr) 16px; row-gap: 2px; }

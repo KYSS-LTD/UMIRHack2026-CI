@@ -11,6 +11,7 @@ import type {
   SampleItem,
   SubmissionPreview,
   SubmitResult,
+  TicketStatus,
   Suggestion,
 } from "./types";
 
@@ -84,8 +85,9 @@ export const api = {
     correctField: (unit: string, value: string, question: string) =>
       request<FieldCorrection>("/api/assistant/document/fields", json("PATCH", { unit, value, question })),
     submission: (includePassport: boolean) => request<SubmissionPreview>(`/api/assistant/submission?include_passport=${includePassport}`),
-    submit: (confirm: boolean, includePassport: boolean) =>
-      request<SubmitResult>("/api/assistant/submission", json("POST", { confirm, include_passport: includePassport })),
+    submit: (confirm: boolean, includePassport: boolean, contact = "") =>
+      request<SubmitResult>("/api/assistant/submission", json("POST", { confirm, include_passport: includePassport, contact })),
+    ticketStatus: (id: number, code: string) => request<TicketStatus>("/api/assistant/status", json("POST", { id, code })),
     deleteData: () => request<{ ok: boolean; message: string }>("/api/assistant/data", { method: "DELETE" }),
   },
 };

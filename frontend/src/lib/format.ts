@@ -6,6 +6,12 @@ export function formatBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} МБ`;
 }
 
+/** Дата и время из ISO-строки сервера в местном виде: «14.10.2026, 13:57». */
+export function fmtDateTime(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 export const pct = (x: number): number => Math.round(Math.max(0, Math.min(1, x || 0)) * 100);
 
 export function formatSeconds(s: number): string {

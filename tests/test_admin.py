@@ -305,6 +305,25 @@ def test_tickets_filters_and_status_changes(app, admin):
     assert admin.patch("/api/admin/tickets/9999", json={"status": "done"}).status_code == 404
 
 
+def test_tickets_export_csv_with_filters_and_without_formula_injection(app, admin, anon):
+    a = seed_ticket(app, key="a")
+    b = app.state.storage.tickets.create("ref2", "enrollment", "Поступление и зачисление", {"request": "зачисление", "fields": {"ФИО": '=HYPERLINK("http://x")', "Контакт": "ivan@example.com"}}, "queue", "b")[0]
+    app.state.storage.tickets.update(b["id"], "in_progress", "+заметка", "Приходите в среду")
+    assert anon.get("/api/admin/tickets/export.csv").status_code == 401
+    r = admin.get("/api/admin/tickets/export.csv")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv") and "attachment" in r.headers["content-disposition"]
+    text = r.content.decode("utf-8")
+    lines = text.strip().split("\r\n")
+    assert text.startswith("﻿") and lines[0].lstrip("﻿").startswith("№;Дата (UTC);Тип;Тема;Статус;ФИО")
+    rows = [line.split(";") for line in lines[1:]]
+    assert len(rows) == 2 and rows[0][0] == str(b["id"]) and rows[0][2] == "зачисление" and rows[0][4] == "в работе"
+    assert "'=HYPERLINK" in text and "ivan@example.com" in text and "'+заметка" in text and "Приходите в среду" in text  # формулы обезврежены
+    only = admin.get("/api/admin/tickets/export.csv?type=transfer").content.decode("utf-8").strip().split("\r\n")
+    assert len(only) == 2 and only[1].startswith(str(a["id"]) + ";")
+    assert admin.get("/api/admin/tickets/export.csv?status=bogus").status_code == 400
+    assert any(e["action"] == "ticket.export" for e in app.state.storage.audit.list("ticket", limit=20))
+
+
 def test_stats_count_requests_topics_and_screenings(app, admin):
     user = TestClient(app)
     user.get("/")

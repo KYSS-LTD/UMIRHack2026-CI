@@ -28,6 +28,25 @@
   .clause.spot { border-color: var(--lamp); box-shadow: 0 0 0 5px var(--lamp-soft), var(--shadow-3); transform: scale(1.015); animation: spot 900ms var(--spring) both; background: color-mix(in srgb, var(--lamp) 8%, var(--surface)); }
   @keyframes spot { from { transform: scale(.97); } }
 
+  /* ---------- Статус обращения ---------- */
+  .status-view { max-width: 720px; margin: 0 auto; }
+  .status-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) auto; gap: 12px; align-items: end; padding: 18px 20px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-1); }
+  .status-form label { display: grid; gap: 6px; }
+  .status-form input { padding: 10px 14px; border-radius: var(--r-md); border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--ink); font-size: var(--fs-md); font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+  .status-form input:focus { outline: none; border-color: var(--lamp); box-shadow: 0 0 0 3px var(--lamp-soft); }
+  .status-card { display: grid; gap: 14px; margin-top: var(--s-5); padding: 20px 22px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-2); animation: row-in 460ms var(--glide) both; }
+  .status-card > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .status-card h2 { font-size: var(--fs-xl); }
+  .status-card dl { display: grid; margin: 0; }
+  .status-card dl > div { display: grid; grid-template-columns: 38% minmax(0, 1fr); gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); }
+  .status-card dt { color: var(--ink-3); }
+  .status-card dd { margin: 0; font-weight: 600; }
+  .status-stamp { display: inline-block; padding: 3px 10px 2px; border: 1.5px solid currentColor; border-radius: 3px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+  .status-stamp.new { color: var(--stamp); } .status-stamp.in_progress { color: var(--warn); } .status-stamp.done { color: var(--ok); } .status-stamp.rejected { color: var(--none); }
+  .status-reply { margin: 0; padding: 12px 16px; border-left: 3px solid var(--lamp); background: var(--surface-2); border-radius: 0 var(--r-md) var(--r-md) 0; }
+  .status-reply p:last-child { margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  @media (max-width: 640px) { .status-form { grid-template-columns: minmax(0, 1fr); } }
+
   @media (max-width: 900px) {
     .reg-grid { grid-template-columns: 1fr; }
     .toc { position: static; max-height: none; }

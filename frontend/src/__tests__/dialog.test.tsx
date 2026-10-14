@@ -213,7 +213,7 @@ describe("submission is blocked by the rules", () => {
   const base = { busy: false, dialog: dialog("screening"), templates: [], delivery: null, onReply: noop, onGenerate: noop };
 
   it("shows why the request cannot be sent and offers no button", async () => {
-    const preview = { delivery: { channel: "queue", available: true, reason: "" }, payload: { request: "перевод", fields: {} }, excluded: [], attachment: true, state: "completed" as const, already_sent: null, blocked: ["Есть академические задолженности."] };
+    const preview = { delivery: { channel: "queue", available: true, reason: "" }, payload: { request: "перевод", fields: {} }, excluded: [], attachment: true, state: "completed" as const, already_sent: null, blocked: ["Есть академические задолженности."], ticket_code: "" };
     vi.spyOn(api.assistant, "submission").mockResolvedValue(preview);
     const download = { id: "d1", url: "/api/assistant/download/d1", filename: "Заявление.docx" };
     render(<DialogTurn {...base} dialog={dialog("completed")} delivery={{ channel: "queue", available: true, reason: "" }} turn={chatTurn(reply({ kind: "done", text: "Документ готов." }), { download })} latest />);

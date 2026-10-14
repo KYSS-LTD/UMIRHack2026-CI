@@ -404,6 +404,13 @@ class TicketRepo:
             return None
         return self._row(r, False)
 
+    def export(self, date_from: Optional[float] = None, date_to: Optional[float] = None, type_: Optional[str] = None, status: Optional[str] = None,
+               topic: Optional[str] = None, limit: int = 5000) -> list[dict]:
+        """Обращения с данными анкеты для выгрузки (те же фильтры, что у списка); только для сотрудников."""
+        w, params = self._where(date_from, date_to, type_, status, topic)
+        rows = self.db.query(f"SELECT * FROM tickets WHERE {w} ORDER BY created_at DESC, id DESC LIMIT ?", [*params, max(1, min(20000, limit))])
+        return [self._row(r, True) for r in rows]
+
     def update(self, ticket_id: int, status: Optional[str] = None, note: Optional[str] = None, reply: Optional[str] = None) -> bool:
         sets, params = ["updated_at=?"], [now()]
         if status is not None:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import logging
 import tempfile
 from datetime import datetime, timedelta, timezone
@@ -9,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response as RawResponse
 from pydantic import BaseModel, Field
 
 from ..templates import TemplateError, TemplateExists, TemplateNotFound, TemplateStore
@@ -244,6 +246,34 @@ def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_by
         rows, total = storage.tickets.list(_day(date_from), _day(date_to, end=True), type or None, status or None, topic or None, limit, offset)
         counts = storage.tickets.status_counts(_day(date_from), _day(date_to, end=True), type or None, topic or None)
         return {"items": rows, "total": total, "counts": counts, "statuses": list(TICKET_STATUSES), "types": list(TICKET_TYPES), "topics": sorted(set(storage.tickets.topics()) | set(all_topics()))}
+
+    CSV_TYPES = {"transfer": "перевод", "enrollment": "зачисление", "other": "другое"}
+    CSV_STATUSES = {"new": "новое", "in_progress": "в работе", "done": "обработано", "rejected": "отклонено"}
+    CSV_FIELDS = ["ФИО", "Текущий вуз", "Текущий курс", "Направление (текущее)", "Форма обучения", "Академические задолженности", "Целевое направление", "Контакт", "Паспортные данные"]
+
+    def _csv_cell(value) -> str:
+        """Ячейка без «формул»: значение, начинающееся с = + - @, Excel выполнил бы как формулу."""
+        text = "" if value is None else str(value).replace("\r", " ")
+        return "'" + text if text[:1] in ("=", "+", "-", "@", "\t") else text
+
+    @router.get("/tickets/export.csv")
+    def export_tickets(date_from: str = "", date_to: str = "", type: str = "", status: str = "", topic: str = "", who: dict = admin):
+        if type and type not in TICKET_TYPES:
+            raise HTTPException(400, f"type: одно из {list(TICKET_TYPES)}")
+        if status and status not in TICKET_STATUSES:
+            raise HTTPException(400, f"status: одно из {list(TICKET_STATUSES)}")
+        rows = storage.tickets.export(_day(date_from), _day(date_to, end=True), type or None, status or None, topic or None)
+        out = io.StringIO()
+        w = csv.writer(out, delimiter=";", lineterminator="\r\n")  # «;» и BOM: Excel в русской локали открывает без «кракозябр»
+        w.writerow(["№", "Дата (UTC)", "Тип", "Тема", "Статус", *CSV_FIELDS, "Ответ студенту", "Заметка сотрудника"])
+        for t in rows:
+            fields = (t.get("payload") or {}).get("fields", {})
+            w.writerow([t["id"], (t["created_at"] or "")[:16].replace("T", " "), CSV_TYPES.get(t["type"], t["type"]), _csv_cell(t["topic"]), CSV_STATUSES.get(t["status"], t["status"]),
+                        *[_csv_cell(fields.get(k)) for k in CSV_FIELDS], _csv_cell(t.get("reply")), _csv_cell(t.get("note"))])
+        storage.audit.log(who["username"], "ticket.export", "ticket", "", {"rows": len(rows)})
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        return RawResponse(("\ufeff" + out.getvalue()).encode("utf-8"), media_type="text/csv; charset=utf-8",
+                           headers={"Content-Disposition": f'attachment; filename="obrasheniya-{stamp}.csv"', "Cache-Control": "no-store"})
 
     @router.get("/tickets/{ticket_id}")
     def get_ticket(ticket_id: int, who: dict = admin):

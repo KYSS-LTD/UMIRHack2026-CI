@@ -285,14 +285,29 @@ export interface SubmissionPreview {
   already_sent: number | null;
   /** почему обращение не уходит в деканат (задолженности, неполные данные); пусто — можно отправить */
   blocked: string[];
+  /** код статуса уже отправленного обращения (виден, пока жива сессия) */
+  ticket_code: string;
 }
 
 export interface SubmitResult {
   sent: boolean;
   duplicate?: boolean;
   ticket_id?: number;
+  /** код для страницы «Статус обращения»: показывается студенту, в базе лежит только хэш */
+  code?: string;
   excluded?: string[];
   message: string;
+}
+
+export interface TicketStatus {
+  id: number;
+  status: "new" | "in_progress" | "done" | "rejected";
+  status_title: string;
+  topic: string | null;
+  created_at: string;
+  updated_at: string;
+  reply: string | null;
+  reply_at: string | null;
 }
 
 /** Идентификатор режима «другой документ»: ответ по тексту самого документа без карточки полей. */
