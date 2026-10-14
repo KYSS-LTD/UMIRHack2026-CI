@@ -238,7 +238,7 @@ export function CheckView({ types, health, onOpenClause }: Props) {
 
   const offerToContinue = useCallback(
     (state: DialogState) =>
-      desk.note({ text: "Анкета не завершена — можно продолжить с того же места или начать заново.", state, kind: "info", question: null, options: ["продолжить", "заново"], progress: null }),
+      desk.note({ text: "Анкета не завершена — можно продолжить с того же места, начать заново или прекратить.", state, kind: "info", question: null, options: ["продолжить", "заново", "прекратить"], progress: null }),
     [desk],
   );
 
@@ -401,7 +401,7 @@ export function CheckView({ types, health, onOpenClause }: Props) {
   return (
     <div className="desk">
       <section className="desk-chat" aria-label="Диалог">
-        {turns.length > 0 && <ChatBar count={turns.filter((t) => !t.botOnly).length} busy={busy} quiz={quiz} onClear={clearChat} />}
+        {turns.length > 0 && <ChatBar count={turns.filter((t) => !t.botOnly).length} busy={busy} quiz={quiz} onClear={clearChat} onStop={() => say("Прекратить анкету")} />}
         <div
           className="chat-scroll"
           ref={scrollRef}

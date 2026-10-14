@@ -322,6 +322,19 @@ def test_cancel_discards_the_questionnaire():
     assert ctx.state == IDLE and ctx.data == {} and r.kind == "cancelled"
 
 
+@pytest.mark.parametrize("word", ["отмена", "прекратить", "стоп", "хватит"])
+@pytest.mark.parametrize("stage", ["question", "review", "generation"])
+def test_the_questionnaire_can_be_stopped_at_any_stage(word, stage):
+    """Кнопка «Прекратить анкету» шлёт «отмена»; те же слова работают из поля ввода — на любом шаге анкеты."""
+    m, ctx = started()
+    if stage != "question":
+        finish(m, ctx)
+    if stage == "generation":
+        talk(m, ctx, "верно")
+    r = talk(m, ctx, word)
+    assert r.kind == "cancelled" and ctx.state == IDLE and ctx.data == {}
+
+
 def test_back_from_generation_returns_to_review():
     m, ctx = started()
     finish(m, ctx)

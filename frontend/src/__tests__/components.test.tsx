@@ -1,6 +1,7 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { parseHash } from "../App";
+import { ChatBar } from "../components/desk/ChatBar";
 import { Composer } from "../components/desk/Composer";
 import { FieldsCard } from "../components/desk/FieldsCard";
 import { TypeRail } from "../components/desk/TypeRail";
@@ -138,6 +139,48 @@ describe("Composer", () => {
     render(<Composer {...base} question="x" busy onCancel={onCancel} />);
     await userEvent.click(screen.getByRole("button", { name: "Остановить проверку" }));
     expect(onCancel).toHaveBeenCalled();
+  });
+});
+
+describe("ChatBar", () => {
+  const bar = (over: Partial<React.ComponentProps<typeof ChatBar>> = {}) => ({ count: 2, busy: false, quiz: false, onClear: vi.fn(), onStop: vi.fn(), ...over });
+
+  it("has no stop button while there is no questionnaire", () => {
+    render(<ChatBar {...bar()} />);
+    expect(screen.queryByRole("button", { name: /Прекратить анкету/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Очистить чат/ })).toBeInTheDocument();
+  });
+
+  it("asks before stopping the questionnaire and stops only after the confirmation", async () => {
+    const props = bar({ quiz: true });
+    render(<ChatBar {...props} />);
+    await userEvent.click(screen.getByRole("button", { name: /Прекратить анкету/ }));
+    expect(props.onStop).not.toHaveBeenCalled();
+    expect(screen.getByText("Ответы анкеты удалятся.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Прекратить" }));
+    expect(props.onStop).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: /Прекратить анкету/ })).toBeInTheDocument(); // вопрос снят
+  });
+
+  it("'Нет' and Esc keep the questionnaire", async () => {
+    const props = bar({ quiz: true });
+    render(<ChatBar {...props} />);
+    await userEvent.click(screen.getByRole("button", { name: /Прекратить анкету/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Нет" }));
+    expect(screen.queryByText("Ответы анкеты удалятся.")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /Прекратить анкету/ }));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByText("Ответы анкеты удалятся.")).toBeNull();
+    expect(props.onStop).not.toHaveBeenCalled();
+  });
+
+  it("drops the confirmation when the questionnaire ends by itself", async () => {
+    const props = bar({ quiz: true });
+    const { rerender } = render(<ChatBar {...props} />);
+    await userEvent.click(screen.getByRole("button", { name: /Прекратить анкету/ }));
+    rerender(<ChatBar {...props} quiz={false} />);
+    expect(screen.queryByText("Ответы анкеты удалятся.")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Прекратить/ })).toBeNull();
   });
 });
 

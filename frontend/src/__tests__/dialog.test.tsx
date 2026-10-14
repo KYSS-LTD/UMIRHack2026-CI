@@ -80,6 +80,8 @@ describe("dialog helpers", () => {
   it("maps quick-reply labels to questionnaire commands", () => {
     expect(optionText("Да, начать")).toBe("да");
     expect(optionText("Сформировать документ")).toBe("сформировать");
+    expect(optionText("Прекратить анкету")).toBe("отмена");
+    expect(optionText("прекратить")).toBe("прекратить"); // слово сервер понимает и так
     expect(optionText("очная")).toBe("очная");
   });
 

@@ -1,7 +1,7 @@
 import type { AnalysisResult, DialogState, FieldCorrection } from "../types";
 
 /** Что уходит на сервер при нажатии быстрого ответа: подпись кнопки и команда анкеты могут различаться. */
-const OPTION_TEXT: Record<string, string> = { "Да, начать": "да", Нет: "нет", Верно: "верно", Исправить: "исправить", "Сформировать документ": "сформировать" };
+const OPTION_TEXT: Record<string, string> = { "Да, начать": "да", Нет: "нет", Верно: "верно", Исправить: "исправить", "Сформировать документ": "сформировать", "Прекратить анкету": "отмена" };
 
 export const optionText = (label: string): string => OPTION_TEXT[label] ?? label;
 

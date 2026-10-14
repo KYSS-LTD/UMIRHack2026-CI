@@ -34,6 +34,21 @@
   .chat-clear:hover { border-color: color-mix(in srgb, var(--stamp) 45%, var(--line)); color: var(--stamp); transform: translateY(-1px); }
   .chat-clear:hover svg { animation: sweep-wiggle 620ms var(--ease); transform-origin: 80% 20%; }
   .chat-clear:active { transform: scale(.96); }
+  .chat-stop, .chat-stop-yes, .chat-stop-no { display: inline-flex; align-items: center; gap: 7px; flex: none; padding: 6px 12px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-size: var(--fs-sm); font-weight: 600; transition: border-color var(--t-fast), color var(--t-fast), background var(--t-fast), transform var(--t-base) var(--spring); }
+  .chat-stop:hover:not(:disabled), .chat-stop-no:hover { border-color: var(--line-strong); color: var(--ink); transform: translateY(-1px); }
+  .chat-stop:active, .chat-stop-yes:active, .chat-stop-no:active { transform: scale(.96); }
+  .chat-stop:disabled, .chat-stop-yes:disabled { opacity: .5; cursor: default; }
+  .chat-stop svg { transition: transform var(--t-base) var(--spring); }
+  .chat-stop:hover:not(:disabled) svg { transform: rotate(90deg); }
+  .chat-stop-ask { display: inline-flex; align-items: center; gap: 8px; flex: none; color: var(--ink-3); font-size: var(--fs-xs); animation: chip-in 320ms var(--spring) both; }
+  .chat-stop-yes { border-color: color-mix(in srgb, var(--stamp) 55%, var(--line)); background: color-mix(in srgb, var(--stamp) 9%, var(--surface)); color: var(--stamp); }
+  .chat-stop-yes:hover:not(:disabled) { background: color-mix(in srgb, var(--stamp) 16%, var(--surface)); transform: translateY(-1px); }
+  @media (max-width: 640px) {
+    .chat-bar { flex-wrap: wrap; row-gap: 8px; }
+    .chat-bar-title { flex-basis: 100%; }
+    .chat-stop-ask { flex: 1 1 100%; flex-wrap: wrap; row-gap: 6px; }
+    .chat-stop-ask > span { flex-basis: 100%; }
+  }
   @keyframes sweep-wiggle { 25% { transform: rotate(-16deg) translateX(-2px); } 55% { transform: rotate(10deg) translateX(1px); } 80% { transform: rotate(-5deg); } }
 
   /* ---------- к последнему сообщению ---------- */
