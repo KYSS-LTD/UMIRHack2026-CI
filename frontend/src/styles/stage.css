@@ -82,6 +82,8 @@
   .tool.wide { padding: 0 12px; }
   .tool.on { background: var(--btn); color: var(--btn-ink); }
   .zoom { min-width: 46px; text-align: center; font-size: var(--fs-sm); color: var(--ink-2); font-weight: 650; }
+  .viewer-meta { position: absolute; z-index: 5; left: 16px; bottom: 22px; margin: 0; padding: 4px 10px; border-radius: var(--r-pill); background: var(--glass); border: 1px solid var(--line); color: var(--ink-3); font-size: 11.5px; backdrop-filter: blur(8px); pointer-events: none; }
+  @media (max-width: 899px) { .viewer-meta { display: none; } }
   .pager { display: inline-flex; margin-right: 4px; border-radius: var(--r-pill); background: var(--surface-3); padding: 2px; }
   .pager button { min-width: 28px; height: 28px; border-radius: var(--r-pill); font-size: var(--fs-sm); font-weight: 700; color: var(--ink-2); }
   .pager button.on { background: var(--btn); color: var(--btn-ink); }

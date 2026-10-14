@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { cardOwners, type Turn } from "../../hooks/useDesk";
 import { relativeTime, VERDICT_META } from "../../lib/format";
 import type { HistoryEntry } from "../../lib/history";
-import type { Box, Delivery, DialogInfo, DocTypeSummary, FieldResult, PartResult, Source, TemplateInfo } from "../../types";
+import type { Box, Delivery, DialogInfo, DocTypeSummary, FieldResult, PartResult, Source, SubmitResult, TemplateInfo } from "../../types";
 import { Icon } from "../../ui/Icon";
 import { AnswerTurn } from "./AnswerTurn";
 import { Avatar } from "./Avatar";
@@ -38,6 +38,7 @@ interface Props {
   delivery: Delivery | null;
   onSay: (text: string, display?: string) => void;
   onGenerate: (templateId: string | null) => void;
+  onSent?: (result: SubmitResult) => void;
   /** проверка, чью карточку можно исправить (документ текущей сессии) */
   editableId: string | null;
   onCorrect: (turn: Turn, unit: string, value: string) => Promise<boolean>;
@@ -167,6 +168,7 @@ export function Thread(p: Props) {
               delivery={p.delivery}
               onReply={(label) => p.onSay(label)}
               onGenerate={p.onGenerate}
+              onSent={p.onSent}
             />
           )}
           {t.phase === "done" && !t.chat && t.result && (

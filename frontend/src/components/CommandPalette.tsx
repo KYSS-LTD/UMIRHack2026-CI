@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { emit } from "../lib/bus";
 import { rank } from "../lib/fuzzy";
 import { useRegulation } from "../hooks/useRegulation";
+import { clauseNo } from "../lib/format";
 import type { SampleItem } from "../types";
 import { Icon, type IconName } from "../ui/Icon";
 import type { Route } from "./NavBar";
@@ -61,9 +62,9 @@ export function CommandPalette({ open, onClose, samples, onNavigate, onTheme }: 
 
   const clauseCommands = useMemo<Command[]>(() => {
     if (!regulation || query.trim().length < 2) return [];
-    return rank(regulation.clauses, query, (c) => `${c.number} ${c.text} ${c.section.join(" ")}`, 6).map((c) => ({
+    return rank(regulation.clauses, query, (c) => `${clauseNo(c)} ${c.document?.name ?? ""} ${c.text} ${c.section.join(" ")}`, 6).map((c) => ({
       id: `clause-${c.number}`,
-      title: `п. ${c.number} — ${c.text.length > 80 ? c.text.slice(0, 77) + "…" : c.text}`,
+      title: `п. ${clauseNo(c)}${c.document ? ` («${c.document.name}»)` : ""} — ${c.text.length > 80 ? c.text.slice(0, 77) + "…" : c.text}`,
       group: "Положение",
       icon: "book" as const,
       run: () => (onNavigate("rules", c.number), onClose()),

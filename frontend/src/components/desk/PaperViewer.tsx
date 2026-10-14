@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { animate, lerp, useReducedMotion } from "../../lib/motion";
-import { unionBoxes } from "../../lib/format";
+import { formatBytes, unionBoxes } from "../../lib/format";
 import type { Box, PagePreview } from "../../types";
 import { renderAnnotated } from "../../lib/annotate";
 import { Icon } from "../../ui/Icon";
@@ -11,6 +11,8 @@ import type { DeskDoc, Highlight } from "./highlight";
 interface Props {
   /** адрес картинки: локальный предпросмотр или готовый снимок из ответа */
   src: string | null;
+  /** размер файла в байтах: показывается в строке под листом */
+  fileSize?: number;
   /** размеры страницы, к которой относится src, если картинка меньше неё (предпросмотр PDF): лист сразу ложится в нужный размер */
   srcSize?: { w: number; h: number } | null;
   pages: PagePreview[] | null;
@@ -196,6 +198,8 @@ export function PaperViewer(p: Props) {
     const c = { x: size.w / 2, y: size.h / 2 };
     const pan = (dx: number, dy: number) => (stopFly.current?.(), setView((v) => ({ ...v, tx: v.tx + dx, ty: v.ty + dy })));
     const keys: Record<string, () => void> = {
+      PageDown: () => setPage((n) => Math.min(n + 1, (p.pages?.length ?? 1) - 1)),
+      PageUp: () => setPage((n) => Math.max(n - 1, 0)),
       "+": () => zoomAt(c.x, c.y, 1.25),
       "=": () => zoomAt(c.x, c.y, 1.25),
       "-": () => zoomAt(c.x, c.y, 0.8),
@@ -351,26 +355,30 @@ export function PaperViewer(p: Props) {
         </button>
       )}
 
+      <p className="viewer-meta tabnum" aria-label="Сведения о листе">
+        {[`${iw} × ${ih} px`, p.fileSize ? formatBytes(p.fileSize) : "", p.pages && p.pages.length > 1 ? `стр. ${page + 1} из ${p.pages.length}` : ""].filter(Boolean).join(" · ")}
+      </p>
+
       <div className="viewer-tools" role="toolbar" aria-label="Управление снимком">
         {p.pages && p.pages.length > 1 && (
           <div className="pager" role="group" aria-label="Страницы">
             {p.pages.map((im, i) => (
-              <button key={im.page} type="button" className={i === page ? "on" : ""} aria-pressed={i === page} onClick={() => setPage(i)}>
+              <button key={im.page} type="button" className={i === page ? "on" : ""} aria-pressed={i === page} title={`Страница ${i + 1} (PageUp / PageDown)`} onClick={() => setPage(i)}>
                 {i + 1}
               </button>
             ))}
           </div>
         )}
-        <button type="button" className="tool" aria-label="Уменьшить" onClick={() => zoomAt(size.w / 2, size.h / 2, 0.78)}>
+        <button type="button" className="tool" aria-label="Уменьшить" title="Уменьшить (−)" onClick={() => zoomAt(size.w / 2, size.h / 2, 0.78)}>
           <Icon name="zoomOut" />
         </button>
         <span className="zoom tabnum" aria-live="off">
           {zoomPct}%
         </span>
-        <button type="button" className="tool" aria-label="Увеличить" onClick={() => zoomAt(size.w / 2, size.h / 2, 1.28)}>
+        <button type="button" className="tool" aria-label="Увеличить" title="Увеличить (+)" onClick={() => zoomAt(size.w / 2, size.h / 2, 1.28)}>
           <Icon name="zoomIn" />
         </button>
-        <button type="button" className="tool" aria-label="Вписать лист" onClick={() => fly(fitView())}>
+        <button type="button" className="tool" aria-label="Вписать лист" title="Вписать лист (0)" onClick={() => fly(fitView())}>
           <Icon name="fit" />
         </button>
         {p.allBoxes.length > 0 && (

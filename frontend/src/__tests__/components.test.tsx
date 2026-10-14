@@ -7,6 +7,7 @@ import { FieldsCard } from "../components/desk/FieldsCard";
 import { TypeRail } from "../components/desk/TypeRail";
 import { VerdictCard } from "../components/desk/VerdictCard";
 import { useDesk } from "../hooks/useDesk";
+import { clauseNo } from "../lib/format";
 import { suggestionsFor } from "../lib/suggestions";
 import type { Answer, DocTypeInfo, DocTypeSummary, FieldResult, Health, PagePreview } from "../types";
 import { filterClauses, groupSections, highlightText } from "../views/RegulationView";
@@ -297,6 +298,19 @@ describe("regulation helpers", () => {
       ["Справка об обучении", 2],
       ["Сроки", 1],
     ]);
+  });
+  it("shows documents of the knowledge base as their own sections with human numbers, not internal keys", () => {
+    const all = [
+      ...clauses,
+      { number: "db490d4:2.1", display: "2.1", label: "п. 2.1 (Правила общежития)", text: "Плата за проживание 1500 рублей", section: ["Проживание"], document: { id: "db490d4", name: "Правила общежития" } },
+      { number: "d7eadb1:§1", display: "§1", label: "§1 (Библиотека)", text: "Заниматься можно до 21:00", section: [], document: { id: "d7eadb1", name: "Библиотека" } },
+    ];
+    expect(groupSections(all).map((s) => [s.title, s.clauses.length])).toEqual([["Справка об обучении", 2], ["Сроки", 1], ["Документ «Правила общежития»", 1], ["Документ «Библиотека»", 1]]);
+    expect(clauseNo(all[3]!)).toBe("2.1");
+    expect(clauseNo(all[2]!)).toBe("6.1");
+    expect(filterClauses(all, "общежития")).toHaveLength(1); // поиск знает и название документа
+    expect(filterClauses(all, "§1")).toHaveLength(1);
+    expect(filterClauses(all, "db490d4")).toHaveLength(0); // служебный ключ людям не нужен
   });
   it("parses the hash route", () => {
     expect(parseHash("")).toEqual({ route: "check", clause: null });

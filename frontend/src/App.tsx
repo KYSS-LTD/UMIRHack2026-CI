@@ -85,6 +85,7 @@ function Shell() {
   const typeList = types.data ?? [];
   const editable = staffCanEdit(health.data);
   const ocrDown = health.data?.ocr?.available === false;
+  const staff = !!health.data?.admin?.authenticated;
 
   return (
     <>
@@ -118,6 +119,12 @@ function Shell() {
         {ocrDown && (
           <p className="banner bad" role="alert">
             Проверка документов сейчас недоступна: не удалось запустить распознавание текста. Вопросы по Положению и анкета работают — обратитесь в деканат, если проверка нужна срочно.
+            {staff && (
+              <>
+                {" "}
+                <a href="/admin">Что делать — в кабинете сотрудника</a>
+              </>
+            )}
           </p>
         )}
         <div className="route-body" key={hash.route}>

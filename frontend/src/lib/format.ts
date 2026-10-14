@@ -1,4 +1,4 @@
-import type { Box, FieldResult, Verdict } from "../types";
+import type { Box, Clause, FieldResult, Verdict } from "../types";
 
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} Б`;
@@ -75,3 +75,6 @@ export function plural(n: number, forms: [string, string, string]): string {
   if (b === 1) return forms[0];
   return forms[2];
 }
+
+/** Номер пункта для людей: «3.4», а не служебный ключ «d2:3.4» пункта дополнительного документа. */
+export const clauseNo = (c: Pick<Clause, "number" | "display">): string => c.display ?? c.number;

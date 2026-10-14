@@ -62,6 +62,15 @@ admin:
 delivery:
   channel: queue               # queue — внутренняя очередь обращений (их видит администратор); none — отправка недоступна
 
+mail:
+  enabled: false               # true — слать студенту письмо с номером и кодом статуса, если он указал почту (пароль — только в переменной окружения DEKANAT_MAIL_PASSWORD)
+  host: ""                     # SMTP-сервер, например smtp.yandex.ru
+  port: 587
+  security: starttls           # starttls | ssl | none
+  username: ""                 # логин на почтовом сервере (часто совпадает с адресом отправителя)
+  from: ""                     # адрес отправителя, например dekanat@example.ru
+  public_url: ""               # адрес сайта для ссылки в письме, например https://dekanat.example.ru (пусто — письмо подскажет путь в меню)
+
 submission:
   allow_debts: false               # false — обращение с академическими задолженностями в деканат не отправляется (документ студент скачивает)
   require_target_specialty: true   # true — без целевого направления обращение не отправляется

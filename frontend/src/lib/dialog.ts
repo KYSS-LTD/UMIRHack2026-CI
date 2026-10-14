@@ -1,7 +1,28 @@
-import type { AnalysisResult, DialogState, FieldCorrection } from "../types";
+import type { AnalysisResult, DialogState, FieldCorrection, SubmitResult } from "../types";
 
 /** Что уходит на сервер при нажатии быстрого ответа: подпись кнопки и команда анкеты могут различаться. */
 const OPTION_TEXT: Record<string, string> = { "Да, начать": "да", Нет: "нет", Верно: "верно", Исправить: "исправить", "Сформировать документ": "сформировать", "Прекратить анкету": "отмена" };
+
+/** Быстрый ответ секретаря после отправки обращения: переход на страницу статуса (серверу не уходит). */
+export const OPEN_STATUS = "Открыть страницу статуса";
+
+/** Что секретарь пишет сразу после отправки обращения: номер, код, что с письмом и предложение открыть страницу статуса. */
+export function statusOfferText(r: SubmitResult): string {
+  const mail = r.mail;
+  const letter =
+    !mail || mail.status === "none"
+      ? ""
+      : mail.status === "sent"
+        ? `Письмо с номером и кодом отправлено на ${mail.to}.`
+        : mail.status === "failed"
+          ? `Письмо на ${mail.to} отправить не удалось — сохраните номер и код из этого сообщения.`
+          : mail.status === "disabled"
+            ? "Почта на сервере не настроена, поэтому письмо не отправляется — сохраните номер и код."
+            : "Письма уходят только на почту — сохраните номер и код.";
+  return [`Обращение № ${r.ticket_id} отправлено в деканат.`, r.code ? `Код для проверки статуса: ${r.code} — сохраните его.` : "", letter, "Статус и ответ деканата будут на странице «Статус обращения». Открыть её?"]
+    .filter(Boolean)
+    .join(" ");
+}
 
 export const optionText = (label: string): string => OPTION_TEXT[label] ?? label;
 

@@ -307,7 +307,23 @@ async function refreshCounts() {
   return info;
 }
 
+/** Если распознавание текста не работает, сотрудник видит причину и точные шаги: студенты получают только короткую плашку. */
+function renderOcrAlert(info) {
+  const box = $("ocr-alert");
+  const ocr = info.ocr;
+  clear(box);
+  box.classList.toggle("hidden", !ocr || ocr.available !== false);
+  if (!ocr || ocr.available !== false) return;
+  box.appendChild(el("strong", null, "Проверка документов сейчас не работает"));
+  box.appendChild(el("p", null, ocr.reason ? `Причина: ${ocr.reason}.` : "Распознавание текста не запускается."));
+  if (ocr.fix) box.appendChild(el("p", null, ocr.fix));
+  const cmd = ocr.cmd ? el("p", "ocr-where", `Найден Tesseract: ${ocr.cmd}${ocr.tessdata ? ` · языковые данные: ${ocr.tessdata}` : ""}`) : null;
+  if (cmd) box.appendChild(cmd);
+  box.appendChild(el("p", "hint", "После исправления перезапустите сервер и обновите страницу. Вопросы по Положению и анкета работают и сейчас."));
+}
+
 function renderSummary(info) {
+  renderOcrAlert(info);
   const box = clear($("summary"));
   if (info.tickets_new > 0) {
     const link = el("button", "link-btn", `${info.tickets_new} ${plural(info.tickets_new, ["новое обращение", "новых обращения", "новых обращений"])}`, { type: "button" });
@@ -704,6 +720,22 @@ async function viewTickets(panel) {
     if ((t.payload || {}).request) kv.append(el("dt", null, "Что нужно"), el("dd", null, t.payload.request));
     for (const [k, v] of fieldsEntries) kv.append(el("dt", null, k), el("dd", null, v));
     body.appendChild(kv);
+    // история обращения: отправка студентом и действия сотрудников; обновляется после каждого сохранения
+    const historyBox = el("div", "ticket-history");
+    const drawHistory = (items) => {
+      clear(historyBox);
+      historyBox.appendChild(el("p", "eyebrow", "История"));
+      const list = el("ul");
+      for (const h of items) {
+        const li = el("li");
+        li.append(el("time", null, fmtWhen(h.at)), el("span", null, `${h.actor === "student" ? "Студент" : (ACTOR_TITLES[h.actor] || h.actor)}: ${h.text}`));
+        list.appendChild(li);
+      }
+      historyBox.appendChild(list);
+    };
+    drawHistory(t.history || []);
+    const refreshHistory = () => api("GET", `/api/admin/tickets/${t.id}`).then((r) => drawHistory(r.history || [])).catch(() => undefined);
+    body.appendChild(historyBox);
     if (t.similar && t.similar.length) {
       body.appendChild(el("p", "dup-note", `Этот студент уже обращался: ${t.similar.map((s) => `№ ${s.id} (${STATUS_TITLES[s.status] || s.status})`).join(", ")}.`));
     }
@@ -729,6 +761,7 @@ async function viewTickets(panel) {
       headChip.textContent = STATUS_TITLES[v];
       toast(`Статус: ${STATUS_TITLES[v]}`);
       load();
+      refreshHistory();
       refreshCounts();
     }, "Статус обращения"));
     drawSeg();
@@ -745,6 +778,7 @@ async function viewTickets(panel) {
         actions.classList.add("hidden");
         toast(done);
         load();
+        refreshHistory();
       }), "small primary", "check");
       actions.append(save, el("span", "hint", "Ctrl + Enter — сохранить"));
       area.addEventListener("input", () => actions.classList.toggle("hidden", area.value === saved));

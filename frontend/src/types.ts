@@ -178,7 +178,12 @@ export interface SampleItem {
 }
 
 export interface Clause {
+  /** ключ пункта: «3.4» или «d2:3.4» у документа базы знаний */
   number: string;
+  /** номер, как его видит человек: «3.4» (без служебного префикса документа) */
+  display?: string;
+  /** есть только у пунктов дополнительных документов базы знаний */
+  document?: { id: string; name: string };
   label: string;
   text: string;
   section: string[];
@@ -287,6 +292,8 @@ export interface SubmissionPreview {
   blocked: string[];
   /** код статуса уже отправленного обращения (виден, пока жива сессия) */
   ticket_code: string;
+  /** настроена ли почта для письма с номером и кодом */
+  mail: { available: boolean; reason: string };
 }
 
 export interface SubmitResult {
@@ -295,6 +302,8 @@ export interface SubmitResult {
   ticket_id?: number;
   /** код для страницы «Статус обращения»: показывается студенту, в базе лежит только хэш */
   code?: string;
+  /** письмо с номером и кодом: sent — ушло, failed — не получилось, disabled — почта не настроена, skipped — контакт не почта, none — контакта нет */
+  mail?: { status: "sent" | "failed" | "disabled" | "skipped" | "none"; to?: string };
   excluded?: string[];
   message: string;
 }

@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -33,6 +34,46 @@ class OcrUnavailable(RuntimeError):
     pass
 
 
+def _registry_candidates() -> list[str]:
+    """Где установщик Windows записал папку Tesseract: так находится установка не в «стандартную» папку (например, D:\\Tesseract-OCR)."""
+    if sys.platform != "win32":
+        return []
+    try:
+        import winreg
+    except ImportError:  # pragma: no cover
+        return []
+    out: list[str] = []
+    for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+        for sub in (r"SOFTWARE\Tesseract-OCR", r"SOFTWARE\WOW6432Node\Tesseract-OCR"):
+            try:
+                with winreg.OpenKey(root, sub) as key:
+                    for name in ("InstallDir", "Path"):
+                        try:
+                            value, _ = winreg.QueryValueEx(key, name)
+                            out.append(str(Path(str(value)) / "tesseract.exe"))
+                        except OSError:
+                            continue
+            except OSError:
+                continue
+    return out
+
+
+def ocr_fix_hint(info: dict) -> str:
+    """Что делать, если распознавание не работает: человеческим языком, с точными шагами. Пусто — всё в порядке."""
+    if info.get("available"):
+        return ""
+    missing = info.get("missing_languages") or []
+    if info.get("cmd") and missing:
+        return (f"Tesseract найден, но нет языковых данных: {', '.join(missing)}. Самый простой способ — выполнить в папке проекта команду «python -m dekanat fetch-lang» "
+                "(она скачает их в папку data/tessdata, права администратора не нужны) и перезапустить сервер. Либо запустите установщик Tesseract ещё раз и в разделе "
+                "«Additional language data» отметьте Russian.")
+    if not info.get("cmd"):
+        return ("Tesseract не найден. Установите его (Windows: установщик UB Mannheim, https://github.com/UB-Mannheim/tesseract/wiki; не забудьте отметить Russian в разделе "
+                "«Additional language data») и перезапустите сервер. Если он уже установлен, укажите путь к tesseract.exe в config/settings.yaml (ocr.tesseract_cmd) "
+                "или в переменной окружения TESSERACT_CMD.")
+    return "Tesseract найден, но не запускается. Проверьте путь в config/settings.yaml (ocr.tesseract_cmd) и запустите «python -m dekanat doctor» для подробностей."
+
+
 def find_tesseract(explicit: Optional[str] = None) -> Optional[str]:
     for cand in (explicit, os.environ.get("TESSERACT_CMD")):
         if cand and Path(cand).exists():
@@ -40,7 +81,7 @@ def find_tesseract(explicit: Optional[str] = None) -> Optional[str]:
     found = shutil.which("tesseract")
     if found:
         return found
-    for cand in _COMMON_PATHS:
+    for cand in [*_COMMON_PATHS, *_registry_candidates()]:
         if cand and Path(cand).exists():
             return cand
     return None
@@ -50,20 +91,37 @@ class TesseractEngine:
     name = "tesseract"
 
     def __init__(self, cmd: Optional[str] = None, languages: str = "rus+eng", tessdata_dir: Optional[str] = None, timeout: int = 180):
+        self._explicit = cmd
         self.cmd = find_tesseract(cmd)
+        self._ignore_env_tessdata = False  # неверный TESSDATA_PREFIX в окружении: игнорируется после самопроверки (см. _collect_info)
         self.languages = languages
         self.tessdata_dir = tessdata_dir
         self.timeout = timeout
         self._version: Optional[str] = None
+        self._info_cache: Optional[tuple[float, dict]] = None
 
     # ------------------------------------------------------------------ сервис
     def _env(self) -> dict:
         env = dict(os.environ)
         if self.tessdata_dir:
             env["TESSDATA_PREFIX"] = str(self.tessdata_dir)
+        elif self._ignore_env_tessdata:
+            env.pop("TESSDATA_PREFIX", None)
         return env
 
+    def _ensure_cmd(self) -> None:
+        """Tesseract могли установить уже после запуска сервера: ищем снова, перезапуск не нужен."""
+        if not self.cmd:
+            self.cmd = find_tesseract(self._explicit)
+
+    def _list_languages(self, env: dict) -> list[str]:
+        """Языки, которые видит Tesseract. Список печатается в stdout (5.x) или в stderr (старые сборки) — читаем оба."""
+        out = subprocess.run([self.cmd, "--list-langs"], capture_output=True, timeout=40, env=env)
+        text = (out.stdout or b"").decode("utf-8", "replace") + "\n" + (out.stderr or b"").decode("utf-8", "replace")
+        return [l.strip() for l in text.splitlines() if re.fullmatch(r"[A-Za-z_]{2,16}", l.strip())]
+
     def _run(self, args: list[str], image: Optional[np.ndarray] = None) -> bytes:
+        self._ensure_cmd()
         if not self.cmd:
             raise OcrUnavailable(
                 "Tesseract не найден. Установите его (Windows: https://github.com/UB-Mannheim/tesseract/wiki, "
@@ -92,21 +150,64 @@ class TesseractEngine:
                 raise OcrUnavailable(f"Tesseract завершился с ошибкой ({proc.returncode}): {err[:400]}")
             return proc.stdout
 
-    def info(self) -> dict:
-        """Диагностика для `doctor` и /api/health."""
+    def _heal_tessdata(self, wanted: list[str]) -> Optional[list[str]]:
+        """Языковые файлы на месте, а Tesseract их «не видит»: чаще всего виновата переменная TESSDATA_PREFIX, оставшаяся от старых инструкций
+        (указывает не туда). Пробуем без неё и с папкой tessdata рядом с tesseract.exe; рабочий вариант запоминаем — OCR дальше идёт с ним."""
+        trials: list[tuple[str, dict]] = []
+        if os.environ.get("TESSDATA_PREFIX") and not self.tessdata_dir:
+            trials.append(("env", {k: v for k, v in os.environ.items() if k != "TESSDATA_PREFIX"}))
+        beside = Path(self.cmd).parent / "tessdata"
+        if beside.exists():
+            trials.append(("dir", {**os.environ, "TESSDATA_PREFIX": str(beside)}))
+        for kind, env in trials:
+            try:
+                langs = self._list_languages(env)
+            except Exception:
+                continue
+            if not [l for l in wanted if l not in langs]:
+                if kind == "env":
+                    self._ignore_env_tessdata = True
+                else:
+                    self.tessdata_dir = str(beside)
+                log.warning("Tesseract не видел языки из-за TESSDATA_PREFIX=%r: используем %s", os.environ.get("TESSDATA_PREFIX"), "окружение без неё" if kind == "env" else str(beside))
+                return langs
+        return None
+
+    def _tessdata_folder(self) -> str:
+        """Где Tesseract ищет языковые данные (для подсказки человеку)."""
+        if self.tessdata_dir:
+            return str(self.tessdata_dir)
+        if os.environ.get("TESSDATA_PREFIX"):
+            return os.environ["TESSDATA_PREFIX"]
+        guess = Path(self.cmd).parent / "tessdata" if self.cmd else None
+        return str(guess) if guess and guess.exists() else ""
+
+    def info(self, fresh: bool = False) -> dict:
+        """Диагностика для `doctor`, кабинета и /api/health (результат помнится 30 с: проверка запускает tesseract дважды)."""
+        if not fresh and self._info_cache and time.time() - self._info_cache[0] < 30:
+            return self._info_cache[1]
+        data = self._collect_info()
+        data["fix"] = ocr_fix_hint(data)
+        self._info_cache = (time.time(), data)
+        return data
+
+    def _collect_info(self) -> dict:
+        self._ensure_cmd()
         if not self.cmd:
-            return {"available": False, "reason": "tesseract не найден"}
+            return {"available": False, "reason": "tesseract не найден", "missing_languages": []}
+        wanted = self.languages.split("+")
         try:
-            out = subprocess.run([self.cmd, "--version"], capture_output=True, timeout=20, env=self._env())
-            text = (out.stdout or out.stderr).decode("utf-8", "replace")
+            out = subprocess.run([self.cmd, "--version"], capture_output=True, timeout=40, env=self._env())
+            text = ((out.stdout or b"") + (out.stderr or b"")).decode("utf-8", "replace").strip()
             self._version = text.splitlines()[0].strip() if text else "?"
-            langs = subprocess.run([self.cmd, "--list-langs"], capture_output=True, timeout=20, env=self._env())
-            lang_list = [l.strip() for l in langs.stdout.decode("utf-8", "replace").splitlines()[1:] if l.strip()]
-        except Exception as exc:  # pragma: no cover
-            return {"available": False, "reason": str(exc)}
-        need = [l for l in self.languages.split("+") if l not in lang_list]
+            lang_list = self._list_languages(self._env())
+            if [l for l in wanted if l not in lang_list]:
+                lang_list = self._heal_tessdata(wanted) or lang_list
+        except Exception as exc:
+            return {"available": False, "cmd": self.cmd, "reason": f"Tesseract не отвечает: {exc}", "missing_languages": []}
+        need = [l for l in wanted if l not in lang_list]
         return {"available": not need, "cmd": self.cmd, "version": self._version, "languages": [l for l in lang_list if l in ("rus", "eng", "osd")], "missing_languages": need,
-                "reason": f"нет языковых данных: {', '.join(need)}" if need else ""}
+                "tessdata": self._tessdata_folder(), "reason": f"нет языковых данных: {', '.join(need)}" if need else ""}
 
     # ------------------------------------------------------------------ распознавание
     def recognize(self, image: np.ndarray, psm: int = 6) -> list[Word]:

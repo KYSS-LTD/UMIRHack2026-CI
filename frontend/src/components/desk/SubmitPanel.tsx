@@ -7,7 +7,7 @@ import { Icon } from "../../ui/Icon";
  * Передача обращения в деканат — только по желанию и после подтверждения. Перед отправкой видно, что именно уйдёт;
  * паспортные данные по умолчанию не передаются. Документ всегда можно отнести самому.
  */
-export function SubmitPanel({ delivery }: { delivery: Delivery | null }) {
+export function SubmitPanel({ delivery, onSent }: { delivery: Delivery | null; onSent?: (result: SubmitResult) => void }) {
   const titleId = useId();
   const [open, setOpen] = useState(false);
   const [withPassport, setWithPassport] = useState(false);
@@ -34,7 +34,9 @@ export function SubmitPanel({ delivery }: { delivery: Delivery | null }) {
   const send = async (confirm: boolean) => {
     setSending(true);
     try {
-      setDone(await api.assistant.submit(confirm, withPassport, contact.trim()));
+      const res = await api.assistant.submit(confirm, withPassport, contact.trim());
+      setDone(res);
+      if (res.sent && res.ticket_id && !res.duplicate) onSent?.(res);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -140,7 +142,10 @@ export function SubmitPanel({ delivery }: { delivery: Delivery | null }) {
           <label className="contact-field">
             <span>Как с вами связаться (по желанию)</span>
             <input type="text" value={contact} maxLength={120} onChange={(e) => setContact(e.target.value)} placeholder="почта, телефон или @telegram" autoComplete="off" />
-            <small>Деканат увидит это в обращении. Статус вы всё равно узнаете по номеру и коду.</small>
+            <small>
+              Деканат увидит это в обращении.{" "}
+              {preview.mail?.available ? "Если это почта, мы отправим на неё номер и код." : "Письма с кодом сейчас не отправляются — номер и код вы увидите здесь."}
+            </small>
           </label>
           {(preview.excluded.length > 0 || withPassport) && (
             <label className="check-line">

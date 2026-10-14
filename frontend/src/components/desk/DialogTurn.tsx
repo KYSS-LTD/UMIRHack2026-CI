@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Turn } from "../../hooks/useDesk";
 import { parseReview, type ReviewSheet, splitQuestion } from "../../lib/dialog";
-import type { Delivery, DialogInfo, DownloadInfo, TemplateInfo } from "../../types";
+import type { Delivery, DialogInfo, DownloadInfo, SubmitResult, TemplateInfo } from "../../types";
 import { Icon } from "../../ui/Icon";
 import { Reveal } from "../../ui/Reveal";
 import { Avatar } from "./Avatar";
@@ -18,6 +18,8 @@ interface Props {
   delivery: Delivery | null;
   onReply: (label: string) => void;
   onGenerate: (templateId: string | null) => void;
+  /** обращение отправлено: секретарь пишет номер, код и предлагает страницу статуса */
+  onSent?: (result: SubmitResult) => void;
 }
 
 const TONE: Record<string, string> = { error: "bad", clarify: "ask", done: "ok", cancelled: "quiet" };
@@ -196,7 +198,7 @@ export function DialogTurn(p: Props) {
         {p.latest && p.turn.download && p.dialog?.state === "completed" && (
           <>
             <NextSteps />
-            <SubmitPanel delivery={p.delivery} />
+            <SubmitPanel delivery={p.delivery} onSent={p.onSent} />
           </>
         )}
       </div>

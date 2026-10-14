@@ -116,7 +116,7 @@ def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_by
         return {
             "username": who["username"], "llm": svc.llm.status(), "regulation": {"name": svc.regulation_name, "clauses": len(svc.clauses)},
             "templates": len(storage.templates.list()), "kb_documents": len(kbm.list()), "tickets_new": tickets_new,
-            "delivery": delivery_status(), "active_sessions": storage.sessions.count_active(),
+            "delivery": delivery_status(), "active_sessions": storage.sessions.count_active(), "ocr": svc.engine.info(),
         }
 
     def delivery_status() -> dict:
@@ -308,6 +308,27 @@ def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_by
         return RawResponse(("\ufeff" + out.getvalue()).encode("utf-8"), media_type="text/csv; charset=utf-8",
                            headers={"Content-Disposition": f'attachment; filename="obrasheniya-{stamp}.csv"', "Cache-Control": "no-store"})
 
+    STATUS_RU = {"new": "новое", "in_progress": "в работе", "done": "обработано", "rejected": "отклонено"}
+
+    def _ticket_history(row: dict) -> list:
+        """Что происходило с обращением: отправка студентом и действия сотрудников (кто, когда, что). Новые записи сверху."""
+        out = []
+        for e in storage.audit.list("ticket", str(row["id"]), limit=50):
+            if e["action"] != "ticket.update":
+                continue
+            d = e["details"] or {}
+            parts = []
+            if d.get("status"):
+                parts.append(f"статус: {STATUS_RU.get(d['status'], d['status'])}")
+            if d.get("reply"):
+                parts.append("изменён ответ студенту")
+            if d.get("note"):
+                parts.append("изменена заметка")
+            if parts:
+                out.append({"at": e["ts"], "actor": e["actor"], "text": ", ".join(parts)})
+        out.append({"at": row["created_at"], "actor": "student", "text": "обращение отправлено студентом"})
+        return out
+
     @router.get("/tickets/{ticket_id}")
     def get_ticket(ticket_id: int, who: dict = admin):
         row = storage.tickets.get(ticket_id)
@@ -315,6 +336,7 @@ def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_by
             raise HTTPException(404, "Обращение не найдено")
         row["has_attachment"] = (storage.ticket_dir(ticket_id) / "application.docx").exists()
         row["similar"] = storage.tickets.similar(ticket_id)
+        row["history"] = _ticket_history(row)
         return row
 
     @router.get("/reply-templates")

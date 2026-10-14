@@ -1,4 +1,4 @@
-"""Командная строка: serve | ask | batch | ocr | doctor | validate-config | synth | eval | create-admin | template-add | template-sample | purge."""
+"""Командная строка: serve | ask | batch | ocr | doctor | fetch-lang | validate-config | synth | eval | create-admin | template-add | template-sample | purge."""
 
 from __future__ import annotations
 
@@ -134,6 +134,8 @@ def cmd_doctor(args) -> int:
     else:
         ok = False
         print(f"  Tesseract: ПРОБЛЕМА — {ocr.get('reason')}")
+        if ocr.get("fix"):
+            print(f"    Что делать: {ocr['fix']}")
     print(f"  Типы документов: {', '.join(d['title'] for d in info['doc_types'])}")
     print(f"  Положение: {info['regulation']['name'] or 'не загружено'} ({info['regulation']['clauses']} пунктов)")
     llm = info["llm"]
@@ -149,6 +151,35 @@ def cmd_doctor(args) -> int:
     print(f"  Хранилище: {storage.db.path}")
     storage.close()
     return 0 if ok else 1
+
+
+def cmd_fetch_lang(args) -> int:
+    from pathlib import Path
+
+    from .config import load_settings
+    from .ocr import TesseractEngine
+    from .ocr.langdata import LangDataError, MANUAL_PAGE, fetch_languages
+
+    st = load_settings()
+    dest = Path(st.root) / "data" / "tessdata"
+    print(f"Скачиваю языковые данные Tesseract ({', '.join(args.langs)}) в {dest} …")
+    try:
+        result = fetch_languages(dest, args.langs, args.force)
+    except (LangDataError, OSError) as exc:
+        print(f"  Не получилось: {exc}")
+        print(f"  Скачайте нужные файлы вручную со страницы {MANUAL_PAGE} и положите их в {dest}.")
+        return 1
+    for lang, what in result.items():
+        print(f"  {lang}: {what}")
+    engine = TesseractEngine(cmd=st.get("ocr.tesseract_cmd"), languages=str(st.get("ocr.languages", "rus+eng")), tessdata_dir=str(dest))
+    info = engine.info(fresh=True)
+    if info.get("available"):
+        print("Готово: распознавание работает. Перезапустите сервер: python -m dekanat serve")
+        return 0
+    print(f"Файлы скачаны, но распознавание пока не работает: {info.get('reason')}")
+    if info.get("fix"):
+        print(f"  {info['fix']}")
+    return 1
 
 
 def cmd_create_admin(args) -> int:
@@ -279,6 +310,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     d = sub.add_parser("doctor", help="проверить окружение")
     d.set_defaults(func=cmd_doctor)
+
+    fl = sub.add_parser("fetch-lang", help="скачать языковые данные Tesseract (rus, eng, osd) в data/tessdata — если установщик Tesseract поставил только английский")
+    fl.add_argument("langs", nargs="*", default=["rus", "eng", "osd"], help="какие языки скачать (по умолчанию rus eng osd)")
+    fl.add_argument("--force", action="store_true", help="скачать заново, даже если файл уже есть")
+    fl.set_defaults(func=cmd_fetch_lang)
 
     v = sub.add_parser("validate-config", help="проверить YAML типов документов")
     v.add_argument("--dir")

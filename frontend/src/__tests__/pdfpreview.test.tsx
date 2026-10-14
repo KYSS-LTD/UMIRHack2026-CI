@@ -1,4 +1,4 @@
-import { render, renderHook, waitFor } from "@testing-library/react";
+import { fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { api } from "../api";
 import { PaperViewer } from "../components/desk/PaperViewer";
 import { usePagePreview } from "../hooks/usePagePreview";
@@ -63,7 +63,7 @@ describe("PaperViewer keeps the sheet on the desk", () => {
     onSelectDoc: () => {},
     onAnother: () => {},
   };
-  const view = (over: Partial<typeof base> & { srcSize?: { w: number; h: number } | null }) => (
+  const view = (over: Partial<typeof base> & { srcSize?: { w: number; h: number } | null; fileSize?: number }) => (
     <ToastProvider>
       <PaperViewer {...base} {...over} />
     </ToastProvider>
@@ -88,6 +88,22 @@ describe("PaperViewer keeps the sheet on the desk", () => {
     expect(container.querySelector(".pdf-sheet")).toBeNull();
     expect(container.querySelector(".canvas img")).toBe(first); // тот же элемент: анимация появления не запускается заново
     expect(container.querySelector(".canvas img")).toHaveAttribute("src", "data:image/jpeg;base64,CCCC");
+  });
+
+  it("tells the size of the sheet and the file and turns pages with PageUp / PageDown", () => {
+    const pages = [page({ page: 0 }), page({ page: 1, data_url: "data:image/jpeg;base64,BBBB" })];
+    const { container } = render(view({ pages, fileSize: 46_592 }));
+    const meta = container.querySelector(".viewer-meta")!;
+    expect(meta.textContent).toBe("1200 × 1700 px · 46 КБ · стр. 1 из 2");
+    const stage = container.querySelector(".stage") as HTMLElement;
+    fireEvent.keyDown(stage, { key: "PageDown" });
+    expect(container.querySelector(".viewer-meta")!.textContent).toMatch(/стр\. 2 из 2$/);
+    expect(container.querySelector(".canvas img")).toHaveAttribute("src", "data:image/jpeg;base64,BBBB");
+    fireEvent.keyDown(stage, { key: "PageDown" });
+    expect(container.querySelector(".viewer-meta")!.textContent).toMatch(/стр\. 2 из 2$/); // дальше последней страницы не уходит
+    fireEvent.keyDown(stage, { key: "PageUp" });
+    expect(container.querySelector(".viewer-meta")!.textContent).toMatch(/стр\. 1 из 2$/);
+    expect(screen.getByRole("button", { name: "Увеличить" })).toHaveAttribute("title", "Увеличить (+)");
   });
 
   it("a different document is laid on the desk with a fresh fade", () => {

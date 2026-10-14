@@ -369,6 +369,15 @@ label small { color: var(--ink-3); font-weight: 400; }
 .seg button { padding: 6px 12px; border: 0; background: none; box-shadow: none; color: var(--ink-2); font-size: 13px; }
 .seg button:hover:not(:disabled) { background: var(--surface); transform: none; box-shadow: none; }
 .seg button[aria-pressed="true"] { background: var(--btn); color: var(--btn-ink); }
+.ocr-alert { margin: 0 0 18px; padding: 14px 18px; border-radius: var(--r-md); border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent); background: var(--danger-soft); color: var(--ink); animation: panel-in 420ms var(--glide) both; }
+.ocr-alert strong { display: block; margin-bottom: 4px; color: var(--danger); font-family: var(--serif); font-size: 17px; }
+.ocr-alert p { margin: 4px 0 0; font-size: 14px; }
+.ocr-alert .ocr-where { color: var(--ink-3); font-size: 12.5px; overflow-wrap: anywhere; }
+.ticket-history { margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); }
+.ticket-history .eyebrow { margin: 0 0 6px; }
+.ticket-history ul { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.ticket-history li { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; font-size: 12.5px; color: var(--ink-2); }
+.ticket-history time { color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .preset-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .chip-btn { padding: 3px 11px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2); font-size: 12.5px; font-weight: 600; box-shadow: none; transition: background 140ms, color 140ms, border-color 140ms; }
 .chip-btn:hover:not(:disabled) { background: var(--surface-3); color: var(--ink); border-color: var(--line-strong); transform: none; box-shadow: none; }

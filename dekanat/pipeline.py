@@ -141,10 +141,12 @@ class Dekanat:
         self._cache_size = max(0, int(self.settings.get("ocr.cache_size", 4)))
         self._ocr_cache: "OrderedDict[str, list[OcrPage]]" = OrderedDict()
         self._field_cache: "OrderedDict[tuple[str, str], list[FieldResult]]" = OrderedDict()
-        self.engine = TesseractEngine(
-            cmd=self.settings.get("ocr.tesseract_cmd"), languages=str(self.settings.get("ocr.languages", "rus+eng")),
-            tessdata_dir=self.settings.get("ocr.tessdata_dir"),
-        )
+        tessdata = self.settings.get("ocr.tessdata_dir")
+        if not tessdata:  # языковые данные, скачанные командой fetch-lang, подхватываются без настройки
+            local = Path(self.settings.root) / "data" / "tessdata"
+            if (local / "rus.traineddata").exists():
+                tessdata = str(local)
+        self.engine = TesseractEngine(cmd=self.settings.get("ocr.tesseract_cmd"), languages=str(self.settings.get("ocr.languages", "rus+eng")), tessdata_dir=tessdata)
         self.runner = OcrRunner(self.engine, OcrOptions(good_score=float(self.settings.get("ocr.good_score", 70)), fast=bool(self.settings.get("ocr.fast", False))))
         self.doc_types: dict[str, DocTypeSpec] = {}
         self.clauses: list[Clause] = []

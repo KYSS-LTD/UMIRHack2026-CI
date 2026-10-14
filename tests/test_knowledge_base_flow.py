@@ -104,6 +104,17 @@ class TestUploadedDocumentAnswers:
         assert "3000" in answer(app, "Какой размер стипендии?").text
 
 
+def test_public_regulation_list_labels_documents_and_gives_human_numbers(app, admin):
+    """Страница «Положение» показывает пункты документов базы знаний отдельно и с видимыми номерами, а не со служебным ключом «d2:2.1»."""
+    upload_kb(admin)
+    clauses = TestClient(app).get("/api/regulation").json()["clauses"]
+    base = [c for c in clauses if "document" not in c]
+    extra = [c for c in clauses if "document" in c]
+    assert len(base) == 25 and all(c["display"] == c["number"] for c in base)
+    assert {c["display"] for c in extra} == {"1.1", "1.2", "2.1", "2.2"} and {c["document"]["name"] for c in extra} == {"Правила общежития"}
+    assert all(":" in c["number"] and ":" not in c["display"] for c in extra)  # ключ для ссылок остаётся, а показывается номер
+
+
 class TestUploadChecks:
     def test_files_without_numbering_are_accepted_with_a_notice(self, admin):
         r = admin.post("/api/admin/kb", files={"file": ("lib.txt", "Заниматься можно до 21:00.\n\nКниги выдаются на 14 дней.".encode(), "text/plain")}, data={"name": "Библиотека"})

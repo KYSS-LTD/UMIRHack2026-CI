@@ -26,6 +26,7 @@ from starlette.concurrency import run_in_threadpool
 from ..dialog import COMPLETED, DOCUMENT_GENERATION, DialogContext, DialogMachine, Reply
 from ..dialog.eligibility import check_submission
 from ..dialog.nextsteps import build_next_steps
+from ..mailer import Mailer, mask_email
 from ..dialog.docstate import apply_correction, make_record, public_fields, restore_fields, suggestions_from_record
 from ..dialog.questions import REQUEST_TYPES
 from ..templates import TemplateError, TemplateNotFound, TemplateStore, fill_docx
@@ -450,6 +451,7 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
 
     # ---- отправка обращения
     status_limiter = AttemptLimiter()
+    mailer = Mailer(svc.settings)
 
     def build_payload(ctx: DialogContext, include_passport: bool, contact: str = "") -> tuple[dict, list]:
         data = DialogMachine.template_data(ctx)
@@ -473,7 +475,7 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
         ctx = load_ctx(sid)
         payload, excluded = build_payload(ctx, include_passport)
         return {"delivery": delivery_status(), "payload": payload, "excluded": excluded, "attachment": bool(ctx.generated), "state": ctx.state,
-                "already_sent": ctx.ticket_id, "ticket_code": ctx.ticket_code if ctx.ticket_id else "", "blocked": check_submission(ctx, svc.settings.get)}
+                "already_sent": ctx.ticket_id, "ticket_code": ctx.ticket_code if ctx.ticket_id else "", "blocked": check_submission(ctx, svc.settings.get), "mail": mailer.status()}
 
     @router.post("/submission")
     def submit(body: SubmitIn, request: Request):
@@ -512,7 +514,15 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
             save_ctx(sid, ctx)
             if created:
                 storage.events.log("ticket", topic, "sent", sid)
-        return {"sent": True, "duplicate": not created, "ticket_id": ticket["id"], "code": ctx.ticket_code, "excluded": excluded,
+            code, ticket_id = ctx.ticket_code, ticket["id"]
+        # письмо с номером и кодом — по желанию (студент указал почту) и вне блокировки сессии: почтовый сервер может отвечать долго
+        mail = {"status": "none"}
+        if created and contact:
+            if "@" not in contact or contact.startswith("@"):
+                mail = {"status": "skipped"}  # телефон или Telegram: письма уходят только на почту
+            else:
+                mail = {"status": mailer.send_ticket_code(contact, ticket_id, code), "to": mask_email(contact)}
+        return {"sent": True, "duplicate": not created, "ticket_id": ticket_id, "code": code, "excluded": excluded, "mail": mail,
                 "message": "Обращение передано в очередь деканата. Окончательное решение принимает сотрудник деканата."}
 
     # ---- что принести и в какой срок решат: из действующего Положения, со ссылкой на пункт

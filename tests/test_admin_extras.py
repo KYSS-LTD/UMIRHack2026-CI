@@ -108,3 +108,22 @@ def test_ticket_shows_other_requests_of_the_same_student(app, admin):
 def test_ticket_without_a_name_has_no_similar(app, admin):
     t = app.state.storage.tickets.create("r", "other", "Анкета", {"request": "x", "fields": {}}, "queue", "k")[0]
     assert admin.get(f"/api/admin/tickets/{t['id']}").json()["similar"] == []
+
+
+# ============================================================================ история обращения
+def test_ticket_history_lists_the_sending_and_every_staff_action_newest_first(app, admin):
+    t = make_ticket(app, "Иванов Иван", "h1")
+    assert [h["text"] for h in admin.get(f"/api/admin/tickets/{t['id']}").json()["history"]] == ["обращение отправлено студентом"]
+    admin.patch(f"/api/admin/tickets/{t['id']}", json={"status": "in_progress"})
+    admin.patch(f"/api/admin/tickets/{t['id']}", json={"reply": "Приходите в среду", "note": "позвонил студенту"})
+    admin.patch(f"/api/admin/tickets/{t['id']}", json={"status": "done"})
+    history = admin.get(f"/api/admin/tickets/{t['id']}").json()["history"]
+    assert [h["text"] for h in history] == ["статус: обработано", "изменён ответ студенту, изменена заметка", "статус: в работе", "обращение отправлено студентом"]
+    assert history[0]["actor"] == "test-admin" and history[-1]["actor"] == "student" and all(h["at"] for h in history)
+    assert "Приходите" not in str(history) and "позвонил" not in str(history)  # в истории только факты, сами тексты не дублируются
+
+
+def test_history_of_one_ticket_does_not_leak_into_another(app, admin):
+    a, b = make_ticket(app, "Иванов Иван", "x1"), make_ticket(app, "Петров Пётр", "x2")
+    admin.patch(f"/api/admin/tickets/{a['id']}", json={"status": "rejected"})
+    assert [h["text"] for h in admin.get(f"/api/admin/tickets/{b['id']}").json()["history"]] == ["обращение отправлено студентом"]

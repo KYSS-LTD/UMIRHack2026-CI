@@ -224,7 +224,7 @@ class Clause:
         return self.section[-1] if self.section else ""
 
     def to_dict(self) -> dict:
-        out = {"number": self.number, "label": self.label, "text": self.text, "section": self.section}
+        out = {"number": self.number, "display": self.shown, "label": self.label, "text": self.text, "section": self.section}
         if self.doc_name:
             out["document"] = {"id": self.doc_id, "name": self.doc_name}
         return out

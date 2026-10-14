@@ -15,12 +15,12 @@ import { useObjectUrl } from "../hooks/useObjectUrl";
 import { usePagePreview } from "../hooks/usePagePreview";
 import { resetActivity, setActivity } from "../lib/activity";
 import { useBus } from "../lib/bus";
-import { isQuizState, mergeCorrection, optionText } from "../lib/dialog";
+import { isQuizState, mergeCorrection, OPEN_STATUS, optionText, statusOfferText } from "../lib/dialog";
 import { fileFromClipboard, isPdf, validateFile } from "../lib/files";
 import { fieldBoxes } from "../lib/format";
 import { STAGES, stageIndex } from "../lib/stages";
 import { aboutRegulation, suggestionsFor } from "../lib/suggestions";
-import { AUTO_TYPE, type Box, type DialogState, type DocTypeSummary, type FieldResult, GENERIC_TYPE, type Health, type PartResult, type SampleItem, type Source } from "../types";
+import { AUTO_TYPE, type Box, type DialogState, type DocTypeSummary, type FieldResult, GENERIC_TYPE, type Health, type PartResult, type SampleItem, type Source, type SubmitResult } from "../types";
 import { ConfirmDialog } from "../ui/Dialog";
 import { Icon } from "../ui/Icon";
 import { Portal } from "../ui/Portal";
@@ -139,7 +139,26 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
   );
 
   /** Быстрый ответ или фраза-подсказка: подпись кнопки остаётся в ленте, на сервер уходит команда анкеты. */
-  const say = useCallback((label: string) => void talk(label, optionText(label)), [talk]);
+  const statusTicket = useRef<number | null>(null);
+  const say = useCallback(
+    (label: string) => {
+      if (label === OPEN_STATUS) {
+        location.hash = `#/status/${statusTicket.current ?? ""}`; // страница статуса — на сервер этот ответ не уходит
+        return;
+      }
+      void talk(label, optionText(label));
+    },
+    [talk],
+  );
+
+  /** Обращение отправлено: секретарь сам называет номер и код и предлагает открыть страницу статуса. */
+  const afterSubmit = useCallback(
+    (res: SubmitResult) => {
+      statusTicket.current = res.ticket_id ?? null;
+      desk.note({ text: statusOfferText(res), state: "completed", kind: "info", question: null, options: [OPEN_STATUS], progress: null });
+    },
+    [desk],
+  );
 
   const generate = useCallback(
     (templateId: string | null) =>
@@ -458,6 +477,7 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
             delivery={assistant.delivery}
             onSay={say}
             onGenerate={generate}
+            onSent={afterSubmit}
             editableId={busy ? null : editableId}
             onCorrect={correct}
             sweeping={sweeping}
@@ -492,6 +512,7 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
         {hasSubject ? (
           <PaperViewer
             src={subjectUrl ?? pdfPreview?.data_url ?? null}
+            fileSize={subjectFile?.size}
             srcSize={!subjectUrl && pdfPreview ? { w: pdfPreview.width, h: pdfPreview.height } : null}
             pages={subjectResult?.images?.length ? subjectResult.images : scanning ? lastPages : null}
             fileName={subjectName}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRegulation } from "../hooks/useRegulation";
+import { clauseNo } from "../lib/format";
 import { Icon } from "../ui/Icon";
 
 interface Props {
@@ -48,9 +49,9 @@ export function ClauseDrawer({ refId, quote, onClose, onOpenRegulation }: Props)
         <div className="drawer-body" key={cur ?? "none"}>
           {clause ? (
             <>
-              {clause.section.length > 0 && <p className="crumbs">{clause.section.join(" › ")}</p>}
+              {(clause.document || clause.section.length > 0) && <p className="crumbs">{[clause.document ? `Документ «${clause.document.name}»` : "", ...clause.section].filter(Boolean).join(" › ")}</p>}
               <div className="clause-big">
-                <span className="num serif tabnum">{clause.number}</span>
+                <span className="num serif tabnum">{clauseNo(clause)}</span>
                 <p>{clause.text}</p>
               </div>
             </>
@@ -64,11 +65,11 @@ export function ClauseDrawer({ refId, quote, onClose, onOpenRegulation }: Props)
         <nav className="drawer-nav" aria-label="Соседние пункты">
           <button type="button" disabled={!prev} onClick={() => prev && setCur(prev.number)}>
             <small>Предыдущий</small>
-            <span>{prev ? `п. ${prev.number}` : "—"}</span>
+            <span>{prev ? `п. ${clauseNo(prev)}` : "—"}</span>
           </button>
           <button type="button" disabled={!next} onClick={() => next && setCur(next.number)}>
             <small>Следующий</small>
-            <span>{next ? `п. ${next.number}` : "—"}</span>
+            <span>{next ? `п. ${clauseNo(next)}` : "—"}</span>
           </button>
         </nav>
         <footer className="drawer-foot">
