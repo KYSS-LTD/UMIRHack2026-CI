@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from ..dialog import COMPLETED, DOCUMENT_GENERATION, DialogContext, DialogMachine, Reply
+from ..dialog.eligibility import check_submission
 from ..dialog.docstate import apply_correction, make_record, public_fields, restore_fields, suggestions_from_record
 from ..dialog.questions import REQUEST_TYPES
 from ..templates import TemplateError, TemplateNotFound, TemplateStore, fill_docx
@@ -411,7 +412,7 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
         ctx = load_ctx(sid)
         payload, excluded = build_payload(ctx, include_passport)
         return {"delivery": delivery_status(), "payload": payload, "excluded": excluded, "attachment": bool(ctx.generated), "state": ctx.state,
-                "already_sent": ctx.ticket_id}
+                "already_sent": ctx.ticket_id, "blocked": check_submission(ctx, svc.settings.get)}
 
     @router.post("/submission")
     def submit(body: SubmitIn, request: Request):
@@ -428,6 +429,10 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
                 raise HTTPException(409, "Сначала пройдите анкету, подтвердите данные и сформируйте документ.")
             if ctx.ticket_id:
                 return {"sent": True, "duplicate": True, "ticket_id": ctx.ticket_id, "message": "Обращение уже отправлено ранее."}
+            blocked = check_submission(ctx, svc.settings.get)
+            if blocked:
+                storage.events.log("ticket", SCENARIO_TOPICS.get(ctx.scenario, "Анкета"), "blocked", sid)
+                raise HTTPException(409, "Обращение не отправлено. " + " ".join(blocked))
             payload, excluded = build_payload(ctx, body.include_passport)
             ref = session_ref(sid)
             topic = SCENARIO_TOPICS.get(ctx.scenario, "Анкета")

@@ -61,3 +61,7 @@ admin:
   lockout_minutes: 15
 delivery:
   channel: queue               # queue — внутренняя очередь обращений (их видит администратор); none — отправка недоступна
+
+submission:
+  allow_debts: false               # false — обращение с академическими задолженностями в деканат не отправляется (документ студент скачивает)
+  require_target_specialty: true   # true — без целевого направления обращение не отправляется

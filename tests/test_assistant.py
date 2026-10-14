@@ -520,3 +520,47 @@ def test_corrections_survive_a_follow_up_question_about_the_same_file(app, sampl
     # другой файл заменяет документ сессии, исправления прежнего к нему не относятся
     new = check_on_desk(c, png_bytes(samples, "sample_03.jpg"), name="b.jpg", doc_type="auto")
     assert new["corrected"] == [] and c.get("/api/assistant/document").json()["document"]["filename"] == "b.jpg"
+
+
+# ============================================================================ когда обращение не уходит в деканат
+def complete_with(c, debts="нет", target="Прикладная информатика"):
+    say(c, "Я хочу перевестись", "да", *ANSWERS[:-1], debts, target, "пропустить")
+    say(c, "верно")
+    r = c.post("/api/assistant/generate", json={"template_id": "perevod"})
+    assert r.status_code == 200, r.text
+
+
+def test_submission_is_blocked_with_academic_debts_but_the_document_is_still_ready(app, admin, template):
+    c = TestClient(app)
+    complete_with(c, debts="да, по матанализу")
+    prev = c.get("/api/assistant/submission").json()
+    assert prev["attachment"] and any("задолженност" in r for r in prev["blocked"])
+    r = c.post("/api/assistant/submission", json={"confirm": True})
+    assert r.status_code == 409 and "задолженност" in r.json()["detail"] and "не отправлено" in r.json()["detail"]
+    assert admin.get("/api/admin/tickets").json()["total"] == 0
+
+
+def test_submission_is_blocked_without_the_target_direction(app, admin, template):
+    c = TestClient(app)
+    complete_with(c, target="пропустить")
+    r = c.post("/api/assistant/submission", json={"confirm": True})
+    assert r.status_code == 409 and "направление" in r.json()["detail"]
+    assert admin.get("/api/admin/tickets").json()["total"] == 0
+
+
+def test_clean_questionnaire_is_not_blocked_and_the_rule_can_be_relaxed(app, tmp_settings, template, admin):
+    c = TestClient(app)
+    complete_with(c)
+    assert c.get("/api/assistant/submission").json()["blocked"] == []
+    assert c.post("/api/assistant/submission", json={"confirm": True}).status_code == 200
+
+
+def test_debts_rule_is_a_setting(tmp_settings, tmp_path):
+    from dekanat.dialog import DialogContext
+    from dekanat.dialog.eligibility import check_submission
+    ctx = DialogContext(scenario="transfer", data={"student_name": "Иванов Иван Иванович", "current_university": "ЮФУ", "current_course": 2, "current_specialty": "09.03.01 Информатика",
+                                                  "education_form": "очная", "has_debts": True, "target_specialty": "Прикладная информатика"})
+    assert any("задолженност" in r for r in check_submission(ctx))
+    assert check_submission(ctx, lambda key, default: True if key == "submission.allow_debts" else default) == []
+    ctx.data["current_course"] = 9  # недостоверное значение не проходит и повторную проверку
+    assert any("Текущий курс" in r for r in check_submission(ctx, lambda key, default: True if key == "submission.allow_debts" else default))
