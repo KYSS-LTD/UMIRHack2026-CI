@@ -5,6 +5,7 @@ import type { Delivery, DialogInfo, DownloadInfo, TemplateInfo } from "../../typ
 import { Icon } from "../../ui/Icon";
 import { Reveal } from "../../ui/Reveal";
 import { Avatar } from "./Avatar";
+import { NextSteps } from "./NextSteps";
 import { SubmitPanel } from "./SubmitPanel";
 
 interface Props {
@@ -192,7 +193,12 @@ export function DialogTurn(p: Props) {
         )}
         {generating && <GenerateBar templates={p.templates} busy={p.busy} onGenerate={p.onGenerate} />}
         {p.turn.download && <ReadyDoc download={p.turn.download} />}
-        {p.latest && p.turn.download && p.dialog?.state === "completed" && <SubmitPanel delivery={p.delivery} />}
+        {p.latest && p.turn.download && p.dialog?.state === "completed" && (
+          <>
+            <NextSteps />
+            <SubmitPanel delivery={p.delivery} />
+          </>
+        )}
       </div>
     </article>
   );

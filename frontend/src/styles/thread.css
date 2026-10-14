@@ -303,6 +303,9 @@
   .submit-done { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-3); font-size: var(--fs-sm); animation: chip-in 420ms var(--spring) both; }
   .submit-done.ok { background: var(--ok-soft); color: var(--ok); }
   .submit-done svg { flex: none; margin-top: 2px; }
+  .next-steps { display: grid; gap: 6px; padding: 12px 14px; border-radius: var(--r-md); background: var(--surface-2); border-left: 3px solid var(--lamp); font-size: var(--fs-sm); color: var(--ink-2); animation: row-in 420ms var(--ease) both; }
+  .next-steps p { margin: 0; }
+  .next-steps b { color: var(--ink); }
   .submit-code { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 12px 14px; border-radius: var(--r-md); border: 1px dashed var(--line-strong); background: var(--surface); animation: row-in 420ms var(--ease) both; }
   .submit-code > div { display: grid; gap: 2px; flex: 1 1 220px; min-width: 0; }
   .submit-code strong { font-family: var(--serif); font-size: var(--fs-lg); letter-spacing: .02em; overflow-wrap: anywhere; }

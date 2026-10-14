@@ -25,6 +25,7 @@ from starlette.concurrency import run_in_threadpool
 
 from ..dialog import COMPLETED, DOCUMENT_GENERATION, DialogContext, DialogMachine, Reply
 from ..dialog.eligibility import check_submission
+from ..dialog.nextsteps import build_next_steps
 from ..dialog.docstate import apply_correction, make_record, public_fields, restore_fields, suggestions_from_record
 from ..dialog.questions import REQUEST_TYPES
 from ..templates import TemplateError, TemplateNotFound, TemplateStore, fill_docx
@@ -513,6 +514,13 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
                 storage.events.log("ticket", topic, "sent", sid)
         return {"sent": True, "duplicate": not created, "ticket_id": ticket["id"], "code": ctx.ticket_code, "excluded": excluded,
                 "message": "Обращение передано в очередь деканата. Окончательное решение принимает сотрудник деканата."}
+
+    # ---- что принести и в какой срок решат: из действующего Положения, со ссылкой на пункт
+    @router.get("/next-steps")
+    def next_steps(request: Request):
+        sid = require(request)
+        ctx = load_ctx(sid)
+        return build_next_steps(ctx.scenario, lambda question: svc.analyze(None, "", question).answer)
 
     # ---- статус обращения по номеру и коду (без входа и без сессии)
     @router.post("/status")

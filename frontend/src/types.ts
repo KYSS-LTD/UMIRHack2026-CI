@@ -299,6 +299,12 @@ export interface SubmitResult {
   message: string;
 }
 
+/** «Что дальше»: что принести и срок решения из Положения (null — в Положении об этом ничего нет). */
+export interface NextSteps {
+  documents: { text: string; sources: string[] } | null;
+  deadline: { days: number; working: boolean; date: string; source: string; text: string } | null;
+}
+
 export interface TicketStatus {
   id: number;
   status: "new" | "in_progress" | "done" | "rejected";

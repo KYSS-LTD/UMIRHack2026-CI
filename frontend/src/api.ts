@@ -10,6 +10,7 @@ import type {
   RegulationInfo,
   SampleItem,
   SubmissionPreview,
+  NextSteps,
   SubmitResult,
   TicketStatus,
   Suggestion,
@@ -87,6 +88,7 @@ export const api = {
     submission: (includePassport: boolean) => request<SubmissionPreview>(`/api/assistant/submission?include_passport=${includePassport}`),
     submit: (confirm: boolean, includePassport: boolean, contact = "") =>
       request<SubmitResult>("/api/assistant/submission", json("POST", { confirm, include_passport: includePassport, contact })),
+    nextSteps: () => request<NextSteps>("/api/assistant/next-steps"),
     ticketStatus: (id: number, code: string) => request<TicketStatus>("/api/assistant/status", json("POST", { id, code })),
     deleteData: () => request<{ ok: boolean; message: string }>("/api/assistant/data", { method: "DELETE" }),
   },
