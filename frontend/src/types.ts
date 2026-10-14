@@ -283,6 +283,8 @@ export interface SubmissionPreview {
   attachment: boolean;
   state: DialogState;
   already_sent: number | null;
+  /** почему обращение не уходит в деканат (задолженности, неполные данные); пусто — можно отправить */
+  blocked: string[];
 }
 
 export interface SubmitResult {

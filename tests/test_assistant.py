@@ -564,3 +564,13 @@ def test_debts_rule_is_a_setting(tmp_settings, tmp_path):
     assert check_submission(ctx, lambda key, default: True if key == "submission.allow_debts" else default) == []
     ctx.data["current_course"] = 9  # недостоверное значение не проходит и повторную проверку
     assert any("Текущий курс" in r for r in check_submission(ctx, lambda key, default: True if key == "submission.allow_debts" else default))
+
+
+def test_review_warns_about_the_blocked_submission_while_answers_can_still_be_fixed(app, template):
+    c = TestClient(app)
+    last = say(c, "Я хочу перевестись", "да", *ANSWERS[:-1], "да, по матанализу", "Прикладная информатика", "пропустить")
+    text = last["reply"]["text"]
+    assert last["reply"]["kind"] == "review" and "отправить не получится" in text and "задолженност" in text
+    clean = TestClient(app)
+    ok = say(clean, "Я хочу перевестись", "да", *ANSWERS, "Прикладная информатика", "пропустить")
+    assert ok["reply"]["kind"] == "review" and "отправить не получится" not in ok["reply"]["text"]

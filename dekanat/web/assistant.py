@@ -299,6 +299,10 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
             record = doc_record(sid)
             ctx.suggestions = suggestions_from_record(record)
             reply = machine.handle(ctx, body.text)
+            if reply.kind == "review":  # о запрете отправки студент узнаёт на сверке, пока ответы ещё можно исправить
+                blocked = check_submission(ctx, svc.settings.get)
+                if blocked:
+                    reply.text += "\n\nОбратите внимание: обращение в деканат из этой анкеты отправить не получится. " + " ".join(blocked)
             answer, download = None, None
             if reply.kind == "passthrough":
                 answer = answer_question(sid, body.text.strip(), record) if body.text.strip() and not body.defer else None

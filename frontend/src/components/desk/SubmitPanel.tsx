@@ -17,8 +17,8 @@ export function SubmitPanel({ delivery }: { delivery: Delivery | null }) {
   const [done, setDone] = useState<SubmitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // предпросмотр нужен сразу: он же говорит, можно ли вообще отправлять (задолженности, неполные данные)
   useEffect(() => {
-    if (!open) return;
     let alive = true;
     api.assistant
       .submission(withPassport)
@@ -27,7 +27,7 @@ export function SubmitPanel({ delivery }: { delivery: Delivery | null }) {
     return () => {
       alive = false;
     };
-  }, [open, withPassport]);
+  }, [withPassport]);
 
   const send = async (confirm: boolean) => {
     setSending(true);
@@ -48,6 +48,16 @@ export function SubmitPanel({ delivery }: { delivery: Delivery | null }) {
           {done.message}
           {done.ticket_id ? ` Номер обращения: ${done.ticket_id}.` : ""}
         </span>
+      </p>
+    );
+  }
+
+  const blocked = preview?.blocked ?? [];
+  if (blocked.length && !preview?.already_sent) {
+    return (
+      <p className="submit-done" role="status">
+        <Icon name="alert" size={15} />
+        <span>Обращение в деканат отправить нельзя. {blocked.join(" ")}</span>
       </p>
     );
   }

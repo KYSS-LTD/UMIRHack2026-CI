@@ -1,5 +1,6 @@
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { api } from "../api";
 import { AnswerTurn } from "../components/desk/AnswerTurn";
 import { DialogTurn } from "../components/desk/DialogTurn";
 import { cropAround } from "../components/desk/highlight";
@@ -205,6 +206,20 @@ describe("DialogTurn", () => {
     render(<DialogTurn {...base} dialog={dialog("completed")} delivery={{ channel: "queue", available: true, reason: "" }} turn={chatTurn(reply({ kind: "done", text: "Документ готов." }), { download })} latest />);
     expect(screen.getByRole("link", { name: /Скачать/ })).toHaveAttribute("href", "/api/assistant/download/d1");
     expect(screen.getByRole("button", { name: /Передать в деканат/ })).toBeInTheDocument();
+  });
+});
+
+describe("submission is blocked by the rules", () => {
+  const base = { busy: false, dialog: dialog("screening"), templates: [], delivery: null, onReply: noop, onGenerate: noop };
+
+  it("shows why the request cannot be sent and offers no button", async () => {
+    const preview = { delivery: { channel: "queue", available: true, reason: "" }, payload: { request: "перевод", fields: {} }, excluded: [], attachment: true, state: "completed" as const, already_sent: null, blocked: ["Есть академические задолженности."] };
+    vi.spyOn(api.assistant, "submission").mockResolvedValue(preview);
+    const download = { id: "d1", url: "/api/assistant/download/d1", filename: "Заявление.docx" };
+    render(<DialogTurn {...base} dialog={dialog("completed")} delivery={{ channel: "queue", available: true, reason: "" }} turn={chatTurn(reply({ kind: "done", text: "Документ готов." }), { download })} latest />);
+    expect(await screen.findByText(/отправить нельзя/)).toHaveTextContent("Есть академические задолженности.");
+    expect(screen.queryByRole("button", { name: /Передать в деканат/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Скачать/ })).toBeInTheDocument();
   });
 });
 
