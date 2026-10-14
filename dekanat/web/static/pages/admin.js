@@ -319,13 +319,31 @@ function renderSummary(info) {
   if (!info.delivery.available) box.append("Отправка обращений из анкеты сейчас недоступна.");
 }
 
+let renderToken = 0;
+
+/**
+ * Смена закладки: прежнее содержимое гаснет (140 мс), высота области удерживается, пока строится новое, затем плавно отпускается —
+ * страница не «схлопывается» и не прыгает. Быстрые переключения не мешают друг другу: действует только последний вызов.
+ */
 async function render() {
-  const panel = clear($("panel"));
+  const token = ++renderToken;
+  const host = $("panel");
+  const old = host.firstElementChild;
+  if (old) host.style.minHeight = `${host.offsetHeight}px`;
+  if (old && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    old.classList.add("leaving");
+    await new Promise((r) => setTimeout(r, 140));
+    if (token !== renderToken) return;
+  }
   const wrap = el("div", "panel");
-  panel.appendChild(wrap);
+  clear(host).appendChild(wrap);
   showBanner($("banner"), "ok", "");
   const views = { overview: viewOverview, tickets: viewTickets, templates: viewTemplates, kb: viewKb, history: viewHistory, account: viewAccount };
   await guarded(() => views[current](wrap));
+  if (token === renderToken) {
+    host.style.minHeight = "0px"; // высота отпускается плавно (transition у #panel)
+    setTimeout(() => { if (token === renderToken) host.style.minHeight = ""; }, 360);
+  }
 }
 
 // ---------------------------------------------------------------- обзор

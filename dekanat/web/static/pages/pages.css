@@ -43,6 +43,7 @@
   --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, "Liberation Mono", monospace;
   --ease: cubic-bezier(.22, .8, .24, 1);
   --spring: cubic-bezier(.34, 1.56, .64, 1);
+  --glide: cubic-bezier(.32, .72, 0, 1); /* плавное замедление без «перелёта»: для переключений и смены содержимого */
 }
 @supports (transition-timing-function: linear(0, 1)) {
   :root { --spring: linear(0, 0.0116 1.1%, 0.0446 2.3%, 0.1633 4.8%, 0.4954 9.9%, 0.7298 13.6%, 0.8601 17%, 0.9393 20.4%, 0.9847 24.1%, 1.0058 28.2%, 1.0138 32.2%, 1.0115 37%, 1.0052 46.6%, 1.0006 58%, 1); }
@@ -135,7 +136,7 @@ header.top nav a[aria-current="page"] { color: var(--btn-ink); background: var(-
 
 /* ====================================================================== раскладка */
 main { max-width: 1240px; margin: 0 auto; padding: 0 16px 72px; animation: route-in 560ms 120ms var(--ease) backwards; }
-@keyframes route-in { from { opacity: 0; transform: translateY(16px) scale(.995); filter: blur(5px); } }
+@keyframes route-in { from { opacity: 0; transform: translateY(10px); } }
 .page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 6px 28px; margin: 8px 4px 18px; }
 .page-head h1 { font-size: clamp(28px, 3.2vw, 40px); letter-spacing: -.025em; }
 .page-summary { max-width: 62ch; color: var(--ink-2); font-size: 14px; text-wrap: pretty; }
@@ -146,22 +147,28 @@ main { max-width: 1240px; margin: 0 auto; padding: 0 16px 72px; animation: route
 .stack { display: grid; gap: 18px; align-content: start; }
 .sticky { position: sticky; top: 96px; }
 @media (max-width: 980px) { .grid-2, .grid-2.even { grid-template-columns: minmax(0, 1fr); } .sticky { position: static; } }
-.panel { display: grid; gap: 18px; animation: route-in 460ms var(--ease) both; }
+.panel { display: grid; gap: 18px; animation: panel-fade 320ms var(--glide) both; }
+@keyframes panel-fade { from { opacity: 0; transform: translateY(6px); } }
+/* уходящее содержимое гаснет, а не пропадает рывком; высота удерживается, пока меняется содержимое */
+.panel.leaving { animation: none; opacity: 0; transition: opacity 140ms ease; }
+#panel { transition: min-height 320ms var(--glide); }
 
 /* вкладки — закладки журнала: тонкая линейка, под активной — чернильная черта; счётчики */
 .ledger-tabs { position: relative; display: flex; gap: 2px; overflow-x: auto; margin: 0 0 22px; border-bottom: 1px solid var(--line-strong); scrollbar-width: none; }
 .ledger-tabs::-webkit-scrollbar { display: none; }
-.ledger-tabs button { position: relative; flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 10px 14px 12px; border: 0; border-radius: 0; background: none; box-shadow: none; color: var(--ink-3); font-weight: 650; animation: tab-in 520ms var(--spring) both; }
+.ledger-tabs button { position: relative; flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 10px 14px 12px; border: 0; border-radius: 0; background: none; box-shadow: none; color: var(--ink-3); font-weight: 650; transition: color 220ms ease; animation: tab-in 520ms var(--spring) both; }
 .ledger-tabs button:hover:not(:disabled) { color: var(--ink); background: none; transform: none; box-shadow: none; }
 .ledger-tabs button[aria-selected="true"] { color: var(--ink); }
+/* рамка фокуса внутри закладки: снаружи её обрезает прокручиваемая полоса вкладок (получались синие «столбики» по бокам) */
+.ledger-tabs button:focus-visible { outline: 2px solid color-mix(in srgb, var(--link) 70%, transparent); outline-offset: -5px; border-radius: 10px; }
 .ledger-tabs .count { min-width: 20px; padding: 1px 7px; border-radius: var(--r-pill); background: var(--surface-3); color: var(--ink-2); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .ledger-tabs .count.hot { background: var(--stamp); color: #fff; }
-.ledger-tabs .tab-ind { position: absolute; left: 0; bottom: -1px; height: 2px; border-radius: 2px; background: var(--ink); transition: transform 520ms var(--spring), width 520ms var(--spring); pointer-events: none; }
+.ledger-tabs .tab-ind { position: absolute; left: 0; bottom: -1px; height: 2px; border-radius: 2px; background: var(--ink); transition: transform 420ms var(--glide), width 420ms var(--glide); pointer-events: none; }
 
 /* лист — основной контейнер раздела: бумага, линейка под заголовком, без значков-плашек */
-.sheet { position: relative; min-width: 0; padding: 18px 20px 20px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-1); animation: panel-in 620ms var(--ease) both; }
+.sheet { position: relative; min-width: 0; padding: 18px 20px 20px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-1); animation: panel-in 480ms var(--glide) both; }
 .stack .sheet:nth-child(2), .grid-2 > :nth-child(2) { animation-delay: 70ms; }
-@keyframes panel-in { from { opacity: 0; transform: translateY(18px); } }
+@keyframes panel-in { from { opacity: 0; transform: translateY(10px); } }
 .sheet-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 14px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .sheet-head h2 { font-size: 19px; }
 .sheet-head .aside { color: var(--ink-3); font-size: 12.5px; }
@@ -174,7 +181,7 @@ main { max-width: 1240px; margin: 0 auto; padding: 0 16px 72px; animation: route
 .banner.warn { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
 .banner.ok { background: var(--ok-soft); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
 @keyframes chip-in { from { opacity: 0; transform: translateY(8px) scale(.94); } }
-@keyframes row-in { from { opacity: 0; transform: translateX(-10px); } }
+@keyframes row-in { from { opacity: 0; transform: translateX(-6px); } }
 
 /* ====================================================================== кнопки и поля ввода */
 button, .btn {
@@ -278,7 +285,7 @@ label small { color: var(--ink-3); font-weight: 400; }
 
 /* ====================================================================== темы: полоса, число и доля */
 .topics { display: grid; gap: 2px; padding: 0; margin: 0; list-style: none; }
-.topics li { display: grid; grid-template-columns: minmax(0, 1fr) 46px 44px; grid-template-areas: "name num share" "bar bar bar"; column-gap: 10px; row-gap: 5px; padding: 8px 2px 9px; border-bottom: 1px solid var(--line); animation: row-in 460ms var(--ease) both; }
+.topics li { display: grid; grid-template-columns: minmax(0, 1fr) 46px 44px; grid-template-areas: "name num share" "bar bar bar"; column-gap: 10px; row-gap: 5px; padding: 8px 2px 9px; border-bottom: 1px solid var(--line); animation: row-in 380ms var(--glide) both; }
 .topics li:last-child { border-bottom: 0; }
 .topics .t-name { grid-area: name; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
 .topics .t-num { grid-area: num; text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -327,7 +334,7 @@ label small { color: var(--ink-3); font-weight: 400; }
 
 /* ====================================================================== списки: шаблоны, документы, обращения */
 .items { display: grid; }
-.item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; align-items: start; padding: 14px 2px; border-bottom: 1px solid var(--line); animation: row-in 460ms var(--ease) both; }
+.item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; align-items: start; padding: 14px 2px; border-bottom: 1px solid var(--line); animation: row-in 380ms var(--glide) both; }
 .item:last-child { border-bottom: 0; }
 .item h3 { font-size: 16.5px; overflow-wrap: anywhere; }
 .item-meta { margin-top: 2px; color: var(--ink-3); font-size: 12.5px; }
@@ -373,7 +380,7 @@ label small { color: var(--ink-3); font-weight: 400; }
 /* ====================================================================== журнал: лента по дням */
 .timeline-day { margin: 18px 0 4px; color: var(--ink-3); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
 .timeline-day:first-child { margin-top: 0; }
-.event { display: grid; grid-template-columns: 52px 14px minmax(0, 1fr); gap: 10px; padding: 8px 2px; animation: row-in 420ms var(--ease) both; }
+.event { display: grid; grid-template-columns: 52px 14px minmax(0, 1fr); gap: 10px; padding: 8px 2px; animation: row-in 380ms var(--glide) both; }
 .event time { color: var(--ink-3); font-size: 12.5px; font-variant-numeric: tabular-nums; padding-top: 1px; }
 .event .pin { position: relative; }
 .event .pin::before { content: ""; position: absolute; left: 50%; top: 6px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--ink-3); }

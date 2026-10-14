@@ -62,7 +62,7 @@
   @keyframes tab-in { from { opacity: 0; transform: translateY(-12px) scale(.9); } }
   .tabs a:hover { color: var(--ink); transform: translateY(-1px); }
   .tabs a[aria-current="page"] { color: var(--btn-ink); }
-  .tab-ind { position: absolute; z-index: 0; left: 0; top: 4px; bottom: 4px; border-radius: 13px; background: linear-gradient(180deg, color-mix(in srgb, var(--btn) 90%, #fff), var(--btn)); box-shadow: 0 10px 20px -10px color-mix(in srgb, var(--btn) 75%, transparent), inset 0 1px 0 rgb(255 255 255 / .22); transition: transform 600ms var(--spring), width 600ms var(--spring), opacity 260ms; }
+  .tab-ind { position: absolute; z-index: 0; left: 0; top: 4px; bottom: 4px; border-radius: 13px; background: linear-gradient(180deg, color-mix(in srgb, var(--btn) 90%, #fff), var(--btn)); box-shadow: 0 10px 20px -10px color-mix(in srgb, var(--btn) 75%, transparent), inset 0 1px 0 rgb(255 255 255 / .22); transition: transform 460ms var(--glide), width 460ms var(--glide), opacity 260ms; }
   .tab-ind::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 16px; height: 3px; translate: -50% 0; border-radius: 3px; background: var(--lamp); box-shadow: 0 0 10px 1px var(--lamp); }
 
   /* ---------- переключатель для сотрудника: тот же, что на странице сотрудников ---------- */
