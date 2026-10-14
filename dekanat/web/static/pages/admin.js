@@ -632,6 +632,7 @@ async function viewTickets(panel) {
 
   let meta = null;
   let firstLoad = true;
+  const replyPresets = ((await guarded(() => api("GET", "/api/admin/reply-templates"))) || {}).templates || [];
   const fill = (sel, values, titles, current_) => {
     clear(sel);
     sel.appendChild(el("option", null, "все", { value: "" }));
@@ -703,6 +704,9 @@ async function viewTickets(panel) {
     if ((t.payload || {}).request) kv.append(el("dt", null, "Что нужно"), el("dd", null, t.payload.request));
     for (const [k, v] of fieldsEntries) kv.append(el("dt", null, k), el("dd", null, v));
     body.appendChild(kv);
+    if (t.similar && t.similar.length) {
+      body.appendChild(el("p", "dup-note", `Этот студент уже обращался: ${t.similar.map((s) => `№ ${s.id} (${STATUS_TITLES[s.status] || s.status})`).join(", ")}.`));
+    }
     if (!fieldsEntries.length) body.appendChild(el("p", "hint", "Студент не передал личные данные: в обращение попал только его документ."));
     if (t.has_attachment) {
       const a = el("a", "btn small", null, { href: `/api/admin/tickets/${t.id}/attachment` });
@@ -729,7 +733,7 @@ async function viewTickets(panel) {
     }, "Статус обращения"));
     drawSeg();
     /** Текстовое поле обращения: кнопка «Сохранить» появляется только при изменении, Ctrl + Enter тоже сохраняет. */
-    const savedText = (label, id, value, placeholder, apiField, saveLabel, done) => {
+    const savedText = (label, id, value, placeholder, apiField, saveLabel, done, presets = []) => {
       const area = el("textarea", null, null, { id, rows: "3", maxlength: "2000", placeholder });
       area.value = value || "";
       let saved = area.value;
@@ -744,11 +748,26 @@ async function viewTickets(panel) {
       actions.append(save, el("span", "hint", "Ctrl + Enter — сохранить"));
       area.addEventListener("input", () => actions.classList.toggle("hidden", area.value === saved));
       area.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && area.value !== saved) save.click(); });
-      return [field(label, area, id), actions];
+      let node = area;
+      if (presets.length) {  // заготовки: нажатие вставляет текст (к уже написанному — с новой строки), его можно править до сохранения
+        node = el("div");
+        const row = el("div", "preset-row");
+        for (const p of presets) {
+          const b = el("button", "chip-btn", p.title, { type: "button", title: p.text });
+          b.addEventListener("click", () => {
+            area.value = area.value.trim() ? `${area.value.trim()}\n\n${p.text}` : p.text;
+            area.dispatchEvent(new Event("input"));
+            area.focus();
+          });
+          row.appendChild(b);
+        }
+        node.append(row, area);
+      }
+      return [field(label, node, id), actions];
     };
     body.append(
       field("Статус", segBox),
-      ...savedText("Ответ студенту", "t-reply", t.reply, "Студент увидит это на странице «Статус обращения» по своему коду", "reply", "Отправить ответ", "Ответ сохранён: студент увидит его по своему коду"),
+      ...savedText("Ответ студенту", "t-reply", t.reply, "Студент увидит это на странице «Статус обращения» по своему коду", "reply", "Отправить ответ", "Ответ сохранён: студент увидит его по своему коду", replyPresets),
       ...savedText("Заметка сотрудника", "t-note", t.note, "Что сделано, кому передано — видно только сотрудникам", "note", "Сохранить заметку", "Заметка сохранена"),
     );
     rightBox.appendChild(sheet(`Обращение № ${t.id}`, headChip, body));
@@ -946,10 +965,25 @@ async function viewKb(panel) {
   const reindex = button("Обновить поиск", () => guarded(async () => {
     const r = await api("POST", "/api/admin/reindex");
     toast(`Поиск обновлён: ${r.clauses} ${plural(r.clauses, ["пункт", "пункта", "пунктов"])} из ${r.documents} ${plural(r.documents, ["документа", "документов", "документов"])}`.replace("1 документов", "1 документа"));
-  }), "small ghost", "spark");
+  }), "small ghost", "refresh");
   reindex.title = "Пересобрать поиск по всем включённым документам";
-  left.appendChild(sheet("Документы, по которым отвечает секретарь", reindex, listBody));
+  const check = button("Проверить ответы", () => guarded(async () => {
+    const r = await api("POST", "/api/admin/kb/check");
+    clear(historyBox);
+    const rows = r.items.map((x) => [x.question, x.expected, x.got, el("span", `check-mark ${x.ok ? "ok" : "bad"}`, x.ok ? "верно" : "не так")]);
+    const verdict = el("p", r.passed === r.total ? "check-sum ok" : "check-sum bad", r.passed === r.total
+      ? `Все ${r.total} контрольных вопросов отвечены как ожидалось.`
+      : `Отвечено как ожидалось: ${r.passed} из ${r.total}. Проверьте строки с пометкой «не так».`);
+    const c = sheet("Проверка ответов по контрольным вопросам", button("Закрыть", () => clear(historyBox), "small ghost"), verdict, table(["Вопрос", "Ожидалось", "Получено", ""], rows),
+      el("p", "sheet-note", "Вопросы и ожидаемые пункты — в config/golden_questions.yaml; они написаны для учебного Положения. Заменили Положение — замените и вопросы."));
+    historyBox.appendChild(c);
+    c.scrollIntoView({ behavior: REDUCED ? "auto" : "smooth", block: "nearest" });
+  }), "small ghost", "check");
+  check.title = "Задать секретарю контрольные вопросы и сверить ответы с ожидаемыми пунктами";
+  const kbTools = el("div", "actions");
+  kbTools.append(check, reindex);
   const historyBox = el("div");
+  left.appendChild(sheet("Документы, по которым отвечает секретарь", kbTools, listBody));
   left.appendChild(historyBox);
 
   async function showKbHistory(d) {

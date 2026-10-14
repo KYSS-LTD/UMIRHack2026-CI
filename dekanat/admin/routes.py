@@ -6,6 +6,8 @@ import csv
 import io
 import logging
 import tempfile
+
+import yaml
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -16,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from ..templates import TemplateError, TemplateExists, TemplateNotFound, TemplateStore
 from ..templates.docx_templates import MAX_TEMPLATE_BYTES
+from ..kb.check import load_golden, run_check
 from ..kb.documents import KnowledgeBaseError
 from ..storage import TICKET_STATUSES, TICKET_TYPES
 from ..storage.topics import all_topics
@@ -59,6 +62,26 @@ def _day(value: Optional[str], end: bool = False) -> Optional[float]:
     except ValueError as exc:
         raise HTTPException(400, f"Дата «{value}» должна быть в формате ГГГГ-ММ-ДД") from exc
     return (d + timedelta(days=1 if end else 0)).timestamp()
+
+
+# заготовки ответа студенту: кнопки над полем «Ответ студенту»; свои — в config/reply_templates.yaml
+DEFAULT_REPLIES = [
+    {"title": "Приглашение в деканат", "text": "Приходите в деканат с паспортом и оригиналом справки об обучении. Если время приёма вам не подходит, напишите, как с вами связаться."},
+    {"title": "Не хватает справки", "text": "Для рассмотрения нужна справка об обучении из прежнего вуза с номером и датой выдачи, подписью и печатью. Принесите её в деканат."},
+    {"title": "Есть задолженности", "text": "По вашим данным есть академические задолженности. Рассмотрение возможно после их закрытия."},
+    {"title": "Решение принято", "text": "Решение по вашему обращению принято. Подробности сообщит сотрудник деканата."},
+]
+
+
+def load_reply_templates(path: Path) -> list:
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else None
+    except (OSError, yaml.YAMLError):
+        raw = None
+    items = raw.get("templates", []) if isinstance(raw, dict) else []
+    good = [{"title": str(i["title"]).strip()[:60], "text": str(i["text"]).strip()[:2000]} for i in items
+            if isinstance(i, dict) and str(i.get("title", "")).strip() and str(i.get("text", "")).strip()]
+    return good or DEFAULT_REPLIES
 
 
 def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_bytes: int) -> APIRouter:
@@ -203,6 +226,16 @@ def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_by
     def list_kb(who: dict = admin):
         return kbm.list()
 
+    @router.post("/kb/check")
+    def check_kb(who: dict = admin):
+        """Контрольные вопросы (config/golden_questions.yaml) -> ответы секретаря по текущей базе знаний: что сходится с ожидаемым, а что сломалось."""
+        items = load_golden(Path(svc.settings.root) / "config" / "golden_questions.yaml")
+        if not items:
+            raise HTTPException(404, "Контрольных вопросов нет: добавьте их в config/golden_questions.yaml.")
+        result = run_check(lambda question: svc.analyze(None, "", question).answer, items)
+        storage.audit.log(who["username"], "kb.check", "kb", "", {"passed": result["passed"], "total": result["total"]})
+        return result
+
     @router.post("/kb")
     async def add_kb(file: UploadFile = File(...), name: str = Form(""), who: dict = admin):
         data = await file.read(max_bytes + 1)
@@ -281,7 +314,12 @@ def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_by
         if row is None:
             raise HTTPException(404, "Обращение не найдено")
         row["has_attachment"] = (storage.ticket_dir(ticket_id) / "application.docx").exists()
+        row["similar"] = storage.tickets.similar(ticket_id)
         return row
+
+    @router.get("/reply-templates")
+    def reply_templates(who: dict = admin):
+        return {"templates": load_reply_templates(Path(svc.settings.root) / "config" / "reply_templates.yaml")}
 
     @router.patch("/tickets/{ticket_id}")
     def patch_ticket(ticket_id: int, body: TicketPatch, who: dict = admin):

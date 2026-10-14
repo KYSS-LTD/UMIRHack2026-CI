@@ -394,6 +394,23 @@ class TicketRepo:
         rows = self.db.query(f"SELECT * FROM tickets WHERE {w} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?", [*params, max(1, min(500, limit)), max(0, offset)])
         return [self._row(r, False) for r in rows], total
 
+    def similar(self, ticket_id: int, limit: int = 5) -> list[dict]:
+        """Другие обращения с тем же ФИО (регистр, «ё» и пробелы не важны): сотрудник видит, что студент уже обращался."""
+        def norm(text) -> str:
+            return re.sub(r"\s+", " ", str(text or "").lower().replace("ё", "е")).strip()
+
+        r = self.db.one("SELECT payload_json FROM tickets WHERE id=?", (ticket_id,))
+        name = norm(_loads(r["payload_json"], {}).get("fields", {}).get("ФИО")) if r else ""
+        if not name:
+            return []
+        out = []
+        for o in self.db.query("SELECT id, status, created_at, payload_json FROM tickets WHERE id!=? ORDER BY id DESC LIMIT 2000", (ticket_id,)):
+            if norm(_loads(o["payload_json"], {}).get("fields", {}).get("ФИО")) == name:
+                out.append({"id": o["id"], "status": o["status"], "created_at": iso(o["created_at"])})
+                if len(out) >= limit:
+                    break
+        return out
+
     def attach_code(self, ticket_id: int, code: str) -> None:
         self.db.execute("UPDATE tickets SET public_hash=? WHERE id=?", (_code_hash(ticket_id, code), ticket_id))
 
