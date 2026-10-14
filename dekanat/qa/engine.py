@@ -527,6 +527,10 @@ class QAEngine:
         top = hits[0]
         rare = [m for m in top.unmatched if (self.index.idf(m) if self.index.df_of(m) else self.index.max_idf) >= self.index.rare_threshold()]
         answerable = top.coverage >= self.min_coverage and not (rare and top.coverage < 0.75)
+        # совпадение почти только через синонимы («стоит» ~ «плата») и без общих слов с вопросом — не повод отвечать:
+        # «Сколько стоит обучение?» — не про плату за общежитие
+        if answerable and top.exact < 0.35 and top.coverage < 0.95:
+            answerable = False
         note = f"покрытие вопроса пунктом {top.clause.label}: {top.coverage:.2f}"
         if self.llm is not None and self.llm.enabled and 0.35 <= top.coverage < 0.9:
             try:

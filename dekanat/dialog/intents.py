@@ -32,6 +32,9 @@ _STATEMENT = [
     re.compile(r"\b(?:нужн\w+|надо)\s+(?:\w+\s+){0,2}заявлени\w+"),
 ]
 _DOCUMENT_QUESTION = re.compile(r"\bпереводчик\w*|\bзаверенн\w+\s+перевод|\bперевод\w*\s+на\s+русск")
+# «За сколько дней подать заявление?», «Когда подавать?», «Где подать?» — вопрос о правилах; без желания («хочу», «мне нужно») анкету не предлагаем
+_RULE_QUESTION = re.compile(r"^(?:за\s+сколько|сколько|когда|до\s+какого|к\s+какому|в\s+какой\s+срок|в\s+какие\s+сроки|в\s+течение\s+скольки|где|куда)\b")
+_PERSONAL_WISH = re.compile(r"\b(?:хочу|хотел\w*|хотим|собираюсь|планирую|мне\s+(?:нужно|надо)|помогите|помоги)\b")
 
 # слова-«желания»: если правила ничего не нашли, а в сообщении есть желание, неоднозначную фразу можно отдать на разбор модели
 _WISH_MARKERS = re.compile(r"хоч\w+|хотел\w*|нужн\w+|\bнадо\b|собира\w+|планир\w+|интерес\w+|помо\w+|подскаж\w+|\bкак\s+мне\b|\bможно\s+ли\b|\bможно\b")
@@ -48,6 +51,8 @@ def detect_intent(text: str) -> Optional[str]:
     """transfer | enrollment | statement | None. Заявление на академический отпуск анкетой не покрывается."""
     n = _n(text)
     if not n or _DOCUMENT_QUESTION.search(n):
+        return None
+    if _RULE_QUESTION.search(n) and not _PERSONAL_WISH.search(n):
         return None
     if any(p.search(n) for p in _TRANSFER):
         return TRANSFER

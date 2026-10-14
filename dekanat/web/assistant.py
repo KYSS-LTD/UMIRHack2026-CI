@@ -41,6 +41,13 @@ PLACEHOLDER_TITLES = {
     "current_specialty": "направление (текущее)", "target_specialty": "целевое направление", "education_form": "форма обучения",
     "debts": "задолженности", "application_date": "дата заявления",
 }
+
+
+def placeholder_title(key: str) -> str:
+    """Название метки шаблона для человека: известные — по-русски, свои — без подчёркиваний («номер_зачётки» -> «номер зачётки»)."""
+    return PLACEHOLDER_TITLES.get(key) or key.replace("_", " ").strip()
+
+
 SCENARIO_TOPICS = {"transfer": "Перевод из другого вуза", "enrollment": "Поступление и зачисление"}
 WELCOME = ("Здравствуйте! Я цифровой секретарь деканата. Можно задать вопрос по Положению, загрузить справку или заявление для проверки "
            "либо пройти короткую анкету и получить готовое заявление (напишите, например: «Я хочу перевестись»). "
@@ -258,7 +265,7 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
             result.path.unlink(missing_ok=True)  # документ без записи о владельце никому не выдать и не удалить по сроку — убираем сразу
             raise
         ctx.gen_cache[fingerprint] = doc_id
-        titles = [PLACEHOLDER_TITLES.get(k, k) for k in result.unfilled]
+        titles = [placeholder_title(k) for k in result.unfilled]
         if ctx.state == DOCUMENT_GENERATION:
             reply = machine.generation_done(ctx, doc_id, titles)
         else:  # повторная генерация из completed (например, по другому шаблону)

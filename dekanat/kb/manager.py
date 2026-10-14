@@ -16,6 +16,17 @@ from .parser import parse_regulation_text, read_regulation_file
 log = logging.getLogger(__name__)
 
 
+NO_NUMBERING = ("В файле не нашлось нумерации пунктов («3.4.», «п. 3.4») — абзацы пронумерованы подряд (§1, §2…), "
+                "и ссылки в ответах секретаря будут вида «§2». Чтобы ссылки были точными, пронумеруйте пункты в файле и загрузите его заново.")
+
+
+def _with_notice(row: dict, clauses: list) -> dict:
+    """Строка документа для ответа API; если нумерации пунктов в файле нет — с пояснением для сотрудника."""
+    if clauses and all(str(c.number).startswith("§") for c in clauses):
+        return {**row, "notice": NO_NUMBERING}
+    return row
+
+
 class KnowledgeBaseManager:
     def __init__(self, svc, storage, max_bytes: int):
         self.svc = svc
@@ -88,7 +99,7 @@ class KnowledgeBaseManager:
             self._reindex()
             raise
         self.storage.audit.log(actor, "kb.create", "kb", doc_id, {"name": name, "filename": filename, "clauses": len(clauses)})
-        return self.storage.kb.get(doc_id)
+        return _with_notice(self.storage.kb.get(doc_id), clauses)
 
     def replace(self, doc_id: str, filename: str, data: bytes, actor: str) -> dict:
         if doc_id != BASE_ID and self.storage.kb.get(doc_id) is None:
@@ -99,7 +110,7 @@ class KnowledgeBaseManager:
         version = self.storage.kb.new_version(doc_id, text, len(clauses), actor, "replaced", filename)
         self._reindex()
         self.storage.audit.log(actor, "kb.replace", "kb", doc_id, {"filename": filename, "clauses": len(clauses), "version": version})
-        return self.storage.kb.get(doc_id)
+        return _with_notice(self.storage.kb.get(doc_id), clauses)
 
     def update(self, doc_id: str, actor: str, name: Optional[str] = None, active: Optional[bool] = None) -> dict:
         row = self.storage.kb.get(doc_id)

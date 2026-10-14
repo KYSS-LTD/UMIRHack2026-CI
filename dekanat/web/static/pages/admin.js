@@ -45,12 +45,15 @@ function humanDetails(details) {
     .filter(([k, v]) => !HIDDEN_DETAILS.has(k) && v !== null && v !== undefined && v !== "" && !(k === "note" && v === false))
     .map(([k, v]) => {
       if (k === "note") return "заметка обновлена";
-      const value = Array.isArray(v) ? v.map((x) => FIELD_TITLES[x] || x).join(", ") : typeof v === "boolean" ? (v ? "да" : "нет") : k === "status" ? (STATUS_TITLES[v] || v) : v;
+      const value = Array.isArray(v) ? v.map((x) => keyTitle(x)).join(", ") : typeof v === "boolean" ? (v ? "да" : "нет") : k === "status" ? (STATUS_TITLES[v] || v) : v;
       return `${DETAIL_TITLES[k] || k}: ${value}`;
     }).join(" · ");
 }
 // кто сделал: служебные имена — словами
 const ACTOR_TITLES = { cli: "администратор сервера", system: "система" };
+
+/** Название данных в шаблоне: известные — по-русски, свои метки — без подчёркиваний. */
+const keyTitle = (k) => FIELD_TITLES[k] || String(k).replace(/_/g, " ");
 
 const fmtSize = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} КБ` : `${(n / 1024 / 1024).toFixed(1).replace(".", ",")} МБ`);
 
@@ -732,7 +735,7 @@ async function viewTickets(panel) {
 // ---------------------------------------------------------------- шаблоны
 function placeholderChips(keys) {
   const chips = el("div", "chips");
-  for (const k of keys) chips.appendChild(el("span", "chip", FIELD_TITLES[k] || k));
+  for (const k of keys) chips.appendChild(el("span", "chip", keyTitle(k)));
   return chips;
 }
 
@@ -821,11 +824,11 @@ async function viewTemplates(panel) {
     form.append("template_id", target.value);
     form.append("replace", target.value ? "true" : "false");
     const info = await api("POST", "/api/admin/templates", form);
-    const keys = info.placeholders.map((p) => FIELD_TITLES[p.key] || p.key).join(", ");
+    const keys = info.placeholders.map((p) => keyTitle(p.key)).join(", ");
+    await render(); // перерисовка очищает баннер, поэтому сообщение — после неё
     showBanner($("banner"), info.placeholders.length ? "ok" : "warn", info.placeholders.length
       ? `Шаблон «${info.name}» сохранён (версия ${info.version}). Подставляются: ${keys}.`
-      : `Шаблон «${info.name}» сохранён, но в тексте нет мест для данных студента. Нажмите на название данных ниже, чтобы скопировать метку, и вставьте её в документ.`);
-    render();
+      : `Шаблон «${info.name}» сохранён, но в тексте нет мест для данных студента. Нажмите на название данных справа, чтобы скопировать метку, и вставьте её в документ.`);
     refreshCounts();
   }), "primary", "upload");
   upload.disabled = true;
@@ -843,7 +846,7 @@ async function viewTemplates(panel) {
     });
     chips.appendChild(b);
   }
-  right.appendChild(sheet("Какие данные подставляются", null, chips, el("p", "sheet-note", "Нажмите на название — метка скопируется. Вставьте её в документ Word там, где должно появиться значение. Если данных от студента нет, в готовом заявлении останется строка «________» для заполнения от руки.")));
+  right.appendChild(sheet("Какие данные подставляются", null, chips, el("p", "sheet-note", "Нажмите на название — метка скопируется. Вставьте её в документ Word там, где должно появиться значение. Свои метки (например, «{{ номер_зачётки }}») тоже допустимы. Если данных от студента нет, в готовом заявлении останется строка «________» для заполнения от руки.")));
 }
 
 // ---------------------------------------------------------------- база знаний
@@ -877,7 +880,8 @@ async function viewKb(panel) {
       form.append("file", f);
       const r = await api("PUT", `/api/admin/kb/${encodeURIComponent(d.id)}`, form);
       toast(`Документ заменён: ${r.clauses} ${plural(r.clauses, ["пункт", "пункта", "пунктов"])}, версия ${r.version}`);
-      render();
+      await render();
+      if (r.notice) showBanner($("banner"), "warn", r.notice);
     }));
     const isBase = d.kind === "base";
     actions.append(
@@ -946,8 +950,9 @@ async function viewKb(panel) {
     form.append("file", f);
     form.append("name", nameIn.value);
     const r = await api("POST", "/api/admin/kb", form);
-    showBanner($("banner"), "ok", `Документ «${r.name}» добавлен: ${r.clauses} ${plural(r.clauses, ["пункт", "пункта", "пунктов"])}. Секретарь уже отвечает и по нему.`);
-    render();
+    const done = `Документ «${r.name}» добавлен: ${r.clauses} ${plural(r.clauses, ["пункт", "пункта", "пунктов"])}. Секретарь уже отвечает и по нему.`;
+    await render();
+    showBanner($("banner"), r.notice ? "warn" : "ok", r.notice ? `${done} ${r.notice}` : done);
     refreshCounts();
   }), "primary", "upload");
   addBtn.disabled = true;
