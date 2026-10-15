@@ -1,4 +1,9 @@
 import type {
+  AccountMe,
+  AccountTicket,
+  AccountUser,
+  LoginPoll,
+  LoginStart,
   PagePreview,
   AnalysisResult,
   AssistantState,
@@ -83,6 +88,21 @@ export const api = {
     const form = new FormData();
     form.append("file", file, file.name);
     return request("/api/regulation", { method: "PUT", body: form });
+  },
+
+  /** Необязательный аккаунт: вход через Telegram. Без входа всё работает по анонимной сессии. */
+  account: {
+    me: () => request<AccountMe>("/api/account/me"),
+    loginStart: () => request<LoginStart>("/api/auth/telegram/start", { method: "POST" }),
+    loginPoll: (token: string, signal?: AbortSignal) => request<LoginPoll>(`/api/auth/telegram/poll?token=${encodeURIComponent(token)}`, { signal }),
+    /** Mini App: подписанные Telegram данные (initData) обмениваются на вход */
+    webapp: (initData: string) => request<{ user: AccountUser }>("/api/auth/telegram/webapp", json("POST", { init_data: initData })),
+    logout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+    setNotify: (notify: boolean) => request<{ user: AccountUser }>("/api/account", json("PATCH", { notify })),
+    tickets: () => request<{ tickets: AccountTicket[] }>("/api/account/tickets"),
+    linkTicket: (id: number, code: string) => request<{ ticket: AccountTicket }>("/api/account/tickets/link", json("POST", { id, code })),
+    exportUrl: "/api/account/export",
+    remove: () => request<{ ok: boolean }>("/api/account", { method: "DELETE" }),
   },
 
   /** Анкета, документ сессии, DOCX и отправка в деканат. Сессия анонимная: HttpOnly-cookie, данные хранит сервер. */

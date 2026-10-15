@@ -170,6 +170,54 @@ export interface Health {
   llm: { backend: string; [k: string]: unknown };
   /** вошёл ли сотрудник деканата (для переключателя «Стол декана | Сотрудникам») */
   admin?: { authenticated?: boolean; configured?: boolean; protect_edit?: boolean };
+  /** Telegram-бот и вход через него: выключено по умолчанию, сайт работает и без них */
+  telegram?: TelegramInfo;
+}
+
+export interface TelegramInfo {
+  enabled: boolean;
+  /** вход через бота доступен: бот включён и известно его имя */
+  login: boolean;
+  bot: string | null;
+  /** кнопка «Приложение» в боте (нужен https-адрес сайта) */
+  mini_app: boolean;
+}
+
+/** Профиль вошедшего: только то, что нужно показать человеку (без Telegram-идентификатора). */
+export interface AccountUser {
+  id: number;
+  name: string;
+  username: string | null;
+  notify: boolean;
+  created_at: number | null;
+  linked_web: boolean;
+}
+
+export interface AccountMe {
+  user: AccountUser | null;
+  telegram: TelegramInfo;
+}
+
+export interface LoginStart {
+  already?: boolean;
+  user?: AccountUser;
+  token?: string;
+  link?: string;
+  expires_in?: number;
+  bot?: string;
+}
+
+export type LoginPoll = { status: "pending" | "denied" | "expired" } | { status: "confirmed"; user: AccountUser; moved: { dialog: boolean; document: boolean; files: number } };
+
+/** Обращение вошедшего: код не нужен, статус виден сразу. */
+export interface AccountTicket {
+  id: number;
+  status: TicketStatus["status"];
+  topic: string | null;
+  created_at: string;
+  updated_at: string;
+  reply: string | null;
+  reply_at: string | null;
 }
 
 export interface SampleItem {

@@ -1,4 +1,4 @@
-"""Командная строка: serve | ask | batch | ocr | doctor | fetch-lang | validate-config | synth | eval | create-admin | template-add | template-sample | purge."""
+"""Командная строка: serve | bot | ask | batch | ocr | doctor | fetch-lang | validate-config | synth | eval | create-admin | template-add | template-sample | purge."""
 
 from __future__ import annotations
 
@@ -27,6 +27,45 @@ def cmd_serve(args) -> int:
     port = int(args.port or st.get("server.port", 8000))
     print(f"Онлайн-деканат: http://{host}:{port}")
     uvicorn.run("dekanat.web.app:create_app", host=host, port=port, factory=True, log_level="info")
+    return 0
+
+
+def cmd_bot(args) -> int:
+    """Telegram-бот отдельным процессом (когда telegram.run_in_server: false) или разовая настройка бота (--setup)."""
+    from .config import load_settings
+    from .telegram.api import TelegramError
+    from .web.app import create_app
+
+    st = load_settings()
+    if not st.get("telegram.bot_token"):
+        print("Токен бота не задан. Получите его у @BotFather и передайте переменной окружения DEKANAT_TELEGRAM_BOT_TOKEN (в файлы настроек его писать не нужно).")
+        return 1
+    if not st.get("telegram.enabled", False):
+        print("Бот выключен. Включите: telegram.enabled: true в config/settings.yaml (или DEKANAT_TELEGRAM_ENABLED=true).")
+        return 1
+    tg = create_app(st).state.telegram
+    try:
+        me = tg.api.get_me()
+    except TelegramError as exc:
+        print(f"Не удалось подключиться к Telegram: {exc.description}")
+        return 1
+    tg.username = tg.username or str(me.get("username") or "")
+    tg.bot.username = tg.username
+    print(f"Бот: @{tg.username}")
+    if args.setup:
+        tg.bot.setup()
+        print("Команды, описание и кнопка меню обновлены." + ("" if tg.mini_app else " Кнопка приложения не добавлена: нужен https-адрес telegram.public_url."))
+        return 0
+    if st.get("telegram.run_in_server", True):
+        print("Внимание: telegram.run_in_server: true — тот же бот запускается и вместе с сайтом; два процесса не должны опрашивать одного бота одновременно.")
+    tg.start()
+    print("Бот запущен. Остановка — Ctrl+C.")
+    try:
+        while tg.running:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+    tg.stop()
     return 0
 
 
@@ -144,6 +183,14 @@ def cmd_doctor(args) -> int:
     else:
         state = "доступна" if llm.get("available") else "НЕДОСТУПНА (приложение продолжит работать в режиме без LLM)"
         print(f"  Локальная LLM: включена — {llm['backend']}, модель {llm['model']}, только CPU={llm.get('cpu_only')}; {state}")
+    tgs = app.settings
+    if tgs.get("telegram.enabled", False):
+        have = bool(tgs.get("telegram.bot_token"))
+        https = str(tgs.get("telegram.public_url") or "").startswith("https://")
+        print("  Telegram-бот: включён" + ("" if have else ", но токен не задан (DEKANAT_TELEGRAM_BOT_TOKEN)") + f"; режим {tgs.get('telegram.mode', 'polling')}"
+              + ("; Mini App доступно" if have and https else "; Mini App выключено (нужен https-адрес telegram.public_url)"))
+    else:
+        print("  Telegram-бот: выключен (telegram.enabled: false) — сайт работает без него")
     from .storage import Storage
 
     storage = Storage(app.settings)
@@ -288,6 +335,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--host")
     s.add_argument("--port", type=int)
     s.set_defaults(func=cmd_serve)
+
+    bt = sub.add_parser("bot", help="запустить Telegram-бота отдельным процессом или настроить его (--setup)")
+    bt.add_argument("--setup", action="store_true", help="только записать команды, описание и кнопку меню бота и выйти")
+    bt.set_defaults(func=cmd_bot)
 
     a = sub.add_parser("ask", help="проверить документ и ответить на вопрос")
     a.add_argument("image", help="JPG/PNG/PDF")

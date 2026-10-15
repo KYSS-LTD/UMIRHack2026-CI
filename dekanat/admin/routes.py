@@ -90,7 +90,7 @@ def load_reply_templates(path: Path) -> list:
     return good or DEFAULT_REPLIES
 
 
-def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_bytes: int) -> APIRouter:
+def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_bytes: int, notifier=None, telegram=None) -> APIRouter:
     router = APIRouter(prefix="/api/admin", tags=["admin"])
     admin = Depends(auth.require)
 
@@ -123,6 +123,7 @@ def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_by
             "username": who["username"], "llm": svc.llm.status(), "regulation": {"name": svc.regulation_name, "clauses": len(svc.clauses)},
             "templates": len(storage.templates.list()), "kb_documents": len(kbm.list()), "tickets_new": tickets_new,
             "delivery": delivery_status(), "active_sessions": storage.sessions.count_active(), "ocr": svc.engine.info(),
+            "telegram": {**(telegram.status() if telegram else {"enabled": False}), "users": storage.users.count(), "web_linked": storage.users.count_web_linked()},
         }
 
     def delivery_status() -> dict:
@@ -349,14 +350,26 @@ def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_by
     def reply_templates(who: dict = admin):
         return {"templates": load_reply_templates(Path(svc.settings.root) / "config" / "reply_templates.yaml")}
 
+    def _notify_owner(before, after) -> None:
+        """Владельцу обращения (вошёл через Telegram) уходит уведомление о новом статусе или ответе. Сбой очереди не должен ломать работу сотрудника."""
+        if notifier is None:
+            return
+        try:
+            notifier.ticket_changed(before, after)
+        except Exception:
+            logging.getLogger("dekanat.admin").exception("Не удалось поставить уведомление в очередь")
+
     @router.patch("/tickets/{ticket_id}")
     def patch_ticket(ticket_id: int, body: TicketPatch, who: dict = admin):
         if body.status is not None and body.status not in TICKET_STATUSES:
             raise HTTPException(400, f"status: одно из {list(TICKET_STATUSES)}")
+        before = storage.tickets.get(ticket_id)
         if not storage.tickets.update(ticket_id, body.status, body.note, body.reply):
             raise HTTPException(404, "Обращение не найдено")
         storage.audit.log(who["username"], "ticket.update", "ticket", str(ticket_id), {"status": body.status, "note": bool(body.note), "reply": bool(body.reply)})
-        return storage.tickets.get(ticket_id)
+        after = storage.tickets.get(ticket_id)
+        _notify_owner(before, after)
+        return after
 
     @router.post("/tickets/bulk")
     def bulk_tickets(body: TicketBulk, who: dict = admin):
@@ -365,7 +378,9 @@ def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_by
             raise HTTPException(400, f"status: одно из {list(TICKET_STATUSES)}")
         updated, missing = [], []
         for ticket_id in dict.fromkeys(body.ids):  # повторы в запросе не в счёт
+            before = storage.tickets.get(ticket_id)
             if storage.tickets.update(ticket_id, body.status, None, body.reply):
+                _notify_owner(before, storage.tickets.get(ticket_id))
                 storage.audit.log(who["username"], "ticket.update", "ticket", str(ticket_id), {"status": body.status, "note": False, "reply": bool(body.reply), "bulk": True})
                 updated.append(ticket_id)
             else:

@@ -20,6 +20,15 @@ CREATE TABLE IF NOT EXISTS admins(
 CREATE TABLE IF NOT EXISTS admin_sessions(
     token_hash TEXT PRIMARY KEY, admin_id INTEGER NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
     created_at REAL NOT NULL, expires_at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS users(
+    id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER NOT NULL UNIQUE, tg_username TEXT, first_name TEXT, last_name TEXT, language TEXT,
+    data_sid TEXT, notify INTEGER NOT NULL DEFAULT 1, bot_state_json TEXT, created_at REAL NOT NULL, last_seen REAL NOT NULL, web_linked_at REAL);
+CREATE TABLE IF NOT EXISTS login_requests(
+    token_hash TEXT PRIMARY KEY, session_id TEXT NOT NULL, created_at REAL NOT NULL, expires_at REAL NOT NULL, state TEXT NOT NULL DEFAULT 'pending',
+    tg_id INTEGER, profile_json TEXT, device TEXT);
+CREATE TABLE IF NOT EXISTS notifications(
+    id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER NOT NULL, user_id INTEGER, kind TEXT NOT NULL, text TEXT NOT NULL, created_at REAL NOT NULL,
+    send_after REAL NOT NULL, sent_at REAL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, dedupe_key TEXT);
 CREATE TABLE IF NOT EXISTS user_sessions(
     id TEXT PRIMARY KEY, created_at REAL NOT NULL, last_seen REAL NOT NULL, expires_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS dialog_states(
@@ -55,6 +64,8 @@ CREATE INDEX IF NOT EXISTS ix_tickets_created ON tickets(created_at);
 CREATE INDEX IF NOT EXISTS ix_audit_ts ON audit_log(ts);
 CREATE INDEX IF NOT EXISTS ix_sessions_exp ON user_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS ix_gen_exp ON generated_docs(expires_at);
+CREATE INDEX IF NOT EXISTS ix_notif_due ON notifications(sent_at, send_after);
+CREATE INDEX IF NOT EXISTS ix_login_exp ON login_requests(expires_at);
 """
 
 
@@ -82,7 +93,11 @@ class Database:
                 self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.executescript(SCHEMA)
             # базы, созданные до появления кода статуса и ответа студенту, дополняются столбцами
-            self._add_missing_columns("tickets", {"public_hash": "TEXT", "reply": "TEXT", "reply_at": "REAL"})
+            self._add_missing_columns("tickets", {"public_hash": "TEXT", "reply": "TEXT", "reply_at": "REAL", "user_id": "INTEGER"})
+            # сессия может принадлежать аккаунту (вход через Telegram); «account» — не cookie, а общие данные аккаунта для сайта и бота
+            self._add_missing_columns("user_sessions", {"user_id": "INTEGER", "kind": "TEXT NOT NULL DEFAULT 'web'"})
+            self._conn.execute("CREATE INDEX IF NOT EXISTS ix_sessions_user ON user_sessions(user_id)")
+            self._conn.execute("CREATE INDEX IF NOT EXISTS ix_tickets_user ON tickets(user_id)")
             self._conn.execute("INSERT OR IGNORE INTO meta(key, value) VALUES('schema_version', ?)", (str(SCHEMA_VERSION),))
 
     def _add_missing_columns(self, table: str, columns: dict) -> None:
@@ -102,6 +117,13 @@ class Database:
     def one(self, sql: str, params: Sequence[Any] = ()) -> Optional[sqlite3.Row]:
         with self._lock:
             return self._conn.execute(sql, params).fetchone()
+
+    def meta_get(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        row = self.one("SELECT value FROM meta WHERE key=?", (key,))
+        return row["value"] if row else default
+
+    def meta_set(self, key: str, value: str) -> None:
+        self.execute("INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:

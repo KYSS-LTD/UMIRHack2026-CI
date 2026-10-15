@@ -3,7 +3,7 @@ import { emit } from "../lib/bus";
 import { rank } from "../lib/fuzzy";
 import { useRegulation } from "../hooks/useRegulation";
 import { clauseNo } from "../lib/format";
-import type { SampleItem } from "../types";
+import type { AccountUser, SampleItem } from "../types";
 import { Icon, type IconName } from "../ui/Icon";
 import type { Route } from "./NavBar";
 
@@ -23,10 +23,12 @@ interface Props {
   samples: SampleItem[];
   onNavigate: (route: Route, clause?: string) => void;
   onTheme: () => void;
+  /** вход через Telegram включён: в палитре появляются «Мой аккаунт» или «Войти через Telegram» */
+  account?: { user: AccountUser | null; canLogin: boolean; onLogin: () => void };
 }
 
 /** Ctrl+K: переходы, действия, примеры и поиск по пунктам Положения в одной строке. */
-export function CommandPalette({ open, onClose, samples, onNavigate, onTheme }: Props) {
+export function CommandPalette({ open, onClose, samples, onNavigate, onTheme, account }: Props) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const input = useRef<HTMLInputElement>(null);
@@ -48,6 +50,8 @@ export function CommandPalette({ open, onClose, samples, onNavigate, onTheme }: 
       { id: "go-check", title: "Перейти на стол", group: "Перейти", icon: "doc", keywords: "проверка документ главная", run: go("check") },
       { id: "go-rules", title: "Открыть Положение", group: "Перейти", icon: "book", keywords: "правила пункты", run: go("rules") },
       { id: "go-status", title: "Статус обращения", group: "Перейти", icon: "inbox", keywords: "обращение номер код ответ деканата", run: go("status") },
+      ...(account?.user ? [{ id: "go-account", title: "Мой аккаунт и обращения", group: "Перейти", icon: "user" as const, keywords: "аккаунт профиль telegram телеграм уведомления мои обращения", run: go("account") }] : []),
+      ...(account && !account.user && account.canLogin ? [{ id: "login", title: "Войти через Telegram", group: "Перейти", icon: "telegram" as const, keywords: "вход войти аккаунт telegram телеграм бот", run: () => (onClose(), account.onLogin()) }] : []),
       { id: "new", title: "Очистить чат и стол", group: "Действия", icon: "broom", keywords: "сбросить очистить заново новый вопрос диалог", run: act(() => (onNavigate("check"), emit("new-desk"))) },
       { id: "pick", title: "Выбрать файл с документом", group: "Действия", icon: "inbox", keywords: "загрузить файл фото скан pdf", run: act(() => (onNavigate("check"), setTimeout(() => emit("pick-file"), 60))) },
       { id: "ask", title: "Задать вопрос", group: "Действия", icon: "question", keywords: "ввод фокус", run: act(() => (onNavigate("check"), setTimeout(() => emit("focus-question"), 60))) },
@@ -58,7 +62,7 @@ export function CommandPalette({ open, onClose, samples, onNavigate, onTheme }: 
       { id: "help", title: "Горячие клавиши", group: "Действия", icon: "keyboard", keywords: "помощь подсказка", run: act(() => emit("help")) },
       ...samples.map<Command>((s) => ({ id: `sample-${s.file}`, title: s.title, hint: s.question, group: "Примеры на столе", icon: "doc", keywords: "пример образец", run: act(() => (onNavigate("check"), setTimeout(() => emit("sample", s), 80))) })),
     ];
-  }, [samples, onNavigate, onClose, onTheme]);
+  }, [samples, onNavigate, onClose, onTheme, account]);
 
   const clauseCommands = useMemo<Command[]>(() => {
     if (!regulation || query.trim().length < 2) return [];

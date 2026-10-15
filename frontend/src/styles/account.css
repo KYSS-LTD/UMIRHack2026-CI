@@ -1,0 +1,110 @@
+/* Необязательный аккаунт: баннер входа, окно входа через Telegram, кабинет. Спокойная «бумага», цвет — только там, где он что-то значит. */
+@layer views {
+  /* ---------- баннер «Войти через Telegram» ---------- */
+  .tg-banner {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s-4) var(--s-5); align-items: center;
+    max-width: 1180px; margin: 0 auto var(--s-6); padding: var(--s-5) var(--s-6);
+    border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-1);
+    animation: row-in 460ms var(--glide) both;
+  }
+  .tg-ic { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: var(--link); background: color-mix(in srgb, var(--link) 12%, transparent); }
+  .tg-copy h2 { margin: 0 0 6px; font-size: var(--fs-md); letter-spacing: -.01em; }
+  .tg-copy ul { display: grid; gap: 3px; margin: 0 0 8px; padding: 0; list-style: none; color: var(--ink-2); font-size: var(--fs-sm); }
+  .tg-copy li { position: relative; padding-left: 16px; }
+  .tg-copy li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 5px; height: 5px; border-radius: 50%; background: var(--ink-3); }
+  .tg-copy p { margin: 0; font-size: var(--fs-xs); }
+  .tg-actions { display: grid; gap: var(--s-2); justify-items: stretch; }
+  .tg-actions .btn { white-space: nowrap; }
+  @media (max-width: 760px) {
+    .tg-banner { grid-template-columns: auto minmax(0, 1fr); padding: var(--s-4); }
+    .tg-actions { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 560px) {
+    .tg-banner { gap: 12px 14px; padding: 14px; }
+    .tg-ic { width: 36px; height: 36px; }
+    .tg-copy li:nth-child(3) { display: none; } /* на телефоне — два главных плюса, остальное в окне входа */
+  }
+  @media (max-width: 420px) { .tg-actions { grid-template-columns: 1fr; } }
+  [data-tg] .tg-banner { display: none; }
+
+  /* ---------- окно входа ---------- */
+  .login { display: grid; gap: var(--s-4); }
+  .login-steps { display: grid; gap: var(--s-4); margin: 0; padding: 0; list-style: none; counter-reset: step; }
+  .login-steps li { position: relative; display: grid; gap: 6px; padding-left: 40px; counter-increment: step; }
+  .login-steps li::before {
+    content: counter(step); position: absolute; left: 0; top: 0; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+    border: 1.5px solid var(--line-strong); color: var(--ink-2); font-size: var(--fs-sm); font-weight: 700;
+  }
+  .login-steps b { font-size: var(--fs-base); }
+  .login-steps span { font-size: var(--fs-sm); }
+  .login-wait { margin: 0; padding: 10px 14px; border-radius: var(--r-md); background: var(--surface-2); color: var(--ink-2); font-size: var(--fs-sm); }
+  .login-alt { margin: 0; font-size: var(--fs-sm); color: var(--ink-3); }
+  .login-why { font-size: var(--fs-sm); color: var(--ink-2); }
+  .login-why summary { cursor: pointer; color: var(--ink-3); }
+  .login-why summary:hover { color: var(--ink); }
+  .login-why ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+
+  /* ---------- значок аккаунта в панели ---------- */
+  .acc-chip {
+    display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--surface-3); color: var(--ink);
+    font-weight: 700; font-size: var(--fs-sm); text-decoration: none; transition: border-color var(--t-fast), background var(--t-fast);
+  }
+  .acc-chip:hover { border-color: var(--ink-3); }
+  .acc-chip[aria-current="page"] { background: var(--btn); color: var(--btn-ink); border-color: var(--btn); }
+
+  /* ---------- кабинет ---------- */
+  .account-view { max-width: 720px; margin: 0 auto; display: grid; gap: var(--s-5); }
+  .account-view .view-head { margin-bottom: 0; }
+  .acc-head { align-items: center; }
+  .acc-id { display: flex; align-items: center; gap: var(--s-4); }
+  .acc-id h1 { font-size: var(--fs-xl); margin: 2px 0; }
+  .acc-id p { margin: 0; }
+  .acc-avatar { display: grid; place-items: center; flex: none; width: 56px; height: 56px; border-radius: 50%; background: var(--surface-3); border: 1px solid var(--line-strong); font-family: var(--serif); font-size: 26px; color: var(--ink); }
+  .acc-card { display: grid; gap: var(--s-3); padding: var(--s-5) var(--s-6); border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-1); }
+  .acc-card h2 { margin: 0; font-size: var(--fs-md); letter-spacing: -.01em; }
+  .acc-card p { margin: 0; }
+  .acc-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-5); }
+  .acc-row p { margin-top: 4px; font-size: var(--fs-sm); max-width: 52ch; }
+  .acc-actions { display: flex; flex-wrap: wrap; gap: var(--s-3); }
+
+  /* переключатель */
+  .switch-ctl { position: relative; flex: none; display: inline-block; width: 46px; height: 28px; cursor: pointer; }
+  .switch-ctl input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .switch-ctl span { position: absolute; inset: 0; border-radius: var(--r-pill); background: var(--surface-3); border: 1px solid var(--line-strong); transition: background var(--t-base), border-color var(--t-base); pointer-events: none; }
+  .switch-ctl span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--paper); box-shadow: var(--shadow-1); transition: transform var(--t-base) var(--glide); }
+  .switch-ctl input:checked + span { background: var(--ok); border-color: var(--ok); }
+  .switch-ctl input:checked + span::after { transform: translateX(18px); }
+  .switch-ctl input:focus-visible + span { outline: 2px solid var(--lamp); outline-offset: 2px; }
+
+  /* обращения */
+  .acc-tickets { display: grid; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+  .acc-ticket { border-bottom: 1px solid var(--line); }
+  .acc-ticket > button {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-items: center; gap: var(--s-3); width: 100%; padding: 12px 2px;
+    border: 0; background: transparent; color: var(--ink); text-align: left; font: inherit; cursor: pointer;
+  }
+  .acc-ticket > button:hover .topic { text-decoration: underline; text-underline-offset: 3px; }
+  .acc-ticket .num { color: var(--ink-3); font-weight: 700; }
+  .acc-ticket .topic { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .acc-ticket .state { color: var(--ink-2); font-size: var(--fs-sm); white-space: nowrap; }
+  .acc-ticket .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ink-3); }
+  .acc-ticket .dot.new { background: var(--stamp); } .acc-ticket .dot.in_progress { background: var(--warn); } .acc-ticket .dot.done { background: var(--ok); } .acc-ticket .dot.rejected { background: var(--none); }
+  .acc-ticket .chev { color: var(--ink-3); transition: transform var(--t-base) var(--glide); }
+  .acc-ticket.open .chev { transform: rotate(180deg); }
+  .acc-ticket-body { display: grid; gap: var(--s-3); padding: 4px 2px 16px; animation: row-in 360ms var(--glide) both; }
+  .acc-ticket-body .faint { margin: 0; font-size: var(--fs-sm); }
+  @media (max-width: 560px) {
+    .acc-ticket > button { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+    .acc-ticket .state { display: none; }
+  }
+
+  /* привязка прежнего обращения */
+  .acc-link { font-size: var(--fs-sm); color: var(--ink-2); }
+  .acc-link summary { cursor: pointer; color: var(--ink-3); }
+  .acc-link summary:hover { color: var(--ink); }
+  .acc-link form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: var(--s-3); align-items: end; margin-top: var(--s-3); }
+  .acc-link label { display: grid; gap: 6px; }
+  .acc-link input { padding: 9px 12px; border-radius: var(--r-md); border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--ink); font-variant-numeric: tabular-nums; }
+  .acc-link input:focus { outline: none; border-color: var(--lamp); box-shadow: 0 0 0 3px var(--lamp-soft); }
+  @media (max-width: 560px) { .acc-link form { grid-template-columns: 1fr; } .acc-row { align-items: flex-start; } }
+}

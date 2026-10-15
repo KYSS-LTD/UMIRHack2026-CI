@@ -1,23 +1,28 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { CommandPalette } from "./components/CommandPalette";
+import { LoginDialog } from "./components/LoginDialog";
 import { NavBar, type Route } from "./components/NavBar";
+import { TelegramBanner } from "./components/TelegramBanner";
+import { AccountProvider, useAccount } from "./hooks/useAccount";
 import { useFetch } from "./hooks/useFetch";
 import { useTheme } from "./hooks/useTheme";
 import { useBus } from "./lib/bus";
 import { useActivity } from "./lib/activity";
 import { pct } from "./lib/format";
+import { getWebApp } from "./lib/telegram";
 import type { Health } from "./types";
 import { Dialog } from "./ui/Dialog";
 import { LogoDefs } from "./ui/Logo";
 import { ToastProvider } from "./ui/Toasts";
+import { AccountView } from "./views/AccountView";
 import { CheckView } from "./views/CheckView";
 import { RegulationView } from "./views/RegulationView";
 import { StatusView } from "./views/StatusView";
 
 export function parseHash(hash: string): { route: Route; clause: string | null } {
   const m = hash.replace(/^#\/?/, "").split("/");
-  const route = m[0] === "rules" ? "rules" : m[0] === "status" ? "status" : "check";
+  const route = m[0] === "rules" ? "rules" : m[0] === "status" ? "status" : m[0] === "account" ? "account" : "check";
   return { route, clause: (route === "rules" || route === "status") && m[1] ? decodeURIComponent(m[1]) : null }; // у «status» второй сегмент — номер обращения
 }
 
@@ -45,6 +50,28 @@ function Shell() {
   const types = useFetch(api.doctypes);
   const samples = useFetch(api.samples);
   const activity = useActivity();
+  const account = useAccount();
+
+  // внутри Telegram: цвета берём у Telegram (один раз за сессию), а «назад» в шапке Telegram возвращает на стол
+  useEffect(() => {
+    if (!account.miniApp || !account.scheme || theme.theme !== "system") return;
+    try {
+      if (sessionStorage.getItem("dekanat.tgTheme")) return;
+      sessionStorage.setItem("dekanat.tgTheme", "1");
+    } catch {
+      /* без хранилища тема применится при каждой загрузке */
+    }
+    theme.set(account.scheme);
+  }, [account.miniApp, account.scheme, theme]);
+
+  useEffect(() => {
+    const back = getWebApp()?.BackButton;
+    if (!account.miniApp || !back) return;
+    const toDesk = () => void (location.hash = "#/check");
+    if (hash.route === "check") back.hide();
+    else (back.show(), back.onClick(toDesk));
+    return () => back.offClick(toDesk);
+  }, [account.miniApp, account.ready, hash.route]);
 
   useEffect(() => {
     const onHash = () => setHash(parseHash(location.hash));
@@ -86,6 +113,12 @@ function Shell() {
   const editable = staffCanEdit(health.data);
   const ocrDown = health.data?.ocr?.available === false;
   const staff = !!health.data?.admin?.authenticated;
+  const nav = {
+    user: account.user,
+    canLogin: account.telegram.login && !account.miniApp,
+    onLogin: account.openLogin,
+    onLogout: () => void account.logout(),
+  };
 
   return (
     <>
@@ -105,7 +138,7 @@ function Shell() {
       <a className="skip" href="#main">
         К содержимому
       </a>
-      <NavBar route={hash.route} onRoute={(r) => setHash({ route: r, clause: null })} theme={theme.theme} onThemeSet={theme.set} staff={!!health.data?.admin?.authenticated} onPalette={() => setPalette(true)} onHelp={() => setHelp(true)} />
+      <NavBar route={hash.route} onRoute={(r) => setHash({ route: r, clause: null })} theme={theme.theme} onThemeSet={theme.set} staff={!!health.data?.admin?.authenticated} onPalette={() => setPalette(true)} onHelp={() => setHelp(true)} account={account.telegram.login || account.user ? nav : undefined} />
 
       <main id="main" tabIndex={-1} className={`route route-${hash.route}`}>
         {health.error && (
@@ -127,14 +160,17 @@ function Shell() {
             )}
           </p>
         )}
+        {hash.route === "check" && <TelegramBanner />}
         <div className="route-body" key={hash.route}>
           {hash.route === "check" && <CheckView types={typeList} samples={samples.data ?? []} health={health.data} onOpenClause={openClause} />}
           {hash.route === "rules" && <RegulationView focusClause={hash.clause} editable={editable} />}
           {hash.route === "status" && <StatusView initialId={hash.clause} />}
+          {hash.route === "account" && <AccountView />}
         </div>
       </main>
 
-      <CommandPalette open={palette} onClose={() => setPalette(false)} samples={samples.data ?? []} onNavigate={navigate} onTheme={theme.cycle} />
+      <CommandPalette open={palette} onClose={() => setPalette(false)} samples={samples.data ?? []} onNavigate={navigate} onTheme={theme.cycle} account={account.telegram.login || account.user ? nav : undefined} />
+      <LoginDialog />
 
       <Dialog open={help} title="Горячие клавиши" onClose={() => setHelp(false)}>
         <dl className="shortcuts">
@@ -156,7 +192,9 @@ function Shell() {
 export default function App() {
   return (
     <ToastProvider>
-      <Shell />
+      <AccountProvider>
+        <Shell />
+      </AccountProvider>
     </ToastProvider>
   );
 }

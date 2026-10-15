@@ -10,6 +10,7 @@ import "./styles/desk.css";
 import "./styles/thread.css";
 import "./styles/stage.css";
 import "./styles/views.css";
+import "./styles/account.css";
 import "./styles/overlays.css";
 import "./styles/polish.css";
 

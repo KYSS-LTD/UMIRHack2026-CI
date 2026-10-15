@@ -1,6 +1,7 @@
-"""API ассистента для пользователя без аккаунта (/api/assistant/*): диалог с анкетой, документ сессии, DOCX, отправка обращения.
+"""Ассистент (/api/assistant/*): диалог с анкетой, документ сессии, DOCX, отправка обращения.
 
-Идентификатор сессии — случайный токен в HttpOnly-cookie. Все данные привязаны к нему на сервере: чужую анкету,
+Логика живёт в `AssistantCore` и не знает про HTTP: сайт обращается к ней через cookie-сессию, бот — через аккаунт. Идентификатор
+сессии — случайный токен в HttpOnly-cookie (или данные аккаунта у вошедшего). Все данные привязаны к сессии на сервере: чужую анкету,
 документ или файл получить нельзя, даже зная идентификатор документа.
 """
 
@@ -33,12 +34,12 @@ from ..templates import TemplateError, TemplateNotFound, TemplateStore, fill_doc
 from ..storage import session_ref
 from ..storage.repos import new_public_code
 from ..storage.topics import classify_topic
+from .session import COOKIE_SID, WebSessions  # noqa: F401  (COOKIE_SID отсюда импортируют и другие модули)
 from ..ocr.engine import OcrUnavailable
 from ..ocr.preprocess import UnsupportedFile
 
 log = logging.getLogger("dekanat.assistant")
 
-COOKIE_SID = "dekanat_sid"
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 PLACEHOLDER_TITLES = {
@@ -190,79 +191,46 @@ def remember_document(storage, locks: SessionLocks, sid: str, result, filename: 
     return []
 
 
-def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, max_bytes: int, delivery_status, cookie_secure,
-                           locks: Optional[SessionLocks] = None) -> APIRouter:
-    router = APIRouter(prefix="/api/assistant", tags=["assistant"])
-    machine = DialogMachine(svc.llm)
-    locks = locks or SessionLocks()
-    last_purge = {"t": 0.0}
+class AssistantCore:
+    """Логика ассистента для одной «сессии данных» (sid): анкета, документ, DOCX, обращение.
 
-    # ------------------------------------------------------------------ сессия
-    def ttl() -> float:
-        return storage.session_ttl
+    Её используют и сайт (идентификатор берётся из cookie), и Telegram-бот (идентификатор аккаунта): поэтому анкета, начатая в боте,
+    продолжается на сайте и наоборот. Ошибки поднимаются как HTTPException — сайт отдаёт их как есть, бот показывает текст человеку.
+    """
 
-    def maybe_purge() -> None:
-        if time.time() - last_purge["t"] > 600:
-            last_purge["t"] = time.time()
-            try:
-                storage.purge()
-            except Exception:  # чистка не должна мешать работе
-                log.exception("Не удалось очистить просроченные данные")
+    def __init__(self, svc, storage, templates: TemplateStore, ocr_slots, max_bytes: int, delivery_status, locks: Optional[SessionLocks] = None, notifier=None):
+        self.svc, self.storage, self.templates = svc, storage, templates
+        self.ocr_slots, self.max_bytes, self.delivery_status = ocr_slots, max_bytes, delivery_status
+        self.machine = DialogMachine(svc.llm)
+        self.locks = locks or SessionLocks()
+        self.mailer = Mailer(svc.settings)
+        self.status_limiter = AttemptLimiter()
+        self.notifier = notifier  # сообщения в Telegram о новых обращениях (None — не нужны)
 
-    created: dict[str, list[float]] = {}  # адрес -> время создания последних сессий (защита от массового создания)
-
-    def throttle_new_sessions(request: Request) -> None:
-        limit = int(svc.settings.get("server.max_new_sessions_per_minute", 60))
-        ip = request.client.host if request.client else "?"
-        now = time.time()
-        recent = [t for t in created.get(ip, []) if now - t < 60]
-        if limit and len(recent) >= limit:
-            created[ip] = recent
-            raise HTTPException(429, "Слишком много новых сессий с вашего адреса. Подождите минуту и повторите.")
-        created[ip] = recent + [now]
-        if len(created) > 5000:
-            created.clear()
-
-    def ensure(request: Request, response: Response) -> tuple[str, str]:
-        """(идентификатор сессии, ok | new | expired). Пустая или просроченная сессия заменяется новой."""
-        maybe_purge()  # сроки хранения соблюдаются и на сервере, где новых сессий давно нет
-        cookie = request.cookies.get(COOKIE_SID, "")
-        if cookie and storage.sessions.touch(cookie, ttl()):
-            return cookie, "ok"
-        throttle_new_sessions(request)
-        sid = storage.sessions.create(ttl())
-        response.set_cookie(COOKIE_SID, sid, max_age=int(ttl()), httponly=True, samesite="lax", secure=cookie_secure(request), path="/")
-        return sid, ("expired" if cookie else "new")
-
-    def require(request: Request) -> str:
-        maybe_purge()
-        cookie = request.cookies.get(COOKIE_SID, "")
-        if not cookie or not storage.sessions.touch(cookie, ttl()):
-            raise HTTPException(410, "Сессия истекла или не найдена: данные удалены. Обновите страницу и начните заново.")
-        return cookie
-
-    def load_ctx(sid: str) -> DialogContext:
-        ctx = DialogContext.from_dict(storage.sessions.load_state(sid))
-        if DialogMachine.expire_sensitive(ctx, storage.passport_ttl):
-            save_ctx(sid, ctx)  # срок хранения паспортных данных истёк — они удалены из анкеты
+    # ------------------------------------------------------------------ состояние диалога
+    def load_ctx(self, sid: str) -> DialogContext:
+        ctx = DialogContext.from_dict(self.storage.sessions.load_state(sid))
+        if DialogMachine.expire_sensitive(ctx, self.storage.passport_ttl):
+            self.save_ctx(sid, ctx)  # срок хранения паспортных данных истёк — они удалены из анкеты
         return ctx
 
-    def save_ctx(sid: str, ctx: DialogContext) -> None:
-        storage.sessions.save_state(sid, ctx.to_dict())
+    def save_ctx(self, sid: str, ctx: DialogContext) -> None:
+        self.storage.sessions.save_state(sid, ctx.to_dict())
 
-    def log_events(sid: str, ctx: DialogContext, events: list) -> None:
+    def log_events(self, sid: str, ctx: DialogContext, events: list) -> None:
         topic = SCENARIO_TOPICS.get(ctx.scenario, "Анкета")
         for name, value in events:
             if name == "screening_started":
-                storage.events.log("screening_started", SCENARIO_TOPICS.get(value, "Анкета"), value or "unknown", sid)
+                self.storage.events.log("screening_started", SCENARIO_TOPICS.get(value, "Анкета"), value or "unknown", sid)
             elif name == "document_generated":
-                storage.events.log("document_generated", topic, "ok", sid)
+                self.storage.events.log("document_generated", topic, "ok", sid)
             elif name in ("offer", "screening_completed", "screening_cancelled", "review_confirmed", "generation_failed"):
-                storage.events.log(name, topic, value or "", sid)
+                self.storage.events.log(name, topic, value or "", sid)
 
-    def doc_record(sid: str) -> Optional[dict]:
-        return storage.sessions.load_document(sid)
+    def doc_record(self, sid: str) -> Optional[dict]:
+        return self.storage.sessions.load_document(sid)
 
+    @staticmethod
     def public_doc(record: Optional[dict]) -> Optional[dict]:
         if not record:
             return None
@@ -270,19 +238,20 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
                 "corrected": record.get("corrected", [])}
 
     # ------------------------------------------------------------------ вопросы вне анкеты
-    def answer_question(sid: str, text: str, record: Optional[dict]) -> dict:
+    def answer_question(self, sid: str, text: str, record: Optional[dict]) -> dict:
         if record and record["doc_type"]["id"]:
-            ans = svc.answer_for_fields(text, record["doc_type"]["id"], restore_fields(record), document_first=True)
+            ans = self.svc.answer_for_fields(text, record["doc_type"]["id"], restore_fields(record), document_first=True)
         else:
-            ans = svc.analyze(None, "", text).answer
-        storage.events.log("question", classify_topic(text), ans.verdict, sid)
+            ans = self.svc.analyze(None, "", text).answer
+        self.storage.events.log("question", classify_topic(text), ans.verdict, sid)
         return ans.to_dict()
 
     # ------------------------------------------------------------------ генерация документа
-    def available_templates() -> list[dict]:
-        return [{"id": t["id"], "name": t["name"], "placeholders": [p["key"] for p in t["placeholders"]]} for t in storage.templates.list()]
+    def available_templates(self) -> list[dict]:
+        return [{"id": t["id"], "name": t["name"], "placeholders": [p["key"] for p in t["placeholders"]]} for t in self.storage.templates.list()]
 
-    def do_generate(sid: str, ctx: DialogContext, template_id: Optional[str]) -> dict:
+    def do_generate(self, sid: str, ctx: DialogContext, template_id: Optional[str]) -> dict:
+        storage = self.storage
         if ctx.state not in (DOCUMENT_GENERATION, COMPLETED):
             raise HTTPException(409, "Сначала пройдите анкету и подтвердите собранные данные.")
         if not template_id:
@@ -296,10 +265,10 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
         if row is None:
             raise HTTPException(404, "Шаблон не найден (возможно, его только что удалили). Выберите другой шаблон.")
         try:
-            path = templates.path_of(template_id)
+            path = self.templates.path_of(template_id)
         except TemplateNotFound as exc:
             raise HTTPException(404, str(exc)) from exc
-        data = machine.template_data(ctx)
+        data = self.machine.template_data(ctx)
         fingerprint = hashlib.sha256(f"{template_id}:{row['version']}:{json.dumps(data, sort_keys=True, ensure_ascii=False)}".encode()).hexdigest()
         known = ctx.gen_cache.get(fingerprint)
         if known:
@@ -311,8 +280,8 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
             # данных нет — на месте метки строка «________» для заполнения от руки; список незаполненных полей сообщается пользователю
             result = fill_docx(path, data, storage.output_dir, blank_unfilled=True, output_name=f"{doc_id}.docx")
         except TemplateError as exc:
-            reply = machine.generation_failed(ctx, f"Не удалось сформировать документ: {exc}")
-            log_events(sid, ctx, reply.events)
+            reply = self.machine.generation_failed(ctx, f"Не удалось сформировать документ: {exc}")
+            self.log_events(sid, ctx, reply.events)
             raise HTTPException(422, reply.text) from exc
         try:
             storage.generated.add(doc_id, sid, template_id, f"{row['name']}.docx", str(result.path), storage.generated_ttl, result.unfilled)
@@ -322,137 +291,106 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
         ctx.gen_cache[fingerprint] = doc_id
         titles = [placeholder_title(k) for k in result.unfilled]
         if ctx.state == DOCUMENT_GENERATION:
-            reply = machine.generation_done(ctx, doc_id, titles)
+            reply = self.machine.generation_done(ctx, doc_id, titles)
         else:  # повторная генерация из completed (например, по другому шаблону)
             ctx.generated.append(doc_id)
             reply = Reply("Ещё один документ готов." + (f" Не заполнены (данных нет): {', '.join(titles)}." if titles else ""), ctx.state, "done",
                           events=[("document_generated", ctx.scenario)])
-        log_events(sid, ctx, reply.events)
+        self.log_events(sid, ctx, reply.events)
         return {"doc_id": doc_id, "duplicate": False, "unfilled": titles, "reply": reply}
 
-    def download_info(sid: str, doc_id: Optional[str]) -> Optional[dict]:
+    def download_info(self, sid: str, doc_id: Optional[str]) -> Optional[dict]:
         if not doc_id:
             return None
-        row = storage.generated.get(doc_id, sid)
+        row = self.storage.generated.get(doc_id, sid)
         return {"id": doc_id, "url": f"/api/assistant/download/{doc_id}", "filename": row["filename"]} if row else None
 
-    # ------------------------------------------------------------------ маршруты
-    @router.get("/state")
-    def state(request: Request, response: Response):
-        sid, status = ensure(request, response)
-        ctx = load_ctx(sid)
-        return {"session": status, "welcome": WELCOME, "dialog": ctx.public(), "document": public_doc(doc_record(sid)),
-                "templates": available_templates(), "delivery": delivery_status(), "llm": {"enabled": svc.llm.enabled},
-                "downloads": [d for d in (download_info(sid, g) for g in ctx.generated) if d], "ticket_id": ctx.ticket_id}
+    def download_row(self, sid: str, doc_id: str) -> dict:
+        row = self.storage.generated.get(doc_id, sid)  # только владелец сессии и только до окончания срока хранения
+        if row is None or not Path(row["path"]).exists():
+            raise HTTPException(404, "Документ не найден или срок его хранения истёк. Сформируйте его заново.")
+        return row
 
-    @router.post("/message")
-    def message(body: MessageIn, request: Request, response: Response):
-        sid, status = ensure(request, response)
-        with locks.get(sid):
-            ctx = load_ctx(sid)
-            record = doc_record(sid)
+    # ------------------------------------------------------------------ действия
+    def state(self, sid: str, status: str = "ok") -> dict:
+        ctx = self.load_ctx(sid)
+        return {"session": status, "welcome": WELCOME, "dialog": ctx.public(), "document": self.public_doc(self.doc_record(sid)),
+                "templates": self.available_templates(), "delivery": self.delivery_status(), "llm": {"enabled": self.svc.llm.enabled},
+                "downloads": [d for d in (self.download_info(sid, g) for g in ctx.generated) if d], "ticket_id": ctx.ticket_id}
+
+    def message(self, sid: str, text: str, template_id: Optional[str] = None, defer: bool = False, status: str = "ok") -> dict:
+        with self.locks.get(sid):
+            ctx = self.load_ctx(sid)
+            record = self.doc_record(sid)
             ctx.suggestions = suggestions_from_record(record)
-            reply = machine.handle(ctx, body.text)
+            reply = self.machine.handle(ctx, text)
             if reply.kind == "review":  # о запрете отправки студент узнаёт на сверке, пока ответы ещё можно исправить
-                blocked = check_submission(ctx, svc.settings.get)
+                blocked = check_submission(ctx, self.svc.settings.get)
                 if blocked:
                     reply.text += "\n\nОбратите внимание на отправку в деканат. " + " ".join(blocked)
             answer, download = None, None
             if reply.kind == "passthrough":
-                answer = answer_question(sid, body.text.strip(), record) if body.text.strip() and not body.defer else None
+                answer = self.answer_question(sid, text.strip(), record) if text.strip() and not defer else None
                 if answer:
                     reply.text = answer["text"]
             elif reply.kind == "generate":
-                result = do_generate(sid, ctx, body.template_id)
+                result = self.do_generate(sid, ctx, template_id)
                 if result["reply"] is not None:
                     reply = result["reply"]
                 else:
                     reply = Reply("Этот документ уже сформирован — его можно скачать.", ctx.state, "done")
-                download = download_info(sid, result["doc_id"])
-            log_events(sid, ctx, reply.events)
-            save_ctx(sid, ctx)
+                download = self.download_info(sid, result["doc_id"])
+            self.log_events(sid, ctx, reply.events)
+            self.save_ctx(sid, ctx)
         return {"session": status, "reply": reply.to_dict(), "dialog": ctx.public(), "answer": answer, "download": download}
 
-    @router.post("/generate")
-    def generate(body: GenerateIn, request: Request):
-        sid = require(request)
-        with locks.get(sid):
-            ctx = load_ctx(sid)
-            result = do_generate(sid, ctx, body.template_id)
-            save_ctx(sid, ctx)
+    def generate(self, sid: str, template_id: Optional[str]) -> dict:
+        with self.locks.get(sid):
+            ctx = self.load_ctx(sid)
+            result = self.do_generate(sid, ctx, template_id)
+            self.save_ctx(sid, ctx)
         reply = result["reply"]
-        return {"download": download_info(sid, result["doc_id"]), "duplicate": result["duplicate"], "unfilled": result["unfilled"],
+        return {"download": self.download_info(sid, result["doc_id"]), "duplicate": result["duplicate"], "unfilled": result["unfilled"],
                 "reply": reply.to_dict() if reply else None, "dialog": ctx.public()}
 
-    @router.get("/download/{doc_id}")
-    def download(doc_id: str, request: Request):
-        sid = require(request)
-        row = storage.generated.get(doc_id, sid)  # только владелец сессии и только до окончания срока хранения
-        if row is None or not Path(row["path"]).exists():
-            raise HTTPException(404, "Документ не найден или срок его хранения истёк. Сформируйте его заново.")
-        return FileResponse(row["path"], media_type=DOCX_MIME, filename=row["filename"], headers={"Cache-Control": "no-store"})
-
-    @router.get("/templates")
-    def list_templates():
-        return available_templates()
-
     # ---- документ сессии
-    @router.post("/document")
-    async def upload_document(request: Request, response: Response, file: UploadFile = File(...), doc_type: str = Form("auto")):
-        sid, status = ensure(request, response)
-        data = await file.read(max_bytes + 1)
-        if len(data) > max_bytes:
-            raise HTTPException(413, f"Файл больше {max_bytes // (1024 * 1024)} МБ")
+    def upload_document(self, sid: str, data: bytes, name: str, doc_type: str = "auto", status: str = "ok") -> dict:
+        if len(data) > self.max_bytes:
+            raise HTTPException(413, f"Файл больше {self.max_bytes // (1024 * 1024)} МБ")
         if not data:
             raise HTTPException(400, "Файл пустой")
-        name = Path(file.filename or "документ").name
-
-        def work():
-            with ocr_slots:
-                return svc.analyze(data, name, "", doc_type)
-
+        name = Path(name or "документ").name
         try:
-            result = await run_in_threadpool(work)
+            with self.ocr_slots:
+                result = self.svc.analyze(data, name, "", doc_type)
         except (UnsupportedFile, OcrUnavailable) as exc:
             raise HTTPException(400 if isinstance(exc, UnsupportedFile) else 503, str(exc)) from exc
         record = make_record(result, name)
-        with locks.get(sid):
-            storage.sessions.save_document(sid, record)
-        storage.events.log("document_check", classify_topic(""), result.answer.verdict, sid)
-        return {"session": status, "document": public_doc(record), "answer": result.answer.to_dict()}
+        with self.locks.get(sid):
+            self.storage.sessions.save_document(sid, record)
+        self.storage.events.log("document_check", classify_topic(""), result.answer.verdict, sid)
+        return {"session": status, "document": self.public_doc(record), "answer": result.answer.to_dict()}
 
-    @router.get("/document")
-    def get_document(request: Request, response: Response):
-        sid, status = ensure(request, response)
-        return {"session": status, "document": public_doc(doc_record(sid))}
+    def delete_document(self, sid: str) -> None:
+        self.storage.sessions.delete_document(sid)
 
-    @router.delete("/document")
-    def delete_document(request: Request):
-        sid = require(request)
-        storage.sessions.delete_document(sid)
-        return {"ok": True}
-
-    @router.patch("/document/fields")
-    def patch_field(body: FieldIn, request: Request):
-        sid = require(request)
-        with locks.get(sid):
-            record = doc_record(sid)
+    def patch_field(self, sid: str, unit: str, value: str, question: str) -> dict:
+        with self.locks.get(sid):
+            record = self.doc_record(sid)
             if not record:
                 raise HTTPException(404, "Документ не загружен")
-            spec = svc.doc_types.get(record["doc_type"]["id"] or "")
-            ok, error = apply_correction(record, spec, body.unit, body.value)
+            spec = self.svc.doc_types.get(record["doc_type"]["id"] or "")
+            ok, error = apply_correction(record, spec, unit, value)
             if not ok:
                 raise HTTPException(400, error)
-            storage.sessions.save_document(sid, record)
+            self.storage.sessions.save_document(sid, record)
         fields = restore_fields(record)
-        ans = svc.answer_for_fields(body.question.strip(), record["doc_type"]["id"], fields, document_first=True) if record["doc_type"]["id"] else None
+        ans = self.svc.answer_for_fields(question.strip(), record["doc_type"]["id"], fields, document_first=True) if record["doc_type"]["id"] else None
         # fields — карточка в том же виде, что в ответе проверки (без рамок): интерфейс стола обновляет её на месте
-        return {"document": public_doc(record), "fields": [f.to_dict() for f in fields], "answer": ans.to_dict() if ans else None}
+        return {"document": self.public_doc(record), "fields": [f.to_dict() for f in fields], "answer": ans.to_dict() if ans else None}
 
     # ---- отправка обращения
-    status_limiter = AttemptLimiter()
-    mailer = Mailer(svc.settings)
-
+    @staticmethod
     def build_payload(ctx: DialogContext, include_passport: bool, contact: str = "") -> tuple[dict, list]:
         data = DialogMachine.template_data(ctx)
         titles = {"student_name": "ФИО", "current_university": "Текущий вуз", "current_course": "Текущий курс", "current_specialty": "Направление (текущее)",
@@ -469,38 +407,38 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
             fields["Контакт"] = contact
         return {"request": REQUEST_TYPES.get(ctx.scenario, "не указано"), "fields": fields}, excluded
 
-    @router.get("/submission")
-    def submission_preview(request: Request, include_passport: bool = False):
-        sid = require(request)
-        ctx = load_ctx(sid)
-        payload, excluded = build_payload(ctx, include_passport)
-        return {"delivery": delivery_status(), "payload": payload, "excluded": excluded, "attachment": bool(ctx.generated), "state": ctx.state,
-                "already_sent": ctx.ticket_id, "ticket_code": ctx.ticket_code if ctx.ticket_id else "", "blocked": check_submission(ctx, svc.settings.get), "mail": mailer.status()}
+    def submission_preview(self, sid: str, include_passport: bool = False) -> dict:
+        ctx = self.load_ctx(sid)
+        payload, excluded = self.build_payload(ctx, include_passport)
+        return {"delivery": self.delivery_status(), "payload": payload, "excluded": excluded, "attachment": bool(ctx.generated), "state": ctx.state,
+                "already_sent": ctx.ticket_id, "ticket_code": ctx.ticket_code if ctx.ticket_id else "", "blocked": check_submission(ctx, self.svc.settings.get),
+                "mail": self.mailer.status()}
 
-    @router.post("/submission")
-    def submit(body: SubmitIn, request: Request):
-        sid = require(request)
-        with locks.get(sid):
-            ctx = load_ctx(sid)
-            if not body.confirm:
+    def submit(self, sid: str, confirm: bool, include_passport: bool = False, contact: str = "", source: str = "web") -> dict:
+        storage = self.storage
+        with self.locks.get(sid):
+            ctx = self.load_ctx(sid)
+            if not confirm:
                 storage.events.log("ticket", "Анкета", "declined", sid)
                 return {"sent": False, "message": "Хорошо, ничего не отправлено. Документ можно скачать и передать в деканат самостоятельно."}
-            status = delivery_status()
+            status = self.delivery_status()
             if not status["available"]:
                 raise HTTPException(503, f"Автоматическая отправка пока недоступна: {status['reason']}. Скачайте готовый документ и передайте его в деканат лично.")
             if ctx.state != COMPLETED:
                 raise HTTPException(409, "Сначала пройдите анкету, подтвердите данные и сформируйте документ.")
             if ctx.ticket_id:
                 return {"sent": True, "duplicate": True, "ticket_id": ctx.ticket_id, "code": ctx.ticket_code, "message": "Обращение уже отправлено ранее."}
-            blocked = check_submission(ctx, svc.settings.get)
+            blocked = check_submission(ctx, self.svc.settings.get)
             if blocked:
                 storage.events.log("ticket", SCENARIO_TOPICS.get(ctx.scenario, "Анкета"), "blocked", sid)
                 raise HTTPException(409, "Обращение не отправлено. " + " ".join(blocked))
-            contact = clean_contact(body.contact)
-            payload, excluded = build_payload(ctx, body.include_passport, contact)
+            contact = clean_contact(contact)
+            payload, excluded = self.build_payload(ctx, include_passport, contact)
             ref = session_ref(sid)
             topic = SCENARIO_TOPICS.get(ctx.scenario, "Анкета")
-            ticket, created = storage.tickets.create(ref, ctx.scenario if ctx.scenario in REQUEST_TYPES else "other", topic, payload, "queue", f"{ref}:{ctx.case_id}")
+            owner = storage.users.by_data_sid(sid)  # обращение вошедшего привязывается к аккаунту: статус и ответы видны без кода, ответы приходят в Telegram
+            ticket, created = storage.tickets.create(ref, ctx.scenario if ctx.scenario in REQUEST_TYPES else "other", topic, payload, "queue", f"{ref}:{ctx.case_id}",
+                                                     user_id=owner["id"] if owner else None)
             if created and ctx.generated:
                 last = storage.generated.get(ctx.generated[-1], sid)
                 if last and Path(last["path"]).exists():
@@ -511,47 +449,128 @@ def build_assistant_router(svc, storage, templates: TemplateStore, ocr_slots, ma
             if created:
                 ctx.ticket_code = new_public_code()
                 storage.tickets.attach_code(ticket["id"], ctx.ticket_code)
-            save_ctx(sid, ctx)
+            self.save_ctx(sid, ctx)
             if created:
                 storage.events.log("ticket", topic, "sent", sid)
             code, ticket_id = ctx.ticket_code, ticket["id"]
+        if created and self.notifier is not None:
+            try:  # сообщение сотрудникам и подтверждение вошедшему не должны ломать отправку
+                self.notifier.ticket_created(ticket, owner, source)
+            except Exception:
+                log.exception("Не удалось поставить в очередь уведомление о новом обращении")
         # письмо с номером и кодом — по желанию (студент указал почту) и вне блокировки сессии: почтовый сервер может отвечать долго
         mail = {"status": "none"}
         if created and contact:
             if "@" not in contact or contact.startswith("@"):
                 mail = {"status": "skipped"}  # телефон или Telegram: письма уходят только на почту
             else:
-                mail = {"status": mailer.send_ticket_code(contact, ticket_id, code), "to": mask_email(contact)}
+                mail = {"status": self.mailer.send_ticket_code(contact, ticket_id, code), "to": mask_email(contact)}
         return {"sent": True, "duplicate": not created, "ticket_id": ticket_id, "code": code, "excluded": excluded, "mail": mail,
                 "message": "Обращение передано в очередь деканата. Окончательное решение принимает сотрудник деканата."}
 
-    # ---- что принести и в какой срок решат: из действующего Положения, со ссылкой на пункт
+    def next_steps(self, sid: str) -> dict:
+        """Что принести и в какой срок решат: из действующего Положения, со ссылкой на пункт."""
+        ctx = self.load_ctx(sid)
+        return build_next_steps(ctx.scenario, lambda question: self.svc.analyze(None, "", question).answer)
+
+    def ticket_status(self, ticket_id: int, code: str, key: str) -> dict:
+        """Статус обращения по номеру и коду (без входа и без сессии)."""
+        if not self.status_limiter.allowed(key):
+            raise HTTPException(429, "Слишком много неверных попыток. Подождите несколько минут и попробуйте снова.")
+        row = self.storage.tickets.check_code(ticket_id, code)
+        if row is None:  # одинаковый ответ на «нет такого номера» и «неверный код»: номера нельзя перебирать
+            self.status_limiter.fail(key)
+            raise HTTPException(404, "Обращение с таким номером и кодом не найдено. Проверьте номер и код.")
+        return {"id": row["id"], "status": row["status"], "status_title": STATUS_TITLES.get(row["status"], row["status"]), "topic": row["topic"],
+                "created_at": row["created_at"], "updated_at": row["updated_at"], "reply": row["reply"], "reply_at": row["reply_at"]}
+
+
+def build_assistant_router(core: AssistantCore, sessions: WebSessions) -> APIRouter:
+    """HTTP-обёртка над AssistantCore: определяет сессию по cookie, остальное делает ядро."""
+    router = APIRouter(prefix="/api/assistant", tags=["assistant"])
+    storage = core.storage
+
+    @router.get("/state")
+    def state(request: Request, response: Response):
+        v = sessions.ensure(request, response)
+        return core.state(v.sid, v.status)
+
+    @router.post("/message")
+    def message(body: MessageIn, request: Request, response: Response):
+        v = sessions.ensure(request, response)
+        return core.message(v.sid, body.text, body.template_id, body.defer, v.status)
+
+    @router.post("/generate")
+    def generate(body: GenerateIn, request: Request):
+        v = sessions.require(request)
+        return core.generate(v.sid, body.template_id)
+
+    @router.get("/download/{doc_id}")
+    def download(doc_id: str, request: Request):
+        v = sessions.require(request)
+        row = core.download_row(v.sid, doc_id)
+        return FileResponse(row["path"], media_type=DOCX_MIME, filename=row["filename"], headers={"Cache-Control": "no-store"})
+
+    @router.get("/templates")
+    def list_templates():
+        return core.available_templates()
+
+    # ---- документ сессии
+    @router.post("/document")
+    async def upload_document(request: Request, response: Response, file: UploadFile = File(...), doc_type: str = Form("auto")):
+        v = sessions.ensure(request, response)
+        data = await file.read(core.max_bytes + 1)
+        return await run_in_threadpool(core.upload_document, v.sid, data, file.filename or "документ", doc_type, v.status)
+
+    @router.get("/document")
+    def get_document(request: Request, response: Response):
+        v = sessions.ensure(request, response)
+        return {"session": v.status, "document": core.public_doc(core.doc_record(v.sid))}
+
+    @router.delete("/document")
+    def delete_document(request: Request):
+        v = sessions.require(request)
+        core.delete_document(v.sid)
+        return {"ok": True}
+
+    @router.patch("/document/fields")
+    def patch_field(body: FieldIn, request: Request):
+        v = sessions.require(request)
+        return core.patch_field(v.sid, body.unit, body.value, body.question)
+
+    # ---- отправка обращения
+    @router.get("/submission")
+    def submission_preview(request: Request, include_passport: bool = False):
+        v = sessions.require(request)
+        return core.submission_preview(v.sid, include_passport)
+
+    @router.post("/submission")
+    def submit(body: SubmitIn, request: Request):
+        v = sessions.require(request)
+        return core.submit(v.sid, body.confirm, body.include_passport, body.contact, "web")
+
     @router.get("/next-steps")
     def next_steps(request: Request):
-        sid = require(request)
-        ctx = load_ctx(sid)
-        return build_next_steps(ctx.scenario, lambda question: svc.analyze(None, "", question).answer)
+        v = sessions.require(request)
+        return core.next_steps(v.sid)
 
     # ---- статус обращения по номеру и коду (без входа и без сессии)
     @router.post("/status")
     def ticket_status(body: StatusIn, request: Request):
-        key = request.client.host if request.client else "?"
-        if not status_limiter.allowed(key):
-            raise HTTPException(429, "Слишком много неверных попыток. Подождите несколько минут и попробуйте снова.")
-        row = storage.tickets.check_code(body.id, body.code)
-        if row is None:  # одинаковый ответ на «нет такого номера» и «неверный код»: номера нельзя перебирать
-            status_limiter.fail(key)
-            raise HTTPException(404, "Обращение с таким номером и кодом не найдено. Проверьте номер и код.")
-        return {"id": row["id"], "status": row["status"], "status_title": STATUS_TITLES.get(row["status"], row["status"]), "topic": row["topic"],
-                "created_at": row["created_at"], "updated_at": row["updated_at"], "reply": row["reply"], "reply_at": row["reply_at"]}
+        return core.ticket_status(body.id, body.code, request.client.host if request.client else "?")
 
     # ---- удаление данных и новая анкета
     @router.delete("/data")
     def delete_data(request: Request, response: Response):
         cookie = request.cookies.get(COOKIE_SID, "")
+        user = sessions.accounts.user_of_cookie(cookie) if cookie else None
+        if user:
+            # вошедший: стираются данные аккаунта (в боте тоже), сам вход и аккаунт остаются
+            storage.delete_user_data(sessions.accounts.ensure_data_session(user))
+            return {"ok": True, "message": "Данные вашего аккаунта удалены: анкета, загруженный документ и готовые файлы — и на сайте, и в боте."}
         if cookie:
             storage.delete_session(cookie)
-        response.delete_cookie(COOKIE_SID, path="/")
+        sessions.clear_cookie(response)
         return {"ok": True, "message": "Ваши данные удалены: анкета, загруженный документ и готовые файлы."}
 
     return router

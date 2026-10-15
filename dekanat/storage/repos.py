@@ -96,19 +96,52 @@ class UserSessionRepo:
     def __init__(self, db: Database):
         self.db = db
 
-    def create(self, ttl_seconds: float) -> str:
+    def create(self, ttl_seconds: float, user_id: Optional[int] = None, kind: str = "web") -> str:
         sid = secrets.token_urlsafe(24)
         t = now()
-        self.db.execute("INSERT INTO user_sessions(id, created_at, last_seen, expires_at) VALUES(?,?,?,?)", (sid, t, t, t + ttl_seconds))
+        self.db.execute("INSERT INTO user_sessions(id, created_at, last_seen, expires_at, user_id, kind) VALUES(?,?,?,?,?,?)", (sid, t, t, t + ttl_seconds, user_id, kind))
         return sid
 
-    def touch(self, sid: str, ttl_seconds: float) -> bool:
-        """Продлевает живую сессию. False — сессии нет или она истекла."""
+    def touch(self, sid: str, ttl_seconds: float, user_ttl_seconds: Optional[float] = None) -> bool:
+        """Продлевает живую сессию (срок только растёт: короткая проверка не сокращает долгую сессию аккаунта). False — сессии нет или она истекла.
+        user_ttl_seconds — срок для сессии, привязанной к аккаунту (вход через Telegram); без него действует ttl_seconds."""
         if not sid:
             return False
         t = now()
-        cur = self.db.execute("UPDATE user_sessions SET last_seen=?, expires_at=? WHERE id=? AND expires_at>?", (t, t + ttl_seconds, sid, t))
+        longer = user_ttl_seconds if user_ttl_seconds is not None else ttl_seconds
+        cur = self.db.execute(
+            "UPDATE user_sessions SET last_seen=?, expires_at=MAX(expires_at, ? + CASE WHEN user_id IS NULL THEN ? ELSE ? END) WHERE id=? AND expires_at>?",
+            (t, t, ttl_seconds, longer, sid, t))
         return cur.rowcount > 0
+
+    def get(self, sid: str) -> Optional[dict]:
+        row = self.db.one("SELECT id, user_id, kind, expires_at FROM user_sessions WHERE id=? AND expires_at>?", (sid, now())) if sid else None
+        return dict(row) if row else None
+
+    def attach_user(self, sid: str, user_id: int) -> None:
+        self.db.execute("UPDATE user_sessions SET user_id=? WHERE id=?", (user_id, sid))
+
+    def delete_for_user(self, user_id: int) -> list[str]:
+        """Все сессии аккаунта (входы на сайте) удаляются; возвращает пути их готовых документов."""
+        paths: list[str] = []
+        for r in self.db.query("SELECT id FROM user_sessions WHERE user_id=?", (user_id,)):
+            paths += self.delete(r["id"])
+        return paths
+
+    def has_data(self, sid: str) -> bool:
+        return any(self.db.one(f"SELECT 1 FROM {t} WHERE session_id=?", (sid,)) for t in ("dialog_states", "session_documents", "generated_docs"))
+
+    def move_data(self, src: str, dst: str) -> dict:
+        """Данные анонимной сессии переходят в аккаунт: анкета и карточка документа — если у аккаунта своих ещё нет, готовые файлы — всегда."""
+        moved = {"dialog": False, "document": False, "files": 0}
+        if not src or src == dst:
+            return moved
+        with self.db.transaction() as conn:
+            for table, key in (("dialog_states", "dialog"), ("session_documents", "document")):
+                if conn.execute(f"SELECT 1 FROM {table} WHERE session_id=?", (dst,)).fetchone() is None:
+                    moved[key] = conn.execute(f"UPDATE {table} SET session_id=? WHERE session_id=?", (dst, src)).rowcount > 0
+            moved["files"] = conn.execute("UPDATE generated_docs SET session_id=? WHERE session_id=?", (dst, src)).rowcount
+        return moved
 
     def delete(self, sid: str) -> list[str]:
         """Удаляет сессию со всеми данными. Возвращает пути файлов готовых документов, которые нужно стереть с диска."""
@@ -146,7 +179,8 @@ class UserSessionRepo:
         return n, paths
 
     def count_active(self) -> int:
-        return int(self.db.one("SELECT COUNT(*) AS n FROM user_sessions WHERE expires_at>?", (now(),))["n"])
+        """Живые сессии посетителей: общие данные аккаунтов («account») не считаются — это не открытая вкладка."""
+        return int(self.db.one("SELECT COUNT(*) AS n FROM user_sessions WHERE expires_at>? AND kind='web'", (now(),))["n"])
 
 
 class GeneratedRepo:
@@ -339,15 +373,15 @@ class TicketRepo:
             out["payload"] = _loads(r["payload_json"], {})
         return out
 
-    def create(self, ref: str, type_: str, topic: str, payload: dict, channel: str, idem_key: str) -> tuple[dict, bool]:
+    def create(self, ref: str, type_: str, topic: str, payload: dict, channel: str, idem_key: str, user_id: Optional[int] = None) -> tuple[dict, bool]:
         """Идемпотентно: повторная отправка той же анкеты возвращает уже созданное обращение (created=False)."""
         t = now()
         with self.db.transaction() as conn:
             row = conn.execute("SELECT * FROM tickets WHERE idem_key=?", (idem_key,)).fetchone()
             if row is not None:
                 return self._row(row, True), False
-            cur = conn.execute("INSERT INTO tickets(created_at, updated_at, session_ref, type, status, topic, payload_json, channel, idem_key) VALUES(?,?,?,?,?,?,?,?,?)",
-                               (t, t, ref, type_, "new", topic, _j(payload), channel, idem_key))
+            cur = conn.execute("INSERT INTO tickets(created_at, updated_at, session_ref, type, status, topic, payload_json, channel, idem_key, user_id) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                               (t, t, ref, type_, "new", topic, _j(payload), channel, idem_key, user_id))
             row = conn.execute("SELECT * FROM tickets WHERE id=?", (cur.lastrowid,)).fetchone()
         return self._row(row, True), True
 
@@ -418,6 +452,27 @@ class TicketRepo:
                 if len(out) >= limit:
                     break
         return out
+
+    def list_for_user(self, user_id: int, limit: int = 50) -> list[dict]:
+        """Обращения аккаунта (без кода: вошедший пользователь видит их сам). Новые сверху."""
+        rows = self.db.query("SELECT * FROM tickets WHERE user_id=? ORDER BY created_at DESC, id DESC LIMIT ?", (user_id, max(1, min(200, limit))))
+        return [self._row(r, False) for r in rows]
+
+    def get_for_user(self, ticket_id: int, user_id: int) -> Optional[dict]:
+        r = self.db.one("SELECT * FROM tickets WHERE id=? AND user_id=?", (ticket_id, user_id))
+        return self._row(r, False) if r else None
+
+    def owner_of(self, ticket_id: int) -> Optional[int]:
+        r = self.db.one("SELECT user_id FROM tickets WHERE id=?", (ticket_id,))
+        return int(r["user_id"]) if r and r["user_id"] is not None else None
+
+    def attach_user(self, ticket_id: int, user_id: int) -> bool:
+        """Привязывает ещё ничьё обращение к аккаунту (по номеру и коду): чужое обращение отобрать нельзя."""
+        return self.db.execute("UPDATE tickets SET user_id=? WHERE id=? AND user_id IS NULL", (user_id, ticket_id)).rowcount > 0
+
+    def detach_user(self, user_id: int) -> int:
+        """Аккаунт удалён: обращения остаются у деканата, но уже ни к кому не привязаны."""
+        return self.db.execute("UPDATE tickets SET user_id=NULL WHERE user_id=?", (user_id,)).rowcount
 
     def attach_code(self, ticket_id: int, code: str) -> None:
         self.db.execute("UPDATE tickets SET public_hash=? WHERE id=?", (_code_hash(ticket_id, code), ticket_id))
@@ -533,3 +588,176 @@ class AuditRepo:
         rows = self.db.query(f"SELECT * FROM audit_log WHERE {' AND '.join(where)} ORDER BY ts DESC, id DESC LIMIT ? OFFSET ?", [*params, max(1, min(500, limit)), max(0, offset)])
         return [{"id": r["id"], "ts": iso(r["ts"]), "actor": r["actor"], "action": r["action"], "object_type": r["object_type"],
                  "object_id": r["object_id"], "details": _loads(r["details_json"], {})} for r in rows]
+
+
+# ====================================================================== аккаунты (вход через Telegram)
+class UserRepo:
+    """Необязательные аккаунты: только Telegram-идентификатор и имя. Пароля нет, телефона и почты не храним."""
+
+    def __init__(self, db: Database):
+        self.db = db
+
+    @staticmethod
+    def _row(r: sqlite3.Row) -> dict:
+        return {"id": r["id"], "tg_id": r["tg_id"], "username": r["tg_username"], "first_name": r["first_name"], "last_name": r["last_name"], "language": r["language"],
+                "data_sid": r["data_sid"], "notify": bool(r["notify"]), "created_at": iso(r["created_at"]), "last_seen": iso(r["last_seen"]),
+                "web_linked_at": iso(r["web_linked_at"])}
+
+    def upsert_tg(self, tg_id: int, username: Optional[str] = None, first_name: Optional[str] = None, last_name: Optional[str] = None,
+                  language: Optional[str] = None) -> tuple[dict, bool]:
+        """Создаёт аккаунт по Telegram-идентификатору или обновляет имя. Возвращает (аккаунт, создан ли сейчас)."""
+        t = now()
+        with self.db.transaction() as conn:
+            row = conn.execute("SELECT * FROM users WHERE tg_id=?", (int(tg_id),)).fetchone()
+            if row is None:
+                cur = conn.execute("INSERT INTO users(tg_id, tg_username, first_name, last_name, language, created_at, last_seen) VALUES(?,?,?,?,?,?,?)",
+                                   (int(tg_id), username, first_name, last_name, language, t, t))
+                row = conn.execute("SELECT * FROM users WHERE id=?", (cur.lastrowid,)).fetchone()
+                return self._row(row), True
+            conn.execute("UPDATE users SET tg_username=?, first_name=?, last_name=?, language=COALESCE(?, language), last_seen=? WHERE id=?",
+                         (username, first_name, last_name, language, t, row["id"]))
+            row = conn.execute("SELECT * FROM users WHERE id=?", (row["id"],)).fetchone()
+        return self._row(row), False
+
+    def get(self, user_id: int) -> Optional[dict]:
+        r = self.db.one("SELECT * FROM users WHERE id=?", (user_id,))
+        return self._row(r) if r else None
+
+    def get_by_tg(self, tg_id: int) -> Optional[dict]:
+        r = self.db.one("SELECT * FROM users WHERE tg_id=?", (int(tg_id),))
+        return self._row(r) if r else None
+
+    def by_data_sid(self, sid: str) -> Optional[dict]:
+        r = self.db.one("SELECT * FROM users WHERE data_sid=?", (sid,)) if sid else None
+        return self._row(r) if r else None
+
+    def touch(self, user_id: int) -> None:
+        self.db.execute("UPDATE users SET last_seen=? WHERE id=?", (now(), user_id))
+
+    def mark_web_linked(self, user_id: int) -> None:
+        self.db.execute("UPDATE users SET web_linked_at=?, last_seen=? WHERE id=?", (now(), now(), user_id))
+
+    def set_data_sid(self, user_id: int, sid: Optional[str]) -> None:
+        self.db.execute("UPDATE users SET data_sid=? WHERE id=?", (sid, user_id))
+
+    def set_notify(self, user_id: int, on: bool) -> None:
+        self.db.execute("UPDATE users SET notify=? WHERE id=?", (1 if on else 0, user_id))
+
+    def bot_state(self, user_id: int) -> dict:
+        r = self.db.one("SELECT bot_state_json FROM users WHERE id=?", (user_id,))
+        state = _loads(r["bot_state_json"], {}) if r else {}
+        return state if isinstance(state, dict) else {}
+
+    def save_bot_state(self, user_id: int, state: dict) -> None:
+        self.db.execute("UPDATE users SET bot_state_json=? WHERE id=?", (_j(state), user_id))
+
+    def delete(self, user_id: int) -> None:
+        self.db.execute("DELETE FROM notifications WHERE user_id=?", (user_id,))
+        self.db.execute("DELETE FROM users WHERE id=?", (user_id,))
+
+    def count(self) -> int:
+        return int(self.db.one("SELECT COUNT(*) AS n FROM users")["n"])
+
+    def count_web_linked(self) -> int:
+        return int(self.db.one("SELECT COUNT(*) AS n FROM users WHERE web_linked_at IS NOT NULL")["n"])
+
+    def inactive_since(self, before: float) -> list[dict]:
+        return [self._row(r) for r in self.db.query("SELECT * FROM users WHERE last_seen<? ORDER BY last_seen LIMIT 500", (before,))]
+
+
+class LoginRepo:
+    """Запросы входа через бота: сайт создаёт запрос, человек подтверждает его в Telegram, сайт получает вход. В базе — только хэш токена."""
+
+    def __init__(self, db: Database):
+        self.db = db
+
+    def create(self, session_id: str, ttl_seconds: float, device: str = "") -> str:
+        token = secrets.token_urlsafe(32)
+        t = now()
+        self.db.execute("INSERT INTO login_requests(token_hash, session_id, created_at, expires_at, device) VALUES(?,?,?,?,?)",
+                        (sha256_hex(token), session_id, t, t + ttl_seconds, device[:160]))
+        return token
+
+    def pending_count(self, session_id: str) -> int:
+        return int(self.db.one("SELECT COUNT(*) AS n FROM login_requests WHERE session_id=? AND state='pending' AND expires_at>?", (session_id, now()))["n"])
+
+    def get(self, token: str) -> Optional[dict]:
+        r = self.db.one("SELECT * FROM login_requests WHERE token_hash=?", (sha256_hex(token),)) if token else None
+        return self._row(r) if r else None
+
+    def find_by_prefix(self, prefix: str) -> Optional[dict]:
+        """Бот получает из кнопки только начало хэша: по нему находится ожидающий запрос (однозначно, если начало достаточно длинное)."""
+        if len(prefix) < 12 or not re.fullmatch(r"[0-9a-f]+", prefix):
+            return None
+        rows = self.db.query("SELECT * FROM login_requests WHERE token_hash LIKE ? AND expires_at>? LIMIT 2", (prefix + "%", now()))
+        return self._row(rows[0]) if len(rows) == 1 else None
+
+    @staticmethod
+    def _row(r: sqlite3.Row) -> dict:
+        return {"hash": r["token_hash"], "session_id": r["session_id"], "created_at": r["created_at"], "expires_at": r["expires_at"], "state": r["state"],
+                "tg_id": r["tg_id"], "profile": _loads(r["profile_json"], {}), "device": r["device"] or ""}
+
+    def confirm(self, token_hash: str, tg_id: int, profile: dict) -> bool:
+        """Подтверждает только ожидающий и непросроченный запрос; повторное подтверждение ничего не меняет."""
+        return self.db.execute("UPDATE login_requests SET state='confirmed', tg_id=?, profile_json=? WHERE token_hash=? AND state='pending' AND expires_at>?",
+                               (int(tg_id), _j(profile), token_hash, now())).rowcount > 0
+
+    def deny(self, token_hash: str) -> bool:
+        return self.db.execute("UPDATE login_requests SET state='denied' WHERE token_hash=? AND state='pending'", (token_hash,)).rowcount > 0
+
+    def consume(self, token_hash: str) -> bool:
+        """Вход выдаётся один раз: после выдачи запрос закрыт."""
+        return self.db.execute("UPDATE login_requests SET state='used' WHERE token_hash=? AND state='confirmed'", (token_hash,)).rowcount > 0
+
+    def purge_expired(self) -> int:
+        return self.db.execute("DELETE FROM login_requests WHERE expires_at<?", (now() - 3600,)).rowcount
+
+
+class NotificationRepo:
+    """Очередь сообщений в Telegram: ответы деканата, напоминания, сообщения сотрудникам. Отправка с повторами, пока не получится."""
+
+    MAX_ATTEMPTS = 5
+
+    def __init__(self, db: Database):
+        self.db = db
+
+    def add(self, chat_id: int, kind: str, text: str, user_id: Optional[int] = None, send_after: Optional[float] = None, dedupe_key: str = "") -> Optional[int]:
+        """Ставит сообщение в очередь. dedupe_key: то же событие не ставится дважды, пока предыдущее не отправлено."""
+        if dedupe_key and self.db.one("SELECT 1 FROM notifications WHERE dedupe_key=? AND sent_at IS NULL AND attempts<?", (dedupe_key, self.MAX_ATTEMPTS)):
+            return None
+        t = now()
+        cur = self.db.execute("INSERT INTO notifications(chat_id, user_id, kind, text, created_at, send_after, dedupe_key) VALUES(?,?,?,?,?,?,?)",
+                              (int(chat_id), user_id, kind, text[:3900], t, send_after if send_after is not None else t, dedupe_key or None))
+        return int(cur.lastrowid)
+
+    def due(self, limit: int = 20) -> list[dict]:
+        rows = self.db.query("SELECT * FROM notifications WHERE sent_at IS NULL AND attempts<? AND send_after<=? ORDER BY send_after, id LIMIT ?", (self.MAX_ATTEMPTS, now(), limit))
+        return [dict(r) for r in rows]
+
+    def mark_sent(self, nid: int) -> None:
+        self.db.execute("UPDATE notifications SET sent_at=?, last_error=NULL WHERE id=?", (now(), nid))
+
+    def mark_failed(self, nid: int, error: str, final: bool = False, retry_in: float = 60.0) -> None:
+        """final: повторять бесполезно (бот заблокирован) — попытки исчерпываются сразу; иначе повтор через retry_in секунд."""
+        if final:
+            self.db.execute("UPDATE notifications SET attempts=?, last_error=? WHERE id=?", (self.MAX_ATTEMPTS, error[:200], nid))
+        else:
+            self.db.execute("UPDATE notifications SET attempts=attempts+1, last_error=?, send_after=? WHERE id=?", (error[:200], now() + retry_in, nid))
+
+    def postpone(self, nid: int, seconds: float) -> None:
+        """Telegram просит подождать (flood control): сообщение уходит позже, попытка не засчитывается."""
+        self.db.execute("UPDATE notifications SET send_after=? WHERE id=?", (now() + seconds, nid))
+
+    def pending_for_user(self, user_id: int, kind: Optional[str] = None) -> int:
+        sql = "SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND sent_at IS NULL AND attempts<?"
+        params: list = [user_id, self.MAX_ATTEMPTS]
+        if kind:
+            sql += " AND kind=?"
+            params.append(kind)
+        return int(self.db.one(sql, params)["n"])
+
+    def cancel_for_user(self, user_id: int, kind: str) -> int:
+        return self.db.execute("DELETE FROM notifications WHERE user_id=? AND kind=? AND sent_at IS NULL", (user_id, kind)).rowcount
+
+    def purge_old(self, days: float = 30) -> int:
+        return self.db.execute("DELETE FROM notifications WHERE created_at<? AND (sent_at IS NOT NULL OR attempts>=?)", (now() - days * 86400, self.MAX_ATTEMPTS)).rowcount

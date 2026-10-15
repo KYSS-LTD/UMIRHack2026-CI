@@ -16,7 +16,7 @@ export const stepOf = (status: TicketStatus["status"]): number => (status === "n
 const isFinal = (s: TicketStatus["status"]) => s === "done" || s === "rejected";
 
 /** Три этапа обращения: пройденные отмечены галочкой, текущий выделен, у отклонённого последний этап окрашен как отказ. */
-function StatusSteps({ status }: { status: TicketStatus["status"] }) {
+export function StatusSteps({ status }: { status: TicketStatus["status"] }) {
   const at = stepOf(status);
   return (
     <ol className="status-steps" aria-label="Этапы обращения">

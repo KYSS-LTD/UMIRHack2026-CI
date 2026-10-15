@@ -4,10 +4,11 @@ import type { Theme } from "../hooks/useTheme";
 import { useActivity } from "../lib/activity";
 import { emit } from "../lib/bus";
 import { pct } from "../lib/format";
+import type { AccountUser } from "../types";
 import { Icon, type IconName } from "../ui/Icon";
 import { Logo } from "../ui/Logo";
 
-export type Route = "check" | "rules" | "status";
+export type Route = "check" | "rules" | "status" | "account";
 
 const TABS: { id: Route; title: string }[] = [
   { id: "check", title: "Стол" },
@@ -29,7 +30,11 @@ interface Props {
   onHelp: () => void;
   /** сотрудник вошёл: в переключателе появляется «Сотрудникам» (как «Стол декана | Сотрудникам» на странице сотрудников) */
   staff?: boolean;
+  /** необязательный аккаунт (вход через Telegram); без свойства в панели нет ничего, связанного со входом */
+  account?: { user: AccountUser | null; canLogin: boolean; onLogin: () => void; onLogout: () => void };
 }
+
+type AccountProps = NonNullable<Props["account"]>;
 
 function ThemeSwitch({ theme, onSet }: { theme: Theme; onSet: (t: Theme) => void }) {
   const index = Math.max(0, THEMES.findIndex((t) => t.id === theme));
@@ -47,7 +52,7 @@ function ThemeSwitch({ theme, onSet }: { theme: Theme; onSet: (t: Theme) => void
 }
 
 /** Одно меню вместо россыпи кнопок: тема, горячие клавиши, удаление данных и вход для сотрудников. */
-function Menu({ theme, onThemeSet, onHelp, onForget }: { theme: Theme; onThemeSet: (t: Theme) => void; onHelp: () => void; onForget: () => void }) {
+function Menu({ theme, onThemeSet, onHelp, onForget, account }: { theme: Theme; onThemeSet: (t: Theme) => void; onHelp: () => void; onForget: () => void; account?: AccountProps }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const panelId = useId();
@@ -78,6 +83,25 @@ function Menu({ theme, onThemeSet, onHelp, onForget }: { theme: Theme; onThemeSe
           <ThemeSwitch theme={theme} onSet={onThemeSet} />
         </section>
         <section className="menu-sec menu-actions">
+          {account?.user && (
+            <>
+              <a href="#/account" onClick={() => setOpen(false)}>
+                <Icon name="user" size={16} />
+                <span>{account.user.name}</span>
+                <Icon name="arrowRight" size={14} className="menu-go" />
+              </a>
+              <button type="button" onClick={act(account.onLogout)}>
+                <Icon name="logout" size={16} />
+                <span>Выйти</span>
+              </button>
+            </>
+          )}
+          {account && !account.user && account.canLogin && (
+            <button type="button" onClick={act(account.onLogin)}>
+              <Icon name="telegram" size={16} />
+              <span>Войти через Telegram</span>
+            </button>
+          )}
           <button type="button" onClick={act(onHelp)}>
             <Icon name="keyboard" size={16} />
             <span>Горячие клавиши</span>
@@ -103,7 +127,7 @@ function Menu({ theme, onThemeSet, onHelp, onForget }: { theme: Theme; onThemeSe
   );
 }
 
-export function NavBar({ route, onRoute, theme, onThemeSet, onPalette, onHelp, staff = false }: Props) {
+export function NavBar({ route, onRoute, theme, onThemeSet, onPalette, onHelp, staff = false, account }: Props) {
   const { hidden, compact } = useNavScroll();
   const activity = useActivity();
   const island = useRef<HTMLDivElement>(null);
@@ -157,10 +181,15 @@ export function NavBar({ route, onRoute, theme, onThemeSet, onPalette, onHelp, s
         </nav>
 
         <div className="tools">
+          {account?.user && (
+            <a className="acc-chip" href="#/account" aria-current={route === "account" ? "page" : undefined} aria-label={`Аккаунт: ${account.user.name}`} title={account.user.name} onClick={() => onRoute("account")}>
+              {account.user.name.trim().charAt(0).toUpperCase() || "?"}
+            </a>
+          )}
           <button type="button" className="round-btn" onClick={onPalette} aria-label="Поиск и команды (Ctrl+K)" title="Поиск и команды (Ctrl+K)">
             <Icon name="search" size={16} />
           </button>
-          <Menu theme={theme} onThemeSet={onThemeSet} onHelp={onHelp} onForget={forget} />
+          <Menu theme={theme} onThemeSet={onThemeSet} onHelp={onHelp} onForget={forget} account={account} />
         </div>
 
         <div className="nav-progress" data-on={activity.busy} aria-hidden="true">

@@ -15,8 +15,11 @@ from .repos import (
     EventRepo,
     GeneratedRepo,
     KBRepo,
+    LoginRepo,
+    NotificationRepo,
     TemplateRepo,
     TicketRepo,
+    UserRepo,
     UserSessionRepo,
     session_ref,
     sha256_hex,
@@ -54,6 +57,9 @@ class Storage:
         self.tickets = TicketRepo(self.db)
         self.events = EventRepo(self.db)
         self.audit = AuditRepo(self.db)
+        self.users = UserRepo(self.db)
+        self.logins = LoginRepo(self.db)
+        self.notifications = NotificationRepo(self.db)
 
     # ------------------------------------------------------------------ политика хранения
     @property
@@ -68,6 +74,15 @@ class Storage:
     def generated_ttl(self) -> float:
         return float(self.settings.get("privacy.generated_ttl_hours", 24)) * 3600
 
+    @property
+    def account_session_ttl(self) -> float:
+        """Вход на сайте через Telegram держится дольше анонимной сессии: без активности столько дней."""
+        return float(self.settings.get("accounts.session_days", 30)) * 86400
+
+    @property
+    def account_data_ttl(self) -> float:
+        return float(self.settings.get("accounts.data_days", 90)) * 86400
+
     def purge(self) -> dict:
         """Удаляет просроченное: сессии (с анкетами и данными документов), готовые документы, старые обращения и события, сессии админов."""
         n_sessions, paths = self.sessions.purge_expired()
@@ -79,7 +94,16 @@ class Storage:
         tickets = len(old_tickets)
         events = self.events.purge_older_than(float(self.settings.get("privacy.event_retention_days", 365)))
         admin_sessions = self.admins.purge_expired()
-        return {"sessions": n_sessions, "files": files, "tickets": tickets, "events": events, "admin_sessions": admin_sessions}
+        # аккаунт без активности удаляется вместе со своими данными (срок — accounts.retention_days)
+        accounts = 0
+        retention = float(self.settings.get("accounts.retention_days", 365))
+        if retention > 0:
+            for user in self.users.inactive_since(now() - retention * 86400):
+                self.delete_account(user["id"])
+                accounts += 1
+        self.logins.purge_expired()
+        self.notifications.purge_old()
+        return {"sessions": n_sessions, "files": files, "tickets": tickets, "events": events, "admin_sessions": admin_sessions, "accounts": accounts}
 
     def ticket_dir(self, ticket_id: int) -> Path:
         return self.output_dir / "tickets" / str(int(ticket_id))
@@ -94,6 +118,17 @@ class Storage:
         files = _remove_files(self.generated.delete_for_session(sid))
         self.sessions.delete_state(sid)
         self.sessions.delete_document(sid)
+        return {"files": files}
+
+    def delete_account(self, user_id: int) -> dict:
+        """Удаление аккаунта: входы на сайте, общие данные (анкета, карточка документа, готовые файлы), уведомления. Обращения остаются у деканата без привязки."""
+        user = self.users.get(user_id)
+        paths = self.sessions.delete_for_user(user_id)
+        if user and user.get("data_sid"):
+            paths += self.sessions.delete(user["data_sid"])
+        files = _remove_files(paths)
+        self.tickets.detach_user(user_id)
+        self.users.delete(user_id)
         return {"files": files}
 
     def close(self) -> None:

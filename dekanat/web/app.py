@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
@@ -19,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
 from .. import __version__
+from ..accounts import Accounts
 from ..admin import AdminAuth
 from ..admin.routes import build_admin_router
 from ..config import ConfigError, Settings, load_settings, parse_doc_type_yaml
@@ -32,8 +34,12 @@ from ..ocr.preprocess import UnsupportedFile, load_pages
 from ..pipeline import Cancelled, Dekanat, page_preview
 from ..storage import Storage
 from ..storage.topics import classify_topic
-from .assistant import COOKIE_SID, SessionLocks, build_assistant_router, remember_document
+from ..telegram.notify import Notifier
+from ..telegram.service import TelegramService
+from .account import build_account_router
+from .assistant import AssistantCore, SessionLocks, build_assistant_router, remember_document
 from .jobs import JobManager
+from .session import COOKIE_SID, WebSessions
 
 log = logging.getLogger("dekanat.web")
 STATIC = Path(__file__).parent / "static"
@@ -100,7 +106,16 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     except Exception:
         log.exception("Не удалось очистить просроченные данные")
 
-    app = FastAPI(title="Онлайн-деканат", version=__version__, docs_url="/api/docs", openapi_url="/api/openapi.json")
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        if settings.get("telegram.run_in_server", True):
+            tg.start()  # бот работает в процессе сайта и использует те же очереди распознавания и блокировки сессий
+        try:
+            yield
+        finally:
+            tg.stop()
+
+    app = FastAPI(title="Онлайн-деканат", version=__version__, docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
     app.state.storage, app.state.svc, app.state.auth = storage, svc, auth
 
     @app.middleware("http")
@@ -113,7 +128,11 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "same-origin")
-        response.headers.setdefault("X-Frame-Options", "DENY")
+        if request.url.path == "/" and tg.mini_app:
+            # Mini App показывает сайт внутри Telegram; в веб-версии Telegram это iframe — разрешаем только его
+            response.headers.setdefault("Content-Security-Policy", "frame-ancestors 'self' https://web.telegram.org https://webk.telegram.org https://webz.telegram.org")
+        else:
+            response.headers.setdefault("X-Frame-Options", "DENY")
         if request.url.path.startswith("/api/") and request.url.path != "/api/docs" and request.url.path != "/api/openapi.json":
             response.headers.setdefault("Cache-Control", "no-store")
         elif request.url.path.startswith("/static/pages/"):
@@ -132,6 +151,13 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     def cookie_secure(request: Request) -> bool:
         mode = str(settings.get("server.cookie_secure", "auto")).lower()
         return mode in ("true", "1", "yes", "on") or (mode == "auto" and request.url.scheme == "https")
+
+    accounts = Accounts(storage, settings)
+    sessions = WebSessions(storage, accounts, settings, cookie_secure)
+    notifier = Notifier(storage, settings)
+    core = AssistantCore(svc, storage, templates, ocr_slots, max_bytes, delivery_status, session_locks, notifier)
+    tg = TelegramService(settings, storage, svc, core, accounts, notifier, ocr_slots, session_locks)
+    app.state.accounts, app.state.sessions, app.state.core, app.state.telegram, app.state.notifier = accounts, sessions, core, tg, notifier
 
     def log_event(scenario: str, category: str = "", status: str = "", request: Optional[Request] = None) -> None:
         try:
@@ -159,6 +185,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             "can_edit": allow_edit and auth.can_edit(request),
             "admin": {"protect_edit": auth.protect_edit, "configured": storage.admins.count() > 0, "authenticated": auth.current(request) is not None},
             "delivery": delivery_status(), "assistant": True,
+            "telegram": {"enabled": tg.enabled, "login": bool(tg.enabled and tg.username), "bot": tg.username or None, "mini_app": tg.mini_app},
         })
         return info
 
@@ -270,7 +297,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     @app.post("/api/jobs")
     async def create_job(request: Request, file: Optional[UploadFile] = File(None), question: str = Form(""), doc_type: str = Form("auto")):
         data, name = await _read_upload(file, question)
-        sid = request.cookies.get(COOKIE_SID, "")
+        sid = sessions.peek(request)  # у вошедшего документ сохраняется в данных аккаунта — они общие с ботом
         # стол: с документом — ответ по документу, по Положению — если оно упомянуто в вопросе
         job = jobs.submit(lambda progress: _payload(data, name, question, doc_type, progress, sid, document_first=True), describe_error)
         return {"id": job.id}
@@ -416,8 +443,9 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         return FileResponse(samples_dir / name)
 
     # ------------------------------------------------------------------ ассистент и администратор
-    app.include_router(build_assistant_router(svc, storage, templates, ocr_slots, max_bytes, delivery_status, cookie_secure, session_locks))
-    app.include_router(build_admin_router(svc, storage, auth, kbm, templates, max_bytes))
+    app.include_router(build_assistant_router(core, sessions))
+    app.include_router(build_account_router(core, sessions, accounts, tg, settings))
+    app.include_router(build_admin_router(svc, storage, auth, kbm, templates, max_bytes, notifier, tg))
 
     def _page(name: str) -> FileResponse:
         path = PAGES / name

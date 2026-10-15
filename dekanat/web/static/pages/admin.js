@@ -637,6 +637,15 @@ async function viewOverview(panel) {
   addRow("Пунктов Положения", fmtNum(info.regulation.clauses));
   addRow("Сейчас в системе", `${fmtNum(info.active_sessions)} ${plural(info.active_sessions, ["посетитель", "посетителя", "посетителей"])}`);
   addRow("Отправка обращений из анкеты", info.delivery.available ? "работает" : "сейчас недоступна", info.delivery.available ? "ok" : "warn");
+  const tg = info.telegram || { enabled: false };
+  if (tg.enabled) {
+    // бот включён: работает ли он и сколько людей им пользуется (аккаунты необязательны, поэтому число небольшое — это нормально)
+    const state = tg.running && !tg.error ? "работает" + (tg.bot ? ` (@${tg.bot})` : "") : (tg.error || "запускается");
+    addRow("Telegram-бот", state, tg.running && !tg.error ? "ok" : "warn");
+    addRow("Аккаунтов Telegram", `${fmtNum(tg.users)}, из них входили на сайте — ${fmtNum(tg.web_linked)}`);
+  } else {
+    addRow("Telegram-бот", "выключен");
+  }
   leftCol.append(funnelSheet, sheet("Сводка", null, dl));
 }
 

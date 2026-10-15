@@ -305,6 +305,21 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
   useBus("new-desk", clearChat);
   useBus("pick-file", () => composer.current?.pickFile());
   useBus("focus-question", () => composer.current?.focusQuestion());
+  // вход или выход: данные теперь другие (у вошедшего — общие с ботом), состояние берём у сервера заново
+  useBus<"in" | "out">("account", (kind) => {
+    void (async () => {
+      if (kind === "out") {
+        desk.cancel();
+        reset();
+        setAway(false);
+        restored.current = true; // новая анонимная сессия пуста: предлагать продолжить нечего
+        await assistant.load();
+        return;
+      }
+      const st = await assistant.load();
+      if (st && !turns.length) restored.current = false; // стол пуст: предложим продолжить анкету, начатую в боте
+    })();
+  });
 
   // файл можно бросить на любое место стола, вставить из буфера; Esc отменяет проверку; «/» — к вопросу
   useEffect(() => {
