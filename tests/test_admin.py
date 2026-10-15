@@ -408,3 +408,49 @@ def test_pages_are_served_with_strict_csp(anon):
             assert asset.status_code == 200
             assert asset.headers["cache-control"] == "no-cache"  # после обновления браузер не возьмёт старый скрипт из кеша
     assert anon.get("/api/health").headers["x-content-type-options"] == "nosniff"
+
+
+# ---- забытый пароль: сброс ответственным за сервер
+def test_reset_password_closes_old_sessions_and_changes_the_password(app, anon):
+    auth = app.state.auth
+    auth.create_admin(ADMIN_USER, ADMIN_PASS)
+    assert anon.post("/api/admin/login", json={"username": ADMIN_USER, "password": ADMIN_PASS}).status_code == 200
+    assert anon.get("/api/admin/me").status_code == 200
+    auth.reset_password(ADMIN_USER, "Brand-New-Pass-77!")
+    assert anon.get("/api/admin/me").status_code == 401  # прежний вход завершён
+    fresh = TestClient(app)
+    assert fresh.post("/api/admin/login", json={"username": ADMIN_USER, "password": ADMIN_PASS}).status_code == 401
+    assert fresh.post("/api/admin/login", json={"username": ADMIN_USER, "password": "Brand-New-Pass-77!"}).status_code == 200
+    assert any(e["action"] == "admin.password_reset" for e in app.state.storage.audit.list("admin", None, 20, 0))
+
+
+def test_reset_password_checks_the_policy_and_the_account(app):
+    auth = app.state.auth
+    auth.create_admin(ADMIN_USER, ADMIN_PASS)
+    with pytest.raises(ValueError, match="Администратора"):
+        auth.reset_password("nobody", "Brand-New-Pass-77!")
+    with pytest.raises(ValueError):
+        auth.reset_password(ADMIN_USER, "short")
+    assert app.state.storage.admins.get_by_username(ADMIN_USER)["pw_hash"]  # прежний хэш цел после отказа
+
+
+def test_cli_create_and_reset_admin(tmp_path, monkeypatch, capsys):
+    from dekanat.cli import main as cli
+
+    monkeypatch.setenv("DEKANAT_STORAGE_DB_PATH", str(tmp_path / "cli.db"))  # не трогаем рабочую базу проекта
+    monkeypatch.setenv("TEST_PW_ONE", "First-Pass-12345!")
+    monkeypatch.setenv("TEST_PW_TWO", "Second-Pass-12345!")
+    assert cli(["create-admin", "--username", "dean", "--password-env", "TEST_PW_ONE"]) == 0
+    assert cli(["create-admin", "--username", "dean", "--password-env", "TEST_PW_ONE"]) == 1
+    err = capsys.readouterr().err
+    assert "уже существует" in err and "reset-admin-password --username dean" in err  # подсказка, что делать, если пароль забыт
+    assert cli(["reset-admin-password", "--username", "ghost", "--password-env", "TEST_PW_TWO"]) == 1
+    assert "dean" in capsys.readouterr().err  # перечислены существующие учётные записи
+    assert cli(["reset-admin-password", "--username", "dean", "--password-env", "TEST_PW_TWO"]) == 0
+
+    from dekanat.admin.security import verify_password
+    from dekanat.config import load_settings
+    from dekanat.storage import Storage
+
+    row = Storage(load_settings()).admins.get_by_username("dean")
+    assert verify_password("Second-Pass-12345!", row["pw_hash"]) and not verify_password("First-Pass-12345!", row["pw_hash"])

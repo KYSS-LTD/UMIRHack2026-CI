@@ -28,7 +28,7 @@ const FIELD_TITLES = {
 };
 const ACTION_TITLES = {
   "admin.login": "вошёл(а) в кабинет", "admin.login_failed": "неудачная попытка входа", "admin.logout": "вышел(а) из кабинета", "admin.create": "создана учётная запись",
-  "admin.password_change": "сменил(а) пароль", "template.create": "добавлен шаблон", "template.replace": "заменён шаблон", "template.rename": "переименован шаблон",
+  "admin.password_change": "сменил(а) пароль", "admin.password_reset": "пароль сброшен ответственным за сервер", "template.create": "добавлен шаблон", "template.replace": "заменён шаблон", "template.rename": "переименован шаблон",
   "template.delete": "удалён шаблон", "kb.create": "добавлен документ", "kb.replace": "заменён документ", "kb.update": "изменён документ", "kb.delete": "удалён документ",
   "kb.reset_base": "возвращено Положение из файла", "kb.reindex": "обновлён поиск по документам", "doctype.save": "сохранён тип документа", "doctype.delete": "удалён тип документа",
   "ticket.update": "обновлено обращение", "storage.purge": "удалены просроченные данные",

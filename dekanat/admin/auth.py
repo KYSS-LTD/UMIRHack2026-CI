@@ -107,6 +107,19 @@ class AdminAuth:
         self.storage.audit.log("system", "admin.create", "admin", str(admin_id), {"username": username})
         return admin_id
 
+    def reset_password(self, username: str, new: str) -> None:
+        """Сброс забытого пароля ответственным за сервер (команда `reset-admin-password`): текущий пароль не нужен, все входы этой учётной записи завершаются."""
+        username = (username or "").strip()
+        row = self.storage.admins.get_by_username(username)
+        if row is None:
+            raise ValueError(f"Администратора «{username}» нет. Список: python -m dekanat create-admin --help; создать нового: python -m dekanat create-admin")
+        error = check_password_policy(new, username, self.min_length)
+        if error:
+            raise ValueError(error)
+        self.storage.admins.set_password(row["id"], hash_password(new))
+        self.storage.admins.delete_sessions_of(row["id"])
+        self.storage.audit.log("system", "admin.password_reset", "admin", str(row["id"]), {"username": username})
+
     def change_password(self, admin: dict, current: str, new: str, keep_token: str = "") -> None:
         row = self.storage.admins.get_by_username(admin["username"])
         if row is None or not verify_password(current or "", row["pw_hash"]):

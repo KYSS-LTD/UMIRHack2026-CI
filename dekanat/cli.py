@@ -1,4 +1,4 @@
-"""Командная строка: serve | bot | ask | batch | ocr | doctor | fetch-lang | validate-config | synth | eval | create-admin | template-add | template-sample | purge."""
+"""Командная строка: serve | bot | ask | batch | ocr | doctor | fetch-lang | validate-config | synth | eval | create-admin | reset-admin-password | template-add | template-sample | purge."""
 
 from __future__ import annotations
 
@@ -250,8 +250,43 @@ def cmd_create_admin(args) -> int:
         AdminAuth(storage, st).create_admin(username, password)
     except ValueError as exc:
         print(f"Администратор не создан: {exc}", file=sys.stderr)
+        if "уже существует" in str(exc):
+            print(f"Забыли пароль? Задайте новый: python -m dekanat reset-admin-password --username {username}", file=sys.stderr)
         return 1
     print(f"Администратор «{username}» создан. Вход: http://{st.get('server.host', '127.0.0.1')}:{st.get('server.port', 8000)}/admin")
+    return 0
+
+
+def cmd_reset_admin_password(args) -> int:
+    """Новый пароль для существующего администратора (забытый пароль не восстановить: в базе только хэш). Все входы этой записи завершаются."""
+    import os
+    from getpass import getpass
+
+    from .admin import AdminAuth
+    from .config import load_settings
+    from .storage import Storage
+
+    st = load_settings()
+    storage = Storage(st)
+    admins = [a["username"] for a in storage.admins.list()]
+    if not admins:
+        print("Администраторов нет. Создайте: python -m dekanat create-admin", file=sys.stderr)
+        return 1
+    username = args.username or input(f"Логин администратора ({', '.join(admins)}): ").strip()
+    password = os.environ.get(args.password_env) if args.password_env else None
+    if password is None:
+        password = getpass("Новый пароль: ")
+        if password != getpass("Повторите пароль: "):
+            print("Пароли не совпадают.", file=sys.stderr)
+            return 1
+    try:
+        AdminAuth(storage, st).reset_password(username, password)
+    except ValueError as exc:
+        print(f"Пароль не изменён: {exc}", file=sys.stderr)
+        if admins:
+            print(f"Существующие учётные записи: {', '.join(admins)}.", file=sys.stderr)
+        return 1
+    print(f"Пароль администратора «{username}» изменён, прежние входы завершены. Вход: http://{st.get('server.host', '127.0.0.1')}:{st.get('server.port', 8000)}/admin")
     return 0
 
 
@@ -375,6 +410,11 @@ def build_parser() -> argparse.ArgumentParser:
     ca.add_argument("--username")
     ca.add_argument("--password-env", help="имя переменной окружения с паролем (пароль в аргументах командной строки не принимается)")
     ca.set_defaults(func=cmd_create_admin)
+
+    rp = sub.add_parser("reset-admin-password", help="задать новый пароль существующему администратору (если пароль забыт; пароль вводится скрытно или берётся из переменной окружения)")
+    rp.add_argument("--username")
+    rp.add_argument("--password-env", help="имя переменной окружения с новым паролем (в аргументах командной строки пароль не принимается)")
+    rp.set_defaults(func=cmd_reset_admin_password)
 
     ta = sub.add_parser("template-add", help="добавить DOCX-шаблон с плейсхолдерами {{ ключ }}")
     ta.add_argument("file")
