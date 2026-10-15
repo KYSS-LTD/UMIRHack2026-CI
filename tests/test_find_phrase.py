@@ -208,3 +208,41 @@ def test_labels_are_not_stacked_on_each_other():
     ys, xs = np.where(mask[:200])  # плашки подписей лежат выше рамок
     # вторая плашка либо перенесена, либо не нарисована: ширина закрашенного над рамками не превышает одной подписи
     assert len(xs) == 0 or (xs.max() - xs.min()) < 400
+
+
+# ============================================================================ «покажи РФ» — без слова «слово» и кавычек
+@pytest.mark.parametrize("question, phrase", [
+    ("покажи РФ", "РФ"), ("Покажи Главам", "Главам"), ("найди оповещения", "оповещения"), ("где Челябинская область", "Челябинская область"),
+    ("покажи мне на снимке слово закона", "закона"), ("выдели системы оповещения", "системы оповещения"),
+])
+def test_a_bare_word_after_the_verb_is_the_phrase(question, phrase):
+    assert DocumentQA.bare_phrase(question) == phrase
+
+
+@pytest.mark.parametrize("question", [
+    "покажи дату", "покажи весь текст", "покажи текст", "покажи, что в документе", "найди ошибки", "Хватит ли справки для перевода?",
+    "покажи сколько стоит обучение", "найди срок оплаты", "покажи", "где",
+])
+def test_questions_about_meaning_are_not_phrases(question):
+    assert DocumentQA.bare_phrase(question) is None
+
+
+def test_bare_show_finds_the_word_on_the_page():
+    a = qa().answer("покажи оповещения", page(ORDER))
+    assert a.verdict == "ok" and a.debug.get("locate") and a.debug.get("exact")
+    assert len(a.sources[0].boxes) == 1 and "оповещения" in a.text
+
+
+def test_bare_show_of_a_word_that_is_absent_falls_back_instead_of_a_wrong_claim():
+    """Догадка о фразе («покажи X») не должна подменять обычный ответ: нет такого слова — отвечаем как раньше, а не «фразы не нашлось»."""
+    a = qa().answer("покажи абракадабру", page(ORDER))
+    assert not a.debug.get("locate")
+    explicit = qa().answer("покажи слово абракадабру", page(ORDER))  # а явная просьба «слово …» по-прежнему получает честное «не нашлось»
+    assert explicit.debug.get("locate") and "не нашлось" in explicit.text
+
+
+def test_show_field_questions_on_known_documents_still_mean_the_field(samples):
+    """У документа известного типа «покажи ФИО» — поле карточки (проверяется в test_document_first); поиск фразы туда не вмешивается."""
+    from dekanat.qa.engine import QAEngine
+
+    assert DocumentQA.phrase_of("покажи ФИО") is None  # явной фразы нет — маршрутизация по полю не меняется

@@ -332,12 +332,16 @@ class TelegramBot:
         self.storage.users.save_bot_state(u["id"], state)
         record = self.core.doc_record(sid)
         text = render_document(record, [f.to_dict() for f in res.fields], res.warnings) + "\n\n" + render_answer(res.answer.to_dict())
-        rows = [self._quick_row(caption.strip()), [btn("🖼 Показать на снимке", "doc:img"), btn("📝 Составить заявление", "form:any")]]
+        show = bool(caption.strip() and wants_to_see(caption))  # подпись «покажи …» к фото: подсветка идёт сразу, кнопка не нужна
+        actions = [btn("📝 Составить заявление", "form:any")] if show else [btn("🖼 Показать на снимке", "doc:img"), btn("📝 Составить заявление", "form:any")]
+        rows = [self._quick_row(caption.strip()), actions]
         second = [btn("🗑 Забыть документ", "doc:forget")]
         if remind:
             second.insert(0, btn("⏰ Напомнить через 3 дня", "rem:3"))
         rows.append(second)
         self._edit_or_send(u, wait, text, kb(*rows))
+        if show:
+            self._send_overlay(u, res, auto=True)
 
     def _progress_reporter(self, u: dict, wait: Optional[dict]):
         """Обновляет сообщение «Читаю документ…» по ходу распознавания (не чаще раза в 1,5 с и только при смене этапа или заметном сдвиге)."""
@@ -414,6 +418,10 @@ class TelegramBot:
             if not auto:
                 self._send(u, "Не удалось показать подсветку: файл больше недоступен. Пришлите документ ещё раз.")
             return
+        self._send_overlay(u, res, auto)
+
+    def _send_overlay(self, u: dict, res, auto: bool = False) -> None:
+        """Отправляет снимок(и) с подсветкой по готовому результату проверки (и крупный план, если место маленькое)."""
         items = overlay_items(res.fields, res.answer)
         pages = sorted({box.page for box, _, _ in items if 0 <= box.page < len(res.original_pages)})[:3]
         if not pages:

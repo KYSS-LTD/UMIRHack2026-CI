@@ -34,6 +34,11 @@ def wants_to_see(question: str) -> bool:
     return bool(_LOCATE_CUE.search((question or "").lower()))
 
 
+# «покажи РФ», «найди Главам», «где Челябинской области»: глагол + одно-три слова без «слово» и кавычек
+_BARE_SHOW = re.compile(rf"^\s*(?:пожалуйста[,\s]+)?{_LOCATE_VERB}\s+(?:мне\s+)?(?:(?:на|в)\s+(?:снимке|документе|фото|тексте|скане)\s+)?(?:все\s+)?(?:(?:слово|слова|фразу)\s+)?(.+?)\s*[?!.]*\s*$", re.IGNORECASE)
+_NOT_A_PHRASE = {"текст", "документ", "всё", "все", "это", "здесь", "там", "ошибки", "информацию", "данные", "подробнее", "снимок", "фото", "страницу", "лист"}
+
+
 _QUOTED = re.compile(r"[«“\"]([^«»“”\"]{2,120})[»”\"]")
 _BARE_PHRASE = re.compile(rf"\b{_LOCATE_VERB}\b[^?!\n]{{0,40}}?\b(?:слово|слова|фразу|словосочетание|надпись|выражение|аббревиатуру)\s+([^\n?!]{{2,80}}?)\s*[?!.]*\s*$", re.IGNORECASE)
 # вопрос о значении рядом с цитатой («какая сумма в строке «Итого»?», «покажи значение «ИНН»») — это поиск по смыслу, а не «где слово»
@@ -392,13 +397,33 @@ class DocumentQA:
         m = _BARE_PHRASE.search(question.strip())
         return m.group(1).strip(" «»“”\"'.,") if m else None
 
+    @classmethod
+    def bare_phrase(cls, question: str) -> Optional[str]:
+        """«Покажи РФ», «найди Главам»: после глагола одно-три слова — это искомая фраза. Не фраза: вопросы о значении («покажи дату», «что в документе»),
+        просьба показать весь текст и общие слова («покажи текст», «найди ошибки»). Используется только при поиске по тексту документа:
+        у документа известного типа «покажи ФИО» по-прежнему означает поле карточки."""
+        low = (question or "").lower()
+        if not _LOCATE_CUE.search(low) or cls.wants_whole_text(question):
+            return None
+        m = _BARE_SHOW.match(question.strip())
+        if not m:
+            return None
+        rest = m.group(1).strip(" «»“”\"'.,")
+        words = [w for w in re.split(r"\s+", rest) if w]
+        if not 1 <= len(words) <= 3 or _VALUE_ASK.search(rest.lower()) or re.search(r"\bгде\b", rest.lower()):
+            return None
+        if all(cls._tok(w) in _NOT_A_PHRASE or len(cls._tok(w)) < 2 for w in words):
+            return None
+        return rest
+
     @staticmethod
     def _tok(text: str) -> str:
         return re.sub(r"[^\w]+", "", text.lower().replace("ё", "е"))
 
     def _locate(self, question: str, pages: list[OcrPage]) -> Optional[Answer]:
         """«Где на документе «фраза»?» -> рамки найденных слов на снимке. Слова ищутся в порядке чтения, точно или с запасом на опечатки OCR."""
-        phrase = self.phrase_of(question)
+        explicit = self.phrase_of(question)
+        phrase = explicit or self.bare_phrase(question)
         if not phrase:
             return None
         target = [t for t in (self._tok(w) for w in phrase.split()) if t]
@@ -443,6 +468,8 @@ class DocumentQA:
                         if self._plausible(page, words[i:i + size], letters):
                             hits.append((page, words[i:i + size], sc, i))
         label = f"«{phrase}»"
+        if not hits and not explicit:
+            return None  # «покажи X» без слова «слово» и кавычек — догадка о фразе: не нашлось, значит искать по смыслу, как раньше
         if not hits:
             return Answer("no_answer", f"Фразы {label} в распознанном тексте документа не нашлось. Проверьте написание или попробуйте часть фразы; возможно, этот фрагмент плохо читается на снимке.", "document",
                           confidence=0.7, debug={"locate": True, "matches": 0})

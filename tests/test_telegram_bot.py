@@ -763,3 +763,23 @@ def test_show_request_sends_text_and_snapshot_at_once(bot, api, samples):
 def test_show_request_without_a_document_does_not_pretend(bot, api):
     bot.handle_update(msg("Покажи ФИО"))
     assert api.texts and not api.of("send_photo")
+
+
+@needs_ocr
+def test_photo_with_a_show_caption_sends_the_snapshot_at_once(bot, api, samples):
+    """Фото с подписью «покажи …» — и текст ответа, и снимок с подсветкой сразу: ни кнопки, ни второго сообщения не нужно."""
+    api.files["g1"] = (samples / "sample_09.jpg").read_bytes()
+    bot.handle_update(msg(None, photo=[{"file_id": "g1", "width": 900, "height": 1200, "file_size": len(api.files["g1"])}], caption="покажи городского"))
+    texts = [t for t in api.texts if "Читаю документ" not in t]
+    assert texts and "городского" in texts[-1]
+    photos = api.of("send_photo")
+    assert photos and photos[0]["data"][:2] == b"\xff\xd8"
+    assert "Найдено мест" in photos[0]["caption"]  # несколько вхождений — пронумерованы
+    assert "doc:img" not in str(api.last_markup())  # кнопка «Показать на снимке» не нужна
+
+
+@needs_ocr
+def test_photo_with_an_ordinary_caption_keeps_the_button(bot, api, samples):
+    api.files["g2"] = (samples / "sample_09.jpg").read_bytes()
+    bot.handle_update(msg(None, photo=[{"file_id": "g2", "width": 900, "height": 1200, "file_size": 1000}], caption="Что приказано?"))
+    assert not api.of("send_photo") and "doc:img" in callbacks(api)
