@@ -490,3 +490,36 @@ def test_contexts_of_different_sessions_do_not_mix():
     talk(m, b, "Петров Пётр Петрович")
     assert a.data["student_name"] == "Иванов Иван Иванович" and b.data["student_name"] == "Петров Пётр Петрович"
     assert a.scenario == "transfer" and b.scenario == "enrollment" and "current_university" not in b.data
+
+
+# ============================================================================ «Что ты умеешь?»
+@pytest.mark.parametrize("text", [
+    "Что ты умеешь?", "что ты можешь", "Что вы умеете?", "Чем ты можешь помочь?", "Как пользоваться?", "С чего начать", "Как это работает?",
+    "Что здесь можно делать?", "Помощь", "?", "Что умеет этот бот", "Что можешь?",
+])
+def test_capability_questions_get_the_list_of_what_the_secretary_can_do(text):
+    r = DialogMachine().handle(DialogContext(), text)
+    assert r.kind == "info" and r.state == IDLE
+    for part in ("Проверяю документ", "Отвечаю по Положению", "Показываю на снимке", "Составляю заявление", "предварительную оценку"):
+        assert part in r.text
+    assert r.options == ["Я хочу перевестись", "Как к вам поступить?", "Сколько дней рассматривается заявление?"]  # те же варианты, что на «Можно начать так»
+
+
+@pytest.mark.parametrize("text", [
+    "Что ты можешь сказать про документ?", "Что делать, если нет печати?", "Что это за справка?", "Как работает перевод?", "Что умеет студент после практики?",
+])
+def test_real_questions_that_start_alike_are_not_taken_for_help(text):
+    assert DialogMachine().handle(DialogContext(), text).kind == "passthrough"
+
+
+def test_the_help_options_start_the_questionnaire_and_the_regulation_answer():
+    machine, ctx = DialogMachine(), DialogContext()
+    first = talk(machine, ctx, "Что ты умеешь?")
+    assert talk(machine, ctx, first.options[0]).kind == "offer"  # «Я хочу перевестись» предлагает анкету
+    assert talk(machine, DialogContext(), first.options[2]).kind == "passthrough"  # вопрос о Положении уходит в обычный ответ
+
+
+def test_help_in_the_middle_of_the_questionnaire_keeps_the_question():
+    machine, ctx = started()
+    r = talk(machine, ctx, "Что ты умеешь?")
+    assert ctx.state == SCREENING and "Команды" in r.text  # анкета не сбрасывается: вопрос повторяется, команды напоминаются

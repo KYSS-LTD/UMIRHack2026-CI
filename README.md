@@ -249,7 +249,7 @@ python -m dekanat serve          # бот запускается вместе с
 python -m dekanat bot --setup    # один раз: команды, описание и кнопка меню бота
 ```
 
-Другие режимы: `telegram.mode: webhook` (Telegram присылает сообщения на `telegram.public_url`, нужен https; адрес содержит секрет, запрос проверяется по секретному заголовку); `telegram.run_in_server: false` и `python -m dekanat bot` — бот отдельным процессом. Для кнопки Mini App нужен https-адрес сайта в `telegram.public_url` (обратный прокси с сертификатом); без него всё остальное работает, кнопки приложения просто нет. `telegram.staff_chat_id` — чат сотрудников, куда приходит «Новое обращение № …». `python -m dekanat doctor` показывает состояние бота. Остальные параметры — в блоках `telegram:` и `accounts:` файла `config/settings.yaml`. Аватар бота в стиле сайта — `docs/telegram/bot-avatar.png` (1024×1024; в @BotFather: `/setuserpic`); пересобрать — `python scripts/make_bot_avatar.py`. Приветственная картинка («Что умеет этот бот?») — `docs/telegram/bot-welcome.png` (640×360; `/setdescriptionpic`), пересобрать — `python scripts/make_bot_welcome.py`.
+Другие режимы: `telegram.mode: webhook` (Telegram присылает сообщения на `telegram.public_url`, нужен https; адрес содержит секрет, запрос проверяется по секретному заголовку); `telegram.run_in_server: false` и `python -m dekanat bot` — бот отдельным процессом. Для кнопки Mini App нужен https-адрес сайта в `telegram.public_url` (обратный прокси с сертификатом); без него всё остальное работает, кнопки приложения просто нет. `telegram.staff_chat_id` — чат сотрудников, куда приходит «Новое обращение № …». `python -m dekanat doctor` показывает состояние бота. Остальные параметры — в блоках `telegram:` и `accounts:` файла `config/settings.yaml`. Аватар бота в стиле сайта — `docs/telegram/bot-avatar.png` (1024×1024; в @BotFather: `/setuserpic`), приветственная картинка («Что умеет этот бот?») — `docs/telegram/bot-welcome.png` (640×360; `/setdescriptionpic`).
 
 **Вход на сайте через Telegram (необязательный).** При заходе на сайт показывается спокойный баннер: «Войти через Telegram» (с тремя плюсами: начатое на телефоне заканчивается на компьютере, ответ деканата приходит в Telegram, свои обращения видны без кода) или «Напомнить позже» (через 3, затем 7, затем 30 дней; запоминается в браузере). Баннер не показывается вошедшим, внутри самого Telegram и если бот не включён; войти можно и из меню. Как проходит вход:
 
@@ -688,7 +688,7 @@ dekanat/
   cli.py official.py evaluate.py synth.py                          запуск, results.json организаторов, оценка, генератор данных
 dekanat/web/static pages/ (страница /admin)   app/ (собранный React-интерфейс со столом и анкетой)
 frontend/          исходники React-интерфейса (сборка Vite → dekanat/web/static/app/)
-scripts/           eval_mws_vision.py
+scripts/           eval_mws_vision.py, eval_mws_site.py (проверка OCR на MWS-Vision-Bench), check_classify.py (проверка автоопределения типа)
 examples/          tasks.json, results.example.json, templates/ (учебный DOCX-шаблон)
 templates/         внутренний каталог DOCX-шаблонов (содержимое не хранится в git)
 docs/              ARCHITECTURE.md (архитектура), DEMO.md (сценарий видео и план презентации)
