@@ -105,7 +105,10 @@ export function FieldsCard({ fields, activeId, onHover, onSelect, onCorrect }: P
       <div className="fields-meter" aria-hidden="true">
         <i style={{ transform: `scaleX(${share})` }} />
       </div>
-      {onCorrect && <p className="fields-tip faint">Прочитано неверно? Нажмите на карандаш и впишите своё значение — ответ пересчитается.</p>}
+      <p className="fields-tip faint">
+        {fields.some((f) => fieldBoxes(f).length > 0) && "Нажмите на поле — покажу это место на снимке. "}
+        {onCorrect && "Прочитано неверно? Нажмите на карандаш и впишите своё значение — ответ пересчитается."}
+      </p>
 
       <ul className="field-rows" role="list">
         {fields.map((f) => {

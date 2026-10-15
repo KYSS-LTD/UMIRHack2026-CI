@@ -165,13 +165,45 @@ function field(labelText, node, id, hint) {
   return wrap;
 }
 
-function seg(options, value, onPick, label) {
+const segMemory = {}; // подпись переключателя -> где стоял ползунок: после перерисовки панели он едет от прежнего места, а не появляется на новом
+
+/** Переключатель с ползунком: выбранный вариант «подъезжает» плавно, а не вспыхивает. */
+function seg(options, value, onPick, label, statusOf) {
   const box = el("div", "seg", null, { role: "group", "aria-label": label });
+  const thumb = el("i", "seg-thumb", null, { "aria-hidden": "true" });
+  box.appendChild(thumb);
+  const place = (animate) => {
+    const on = box.querySelector('button[aria-pressed="true"]');
+    if (!on || !box.offsetWidth) return;
+    const at = { x: on.offsetLeft, y: on.offsetTop, w: on.offsetWidth, h: on.offsetHeight };
+    const put = (p) => { for (const [k, v] of Object.entries(p)) thumb.style.setProperty(`--${k}`, `${v}px`); };
+    const from = segMemory[label];
+    if (animate && from && !REDUCED) {
+      thumb.classList.add("no-motion");
+      put(from);
+      void thumb.offsetWidth; // зафиксировать прежнее место, затем поехать
+      thumb.classList.remove("no-motion");
+    } else thumb.classList.add("no-motion");
+    put(at);
+    if (!animate || !from) requestAnimationFrame(() => thumb.classList.remove("no-motion"));
+    if (on.dataset.st) thumb.dataset.st = on.dataset.st;
+    segMemory[label] = at;
+  };
   for (const [v, text] of options) {
     const b = el("button", null, text, { type: "button", "aria-pressed": String(v === value) });
-    b.addEventListener("click", () => onPick(v));
+    if (statusOf) b.dataset.st = statusOf(v);
+    b.addEventListener("click", () => {
+      if (v === value) return;
+      for (const x of box.querySelectorAll("button")) x.setAttribute("aria-pressed", String(x === b));
+      value = v;
+      place(true); // ползунок уже едет; перерисовка панели — когда он почти доехал
+      setTimeout(() => onPick(v), REDUCED ? 0 : 260);
+    });
     box.appendChild(b);
   }
+  setTimeout(() => place(true), 0); // когда переключатель уже в странице; запасной ход на случай, если кадры не рисуются (вкладка в фоне)
+  requestAnimationFrame(() => place(true));
+  if (window.ResizeObserver) new ResizeObserver(() => place(false)).observe(box);
   return box;
 }
 
@@ -813,6 +845,7 @@ async function viewTickets(panel) {
     const add = (value, label, n) => {
       const on = value === ticketFilter.status;
       const b = el("button", n || on ? null : "zero", null, { type: "button", "aria-pressed": String(on), title: `${label}: ${n}` });
+      if (value) b.dataset.st = value;
       b.appendChild(document.createTextNode(label));
       // число — только у того, что требует действий; итог по закрытым — в подсказке, общий — в шапке списка
       if ((value === "new" || value === "in_progress") && n) b.appendChild(el("span", "n", String(n)));
@@ -851,6 +884,7 @@ async function viewTickets(panel) {
     const actions = el("div", "bulk-actions", null, { role: "group", "aria-label": "Статус для выбранных" });
     for (const st of ["in_progress", "done", "rejected"]) {
       const b = el("button", "bulk-st", STATUS_LABEL[st], { type: "button" });
+      b.dataset.st = st;
       b.addEventListener("click", () => applyBulk(st));
       actions.appendChild(b);
     }
@@ -942,7 +976,7 @@ async function viewTickets(panel) {
       const closed = t.status === "done" || t.status === "rejected";
       const name = t.student || "";
       const topicText = t.topic || TYPE_TITLES[t.type] || t.type;
-      const it = el("div", `item ticket${t.status === "new" ? " is-new" : ""}${closed ? " closed" : ""}${t.id === openTicketId ? " on" : ""}${picked.has(t.id) ? " picked" : ""}`, null, { role: "option", tabindex: "0", "aria-selected": String(t.id === openTicketId), "data-id": String(t.id) });
+      const it = el("div", `item ticket st-${t.status}${t.status === "new" ? " is-new" : ""}${closed ? " closed" : ""}${t.id === openTicketId ? " on" : ""}${picked.has(t.id) ? " picked" : ""}`, null, { role: "option", tabindex: "0", "aria-selected": String(t.id === openTicketId), "data-id": String(t.id) });
       it.style.animationDelay = `${Math.min(i, 8) * 30}ms`;
       const pick = el("input", "t-pick", null, { type: "checkbox", "aria-label": `Выбрать обращение № ${t.id}${name ? `, ${name}` : ""}` });
       pick.checked = picked.has(t.id);
@@ -1033,12 +1067,8 @@ async function viewTickets(panel) {
     let status = t.status;
     const segBox = el("div", "case-status");
     const drawSeg = () => {
-      const group = el("div", "seg calm", null, { role: "group", "aria-label": "Статус обращения" });
-      for (const st of meta.statuses) {
-        const b = el("button", null, STATUS_LABEL[st], { type: "button", "aria-pressed": String(st === status) });
-        b.addEventListener("click", () => setStatus(st));
-        group.appendChild(b);
-      }
+      const group = seg(meta.statuses.map((st) => [st, STATUS_LABEL[st]]), status, (st) => setStatus(st), "Статус обращения", (st) => st);
+      group.classList.add("calm");
       clear(segBox).appendChild(group);
     };
     async function setStatus(v, quiet = false) {

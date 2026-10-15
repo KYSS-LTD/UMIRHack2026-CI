@@ -499,6 +499,14 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
             editableId={busy ? null : editableId}
             onCorrect={correct}
             sweeping={sweeping}
+            onTrySample={
+              samples.length
+                ? () => {
+                    const demo = samples.find((s) => /нет|не хватает/i.test(s.title)) ?? samples[0]!; // лучше всего показывает ценность: «чего не хватает»
+                    void loadSample(demo);
+                  }
+                : undefined
+            }
           />
         </div>
         {away && turns.length > 0 && (
@@ -523,6 +531,7 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
           onError={(m) => toast.show(m, "error")}
           recall={lastTurn?.question}
           placeholder={quiz ? "Ваш ответ на вопрос анкеты" : undefined}
+          checked={!!file && turns.some((t) => t.file === file)}
         />
       </section>
 
@@ -559,7 +568,7 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
             cta={composerFileIsNew && !busy ? { label: question.trim() ? "Проверить с моим вопросом" : "Проверить документ целиком", onClick: () => void submit() } : null}
           />
         ) : (
-          <Tray maxMb={maxMb} samples={samples} dragging={dragging} busy={busy} onFile={setFile} onSample={(s) => void loadSample(s)} onError={(m) => toast.show(m, "error")} />
+          <Tray maxMb={maxMb} dragging={dragging} busy={busy} onFile={setFile} onError={(m) => toast.show(m, "error")} />
         )}
       </section>
 

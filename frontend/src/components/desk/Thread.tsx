@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef } from "react";
 import { cardOwners, type Turn } from "../../hooks/useDesk";
+import { emit } from "../../lib/bus";
 import { relativeTime, VERDICT_META } from "../../lib/format";
 import type { HistoryEntry } from "../../lib/history";
 import type { Box, Delivery, DialogInfo, DocTypeSummary, FieldResult, PartResult, Source, SubmitResult, TemplateInfo } from "../../types";
 import { Icon } from "../../ui/Icon";
 import { AnswerTurn } from "./AnswerTurn";
 import { Avatar } from "./Avatar";
-import { DemoLoop } from "./DemoLoop";
 import { DialogTurn, TypingTurn } from "./DialogTurn";
 import type { Highlight } from "./highlight";
 import { ProcessTurn } from "./ProcessTurn";
@@ -44,6 +44,8 @@ interface Props {
   onCorrect: (turn: Turn, unit: string, value: string) => Promise<boolean>;
   /** идёт очистка чата: реплики уходят с ленты, затем стол пустеет */
   sweeping?: boolean;
+  /** «Попробовать на примере»: проверка готового документа со стола (кнопки нет, если примеров нет) */
+  onTrySample?: () => void;
 }
 
 /** Что умеет секретарь — как опись в деле: римская нумерация на полях, тонкие линейки, без плашек. */
@@ -55,12 +57,15 @@ const LEDGER: { title: string; text: string }[] = [
 ];
 const ROMAN = ["I", "II", "III", "IV", "V"];
 
-/** С чего начать — как оглавление: вопрос, отточие, что получится. */
-const STARTERS: [string, string][] = [
+/** С чего начать — как оглавление: вопрос, отточие, что получится. Вопросы по Положению приходят с сервера (они берутся из загруженного Положения). */
+const FORMS: [string, string][] = [
   ["Я хочу перевестись", "анкета и заявление"],
   ["Как к вам поступить?", "анкета на зачисление"],
-  ["Сколько дней рассматривается заявление?", "ответ по Положению"],
 ];
+const DEFAULT_ASK = "Сколько дней рассматривается заявление?";
+
+/** Первая строка «Можно начать так»: выделена, потому что на неё нажимает тот, кто не знает, с чего начать. */
+const FEATURED: [string, string] = ["Что ты умеешь?", "всё, что я могу, и с чего начать"];
 
 export function Thread(p: Props) {
   const end = useRef<HTMLDivElement>(null);
@@ -75,6 +80,9 @@ export function Thread(p: Props) {
     return () => clearTimeout(t);
   }, [lastId, lastPhase]);
 
+  const asks = (p.rules.length ? p.rules : [DEFAULT_ASK]).slice(0, 3);
+  const starters: [string, string][] = [...FORMS, ...asks.map((q): [string, string] => [q, "ответ по Положению"])];
+
   const typeTitle = (id: string) => p.types.find((t) => t.id === id)?.title ?? id;
   const owners = useMemo(() => cardOwners(p.turns), [p.turns]);
 
@@ -87,12 +95,9 @@ export function Thread(p: Props) {
   if (!p.turns.length) {
     return (
       <div className="thread-empty">
-        <p className="eyebrow">Онлайн-деканат · цифровой секретарь</p>
         <h1>
           Покажите документ — получите <em>ответ со ссылкой на пункт</em>
         </h1>
-        <p className="lead">Секретарь прочитает фото справки или заявления, заполнит карточку полей и честно скажет, чего не хватает — или что ответа нет. Нужно заявление — проведёт короткую анкету и соберёт документ.</p>
-        <DemoLoop />
         <ol className="ledger" aria-label="Что умеет секретарь">
           {LEDGER.map((c, i) => (
             <li key={c.title} style={{ ["--i" as string]: i }}>
@@ -110,8 +115,18 @@ export function Thread(p: Props) {
             Можно начать так
           </h2>
           <ul role="list">
-            {STARTERS.map(([q, hint], i) => (
-              <li key={q} style={{ ["--i" as string]: i }}>
+            <li className="featured" style={{ ["--i" as string]: 0 }}>
+              <button type="button" className="start-line" disabled={p.busy} onClick={() => p.onSay(FEATURED[0])}>
+                <span className="start-q">
+                  <Icon name="question" size={18} className="start-q-icon" />
+                  {FEATURED[0]}
+                </span>
+                <span className="start-hint">{FEATURED[1]}</span>
+                <Icon name="arrowRight" size={14} className="start-arrow" />
+              </button>
+            </li>
+            {starters.map(([q, hint], i) => (
+              <li key={q} style={{ ["--i" as string]: i + 1 }}>
                 <button type="button" className="start-line" disabled={p.busy} onClick={() => p.onSay(q)}>
                   <span className="start-q">«{q}»</span>
                   <span className="start-hint">{hint}</span>
@@ -120,6 +135,19 @@ export function Thread(p: Props) {
               </li>
             ))}
           </ul>
+          <div className="start-actions" role="group" aria-label="Или сразу">
+            <button type="button" className="start-act" disabled={p.busy} onClick={() => emit("pick-file")}>
+              <Icon name="attach" size={15} /> Проверить документ
+            </button>
+            {p.onTrySample && (
+              <button type="button" className="start-act" disabled={p.busy} onClick={p.onTrySample}>
+                <Icon name="doc" size={15} /> Попробовать на примере
+              </button>
+            )}
+            <button type="button" className="start-act" onClick={() => (location.hash = "#/status")}>
+              <Icon name="inbox" size={15} /> Статус обращения
+            </button>
+          </div>
         </section>
         {p.history.length > 0 && (
           <section className="hist" aria-labelledby="hist-title">

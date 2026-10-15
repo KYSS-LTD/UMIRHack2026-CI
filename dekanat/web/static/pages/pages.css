@@ -345,11 +345,15 @@ label small { color: var(--ink-3); font-weight: 400; }
 .chip.off { background: var(--surface-3); color: var(--ink-3); }
 
 .filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
-.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; gap: 2px; padding: 3px; border-radius: 18px; background: var(--surface-3); }
-.seg button { flex: none; }
-.seg button { padding: 6px 12px; border: 0; background: none; box-shadow: none; color: var(--ink-2); font-size: 13px; }
-.seg button:hover:not(:disabled) { background: var(--surface); transform: none; box-shadow: none; }
-.seg button[aria-pressed="true"] { background: var(--btn); color: var(--btn-ink); }
+.seg { position: relative; display: inline-flex; flex-wrap: wrap; max-width: 100%; gap: 2px; padding: 3px; border-radius: 18px; background: var(--surface-3); }
+.seg button { position: relative; z-index: 1; flex: none; }
+.seg button { padding: 6px 12px; border: 0; background: none; box-shadow: none; color: var(--ink-2); font-size: 13px; transition: color 240ms var(--glide), background-color 160ms; }
+.seg button:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--surface); transform: none; box-shadow: none; }
+.seg button[aria-pressed="true"] { background: none; color: var(--btn-ink); }
+/* ползунок под выбранным вариантом: едет, а не появляется (положение задаёт скрипт через --x --y --w --h) */
+.seg-thumb { position: absolute; left: 0; top: 0; width: var(--w, 0px); height: var(--h, 0px); transform: translate(var(--x, 0px), var(--y, 0px)); border-radius: 15px; background: var(--btn); pointer-events: none; transition: transform 420ms var(--glide), width 420ms var(--glide), height 420ms var(--glide), background-color 260ms, box-shadow 260ms; }
+.seg-thumb.no-motion { transition: none; }
+@media (prefers-reduced-motion: reduce) { .seg-thumb, .seg button { transition: none; } }
 .ocr-alert { margin: 0 0 18px; padding: 14px 18px; border-radius: var(--r-md); border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent); background: var(--danger-soft); color: var(--ink); animation: panel-in 420ms var(--glide) both; }
 .ocr-alert strong { display: block; margin-bottom: 4px; color: var(--danger); font-family: var(--serif); font-size: 17px; }
 .ocr-alert p { margin: 4px 0 0; font-size: 14px; }
@@ -493,7 +497,7 @@ button.danger.solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .item.ticket { position: relative; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 0 12px; padding: 13px 14px 13px 12px; border: 0; border-radius: 13px; cursor: pointer; transition: background 140ms; }
 .item.ticket:hover { background: var(--surface-2); }
 .item.ticket.on { background: var(--surface-2); }
-.item.ticket.on::before { content: ""; position: absolute; left: 0; top: 50%; width: 3px; height: 26px; border-radius: 0 3px 3px 0; background: var(--stamp); transform: translateY(-50%); }
+.item.ticket.on::before { content: ""; position: absolute; left: 0; top: 50%; width: 3px; height: 26px; border-radius: 0 3px 3px 0; background: var(--c, var(--stamp)); transform: translateY(-50%); }
 .item.ticket.picked { background: color-mix(in srgb, var(--lamp) 11%, transparent); }
 .item.ticket:focus-visible { outline: none; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--link) 55%, transparent); }
 .ticket h3 { position: relative; overflow: hidden; font-size: 15.5px; font-weight: 600; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
@@ -508,7 +512,7 @@ button.danger.solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .ticket:hover .t-lead .tick, .ticket:focus-within .t-lead .tick, .ticket.picked .t-lead .tick, .items.selecting .t-lead .tick { opacity: 1; pointer-events: auto; }
 .ticket:hover .t-lead .dot, .ticket:focus-within .t-lead .dot, .ticket.picked .t-lead .dot, .items.selecting .t-lead .dot { opacity: 0; }
 .dot { display: inline-block; flex: none; width: 9px; height: 9px; border-radius: 50%; }
-.dot.new { background: var(--stamp); } .dot.in_progress { background: var(--lamp); } .dot.done { background: var(--ok); } .dot.rejected { background: var(--none); }
+.dot.new { background: var(--st-new); } .dot.in_progress { background: var(--st-work); } .dot.done { background: var(--st-done); } .dot.rejected { background: var(--st-rej); }
 .ticket.closed .dot { opacity: .75; }
 .t-side { display: grid; justify-items: end; align-items: center; min-width: 40px; }
 .t-side > * { grid-area: 1 / 1; }
@@ -563,9 +567,35 @@ button.danger.solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .case-body { flex: 1; min-height: 0; overflow-y: auto; padding: 22px 32px 48px; overscroll-behavior: contain; animation: row-in 320ms var(--glide) both; }
 .case-status .seg.calm { display: flex; width: 100%; }
 .seg.calm { padding: 3px; border-radius: 13px; background: var(--surface-2); }
-.seg.calm button { flex: 1; padding: 8px 10px; border-radius: 10px; color: var(--ink-3); font-size: 13.5px; font-weight: 600; transition: background 160ms, color 160ms, box-shadow 200ms; }
-.seg.calm button:hover:not(:disabled) { background: transparent; color: var(--ink); }
-.seg.calm button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line), var(--shadow-1); }
+.seg.calm button { flex: 1; padding: 8px 10px; border-radius: 10px; color: var(--ink-3); font-size: 13.5px; font-weight: 600; }
+.seg.calm button:hover:not(:disabled):not([aria-pressed="true"]) { background: transparent; color: var(--ink); }
+.seg.calm button[aria-pressed="true"] { background: none; color: var(--ink); }
+.seg.calm .seg-thumb { border-radius: 10px; background: var(--surface); box-shadow: 0 0 0 1px var(--line), var(--shadow-1); }
+
+/* ---------- цвета статусов обращений: новое — синий, в работе — жёлтый, обработано — зелёный, отклонено — красный ---------- */
+:root {
+  --st-new: light-dark(#2a6bc4, #7fb0ff);       --st-new-ink: light-dark(#1f56a3, #a9c8ff);       --st-new-soft: light-dark(rgb(42 107 196 / .12), rgb(127 176 255 / .18));
+  --st-work: light-dark(#e0a410, #ffc94d);      --st-work-ink: light-dark(#8a5a00, #ffd978);      --st-work-soft: light-dark(rgb(224 164 16 / .18), rgb(255 201 77 / .2));
+  --st-done: light-dark(#1c8a56, #62e2a4);      --st-done-ink: light-dark(#14693f, #8cf0bf);      --st-done-soft: light-dark(rgb(28 138 86 / .13), rgb(98 226 164 / .18));
+  --st-rej: light-dark(#c63a25, #ff8468);       --st-rej-ink: light-dark(#a02a18, #ff9d86);       --st-rej-soft: light-dark(rgb(198 58 37 / .12), rgb(255 132 104 / .18));
+}
+[data-st="new"] { --c: var(--st-new); --c-ink: var(--st-new-ink); --c-soft: var(--st-new-soft); }
+[data-st="in_progress"] { --c: var(--st-work); --c-ink: var(--st-work-ink); --c-soft: var(--st-work-soft); }
+[data-st="done"] { --c: var(--st-done); --c-ink: var(--st-done-ink); --c-soft: var(--st-done-soft); }
+[data-st="rejected"] { --c: var(--st-rej); --c-ink: var(--st-rej-ink); --c-soft: var(--st-rej-soft); }
+.ticket.st-new { --c: var(--st-new); } .ticket.st-in_progress { --c: var(--st-work); } .ticket.st-done { --c: var(--st-done); } .ticket.st-rejected { --c: var(--st-rej); }
+/* переключатель статуса в карточке: выбранный окрашен в цвет статуса */
+.seg.calm .seg-thumb[data-st] { background: var(--c-soft); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--c) 60%, transparent), var(--shadow-1); }
+.seg.calm button[aria-pressed="true"][data-st] { color: var(--c-ink); }
+.seg.calm button[data-st]:not([aria-pressed="true"])::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--c); vertical-align: 1px; opacity: .85; }
+.seg.calm button[data-st][aria-pressed="true"]::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--c); vertical-align: 1px; }
+/* вкладки списка: точка цвета перед названием, цветная черта у выбранной */
+.t-tabs button[data-st]::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--c); vertical-align: 1px; }
+.t-tabs button[data-st][aria-pressed="true"] { color: var(--c-ink); }
+.t-tabs button[data-st][aria-pressed="true"]::after { background: var(--c); }
+.t-tabs button[data-st="new"] .n, .t-tabs button[data-st="in_progress"] .n { padding: 0 7px; border-radius: var(--r-pill); background: var(--c-soft); color: var(--c-ink); opacity: 1; font-weight: 700; }
+/* панель выбора нескольких обращений (тёмная): цветная точка у кнопок статуса */
+.bulk-st[data-st]::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--c); vertical-align: 1px; }
 .case-sec { margin-top: 34px; }
 .sec-line { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .sec-title { margin: 0; color: var(--ink-3); font-family: var(--font); font-size: 13px; font-weight: 650; letter-spacing: 0; }

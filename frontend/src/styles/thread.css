@@ -7,22 +7,7 @@
   .thread-empty h1 em { font-style: italic; color: var(--stamp); position: relative; }
   .thread-empty h1 em::after { content: ""; position: absolute; left: 0; right: 0; bottom: -2px; height: 8px; background: var(--lamp-soft); z-index: -1; transform-origin: left; animation: underline 900ms 700ms var(--ease) both; }
   @keyframes underline { from { transform: scaleX(0); } }
-  .lead { color: var(--ink-2); font-size: var(--fs-md); max-width: 46ch; }
 
-  .demo { position: relative; display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 18px; align-items: center; padding: 18px; border-radius: var(--r-lg); background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; }
-  .demo-paper { position: relative; display: grid; gap: 7px; align-content: start; padding: 14px 12px 12px; height: 168px; border-radius: 8px; background: var(--paper); box-shadow: var(--shadow-paper); overflow: hidden; animation: chip-in 600ms var(--spring) both; transform: rotate(-2deg); }
-  .demo-line { height: 6px; border-radius: 3px; background: #d9d2c0; }
-  .w80 { width: 80%; } .w55 { width: 55%; } .w90 { width: 90%; } .w40 { width: 40%; } .w70 { width: 70%; }
-  .demo-beam { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--lamp); box-shadow: 0 0 16px 6px color-mix(in srgb, var(--lamp) 50%, transparent); animation: scan 2.2s 300ms ease-in-out 1 both; }
-  @keyframes scan { from { top: 0; } to { top: 100%; opacity: 0; } }
-  .demo-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 6px; }
-  .demo-field { padding: 2px 6px; border-radius: 5px; font-size: 10px; font-weight: 700; color: #14213a; background: #e3f3e9; opacity: 0; animation: field-pop 480ms var(--spring) forwards; }
-  .demo-field.miss { background: #fbe6e1; color: #a8321f; }
-  @keyframes field-pop { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: none; } }
-  .demo-side { display: grid; gap: 12px; justify-items: start; min-width: 0; }
-  .demo-q { max-width: 100%; overflow-wrap: anywhere; padding: 8px 14px; border-radius: 16px 16px 16px 4px; background: var(--btn); color: var(--btn-ink); font-size: var(--fs-sm); font-weight: 600; animation: chip-in 500ms var(--spring) both; }
-  .demo-stamp { opacity: 0; animation: field-pop 400ms 2.2s var(--ease) forwards; }
-  .demo-stamp .stamp { transform: rotate(-6deg) scale(.82); transform-origin: left center; }
 
   /* опись в деле: римские номера на полях за красной линией, линейки прорисовываются по очереди */
   .ledger { display: grid; padding: 0; margin: 0; list-style: none; border-top: 1px solid var(--line-strong); background: linear-gradient(var(--stamp-soft), var(--stamp-soft)) 52px 0 / 1px 100% no-repeat; }
@@ -50,6 +35,19 @@
   .start-line:hover:not(:disabled) .start-arrow, .start-line:focus-visible .start-arrow { opacity: 1; transform: none; }
   .start-line:focus-visible { outline: none; }
   .start-line:disabled { opacity: .5; cursor: not-allowed; }
+  /* «Что ты умеешь?» — первая строка списка: подчёркнута всегда, а не только при наведении, и с кружком-вопросом */
+  .starts li.featured .start-line { padding-top: 13px; padding-bottom: 14px; color: var(--stamp); }
+  .starts li.featured .start-line::after { transform: none; background: var(--lamp-soft); height: 100%; bottom: -1px; z-index: -1; border-radius: var(--r-sm); }
+  .starts li.featured .start-q { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-style: normal; font-family: var(--font); font-size: var(--fs-md); }
+  .starts li.featured .start-q-icon { flex: none; color: var(--stamp); }
+  .starts li.featured .start-hint { color: var(--ink-2); }
+  .starts li.featured .start-arrow { opacity: 1; transform: none; }
+  .starts li.featured .start-line:hover:not(:disabled)::after { background: var(--lamp-soft); }
+  /* действия — не фразы, а кнопки: сразу что-то сделать, не набирая вопрос */
+  .start-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: var(--s-3); }
+  .start-act { display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; border-radius: var(--r-pill); border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-2); font-size: var(--fs-sm); font-weight: 650; transition: transform var(--t-base) var(--spring), border-color var(--t-fast), color var(--t-fast); }
+  .start-act:hover:not(:disabled), .start-act:focus-visible { transform: translateY(-2px); border-color: var(--lamp); color: var(--ink); }
+  .start-act:disabled { opacity: .5; cursor: not-allowed; }
 
   .hist { display: grid; gap: 8px; }
   .hist-head { display: flex; justify-content: space-between; align-items: baseline; }

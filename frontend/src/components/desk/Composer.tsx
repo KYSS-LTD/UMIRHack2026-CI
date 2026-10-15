@@ -2,7 +2,6 @@ import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, us
 import { useObjectUrl } from "../../hooks/useObjectUrl";
 import { ACCEPT, validateFile } from "../../lib/files";
 import { formatBytes } from "../../lib/format";
-import { SUGGESTION_TITLES } from "../../lib/suggestions";
 import type { DocTypeSummary, Suggestion } from "../../types";
 import { Icon } from "../../ui/Icon";
 import { TypePicker } from "./TypePicker";
@@ -30,6 +29,8 @@ interface Props {
   recall?: string;
   /** своя подсказка-заглушка (например, пока идёт анкета) вместо сменяющихся вопросов */
   placeholder?: string;
+  /** документ в поле уже проверен: подсказка предлагает уточнить, а не «нажмите Проверить» */
+  checked?: boolean;
 }
 
 const MAX_LEN = 600;
@@ -67,8 +68,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(p, r
     else p.onFile(f);
   };
 
+  // подсказка под текущий шаг: что делать сейчас, а не перечень клавиш
+  const typing = p.question.trim().length > 0;
+  const step = p.busy ? "Идёт проверка — остановить можно кнопкой справа" : !p.file && !typing ? "Приложите документ или задайте вопрос" : p.file && !typing ? (p.checked ? "Документ проверен — можно уточнить вопросом" : "Вопрос необязателен — нажмите «Проверить»") : null;
   const placeholder = p.placeholder ?? (p.suggestions.length ? p.suggestions[ph % p.suggestions.length]!.text : "Задайте вопрос по документу или по Положению");
-  const groups = (["check", "field", "rules", "form"] as const).map((k) => [k, p.suggestions.filter((s) => s.kind === k)] as const).filter(([, l]) => l.length);
 
   return (
     <form
@@ -79,17 +82,6 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(p, r
         if (canRun && !p.busy) p.onSubmit();
       }}
     >
-      <div className="suggest-strip" role="group" aria-label="Подсказки вопросов">
-        {groups.flatMap(([kind, list]) =>
-          list.map((s, i) => (
-            <button key={`${kind}:${s.text}`} type="button" className={`sg kind-${kind}`} disabled={p.busy} title={SUGGESTION_TITLES[kind]} style={{ ["--i" as string]: i }} onClick={() => (p.onQuestion(s.text), area.current?.focus())}>
-              <i aria-hidden="true" />
-              {s.text}
-            </button>
-          )),
-        )}
-      </div>
-
       {p.file && (
         <div className="dock-file">
           {thumb ? <img src={thumb} alt="" /> : <span className="pdf-mini">PDF</span>}
@@ -142,7 +134,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(p, r
         <TypePicker value={p.docType} types={p.types} disabled={p.busy} onChange={p.onDocType} />
         <span className="grow" />
         <span id="dock-hint" className="dock-hint faint">
-          {p.question.length > MAX_LEN - 80 ? <span className="tabnum">{p.question.length}/{MAX_LEN}</span> : <><kbd>Enter</kbd> — отправить<span className="dock-hint-more">, <kbd>Shift</kbd>+<kbd>Enter</kbd> — новая строка</span></>}
+          {p.question.length > MAX_LEN - 80 ? <span className="tabnum">{p.question.length}/{MAX_LEN}</span> : (step ?? <><kbd>Enter</kbd> — отправить<span className="dock-hint-more">, <kbd>Shift</kbd>+<kbd>Enter</kbd> — новая строка</span></>)}
         </span>
         {p.busy ? (
           <button type="button" className="send stop" onClick={p.onCancel} aria-label="Остановить проверку">
@@ -150,7 +142,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(p, r
             <Icon name="stop" size={14} />
           </button>
         ) : (
-          <button type="submit" className="send" disabled={!canRun} aria-label="Проверить">
+          <button type="submit" className="send" disabled={!canRun} aria-label="Проверить" title={canRun ? "Проверить (Enter)" : "Сначала приложите документ или напишите вопрос"}>
             <Icon name="send" size={18} />
           </button>
         )}

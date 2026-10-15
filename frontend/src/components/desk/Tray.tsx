@@ -1,21 +1,17 @@
 import { useRef } from "react";
-import { api } from "../../api";
 import { ACCEPT, validateFile } from "../../lib/files";
-import type { SampleItem } from "../../types";
 import { Icon } from "../../ui/Icon";
 
 interface Props {
   maxMb: number;
-  samples: SampleItem[];
   dragging: boolean;
   busy: boolean;
   onFile: (f: File) => void;
-  onSample: (s: SampleItem) => void;
   onError: (message: string) => void;
 }
 
-/** Пустой стол: лоток для документа и «примеры на столе». Принимает файл по клику, перетаскиванию и из буфера. */
-export function Tray({ maxMb, samples, dragging, busy, onFile, onSample, onError }: Props) {
+/** Пустой стол: лоток для документа. Принимает файл по клику, перетаскиванию и из буфера. */
+export function Tray({ maxMb, dragging, busy, onFile, onError }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
 
@@ -61,23 +57,6 @@ export function Tray({ maxMb, samples, dragging, busy, onFile, onSample, onError
         </button>
       </div>
 
-      {samples.length > 0 && (
-        <div className="samples" aria-label="Примеры документов">
-          <p className="eyebrow">Или возьмите пример со стола</p>
-          <ul role="list">
-            {samples.map((s, i) => (
-              <li key={s.file} style={{ ["--i" as string]: i, ["--tilt" as string]: `${(i % 2 ? 1 : -1) * (1 + (i % 3))}deg` }}>
-                <button type="button" className="sample" disabled={busy} onClick={() => onSample(s)} title={s.title}>
-                  <span className="sample-paper">
-                    <img src={api.sampleUrl(s.file)} alt="" loading="lazy" draggable={false} />
-                  </span>
-                  <span className="sample-title">{s.title}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </section>
   );
 }

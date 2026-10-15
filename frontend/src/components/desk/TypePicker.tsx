@@ -70,6 +70,7 @@ export function TypePicker({ value, types, disabled, onChange }: Props) {
         aria-expanded={open}
         aria-controls={listId}
         aria-label={`Тип документа: ${current.title}`}
+        title="Тип документа: по умолчанию определяется сам, при необходимости выберите вручную"
         onClick={() => setOpen((o) => !o)}
       >
         <Icon name={value === AUTO_TYPE ? "doc" : "layers"} size={15} />

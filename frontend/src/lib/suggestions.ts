@@ -15,13 +15,6 @@ const AUTO_SUGGESTIONS: Suggestion[] = [
 /** Анкета: после проверенной справки её поля подставляются в ответы. */
 const FORM_SUGGESTION: Suggestion = { kind: "form", text: "Я хочу перевестись" };
 
-export const SUGGESTION_TITLES: Record<Suggestion["kind"], string> = {
-  check: "Проверка документа",
-  field: "Значение из документа",
-  rules: "По Положению",
-  form: "Анкета и готовое заявление",
-};
-
 const lcFirst = (s: string) => (!s || /^[А-ЯЁA-Z]{2}/.test(s) ? s : s[0]!.toLowerCase() + s.slice(1));
 
 /**

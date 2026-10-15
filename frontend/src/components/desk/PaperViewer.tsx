@@ -52,11 +52,37 @@ interface View {
 
 const MAX_ZOOM = 9;
 
+const TIP_KEY = "dekanat.viewerTip";
+const tipSeen = (): boolean => {
+  try {
+    return localStorage.getItem(TIP_KEY) === "1";
+  } catch {
+    return false; // без хранилища подсказка просто показывается каждый раз
+  }
+};
+const markTipSeen = () => {
+  try {
+    localStorage.setItem(TIP_KEY, "1");
+  } catch {
+    /* не страшно */
+  }
+};
+
 export function PaperViewer(p: Props) {
   const reduced = useReducedMotion();
   const toast = useToast();
   const imgRef = useRef<HTMLImageElement>(null);
   const [enhance, setEnhance] = useState(false);
+  const [tip, setTip] = useState(() => !tipSeen());
+  const dismissTip = useCallback(() => {
+    setTip(false);
+    markTipSeen();
+  }, []);
+  useEffect(() => {
+    if (!tip) return;
+    const t = setTimeout(dismissTip, 9000); // подсказка не висит вечно, даже если снимок не трогали
+    return () => clearTimeout(t);
+  }, [tip, dismissTip]);
   const [showText, setShowText] = useState(false);
   const stage = useRef<HTMLDivElement>(null);
   const plane = useRef<HTMLDivElement>(null);
@@ -168,6 +194,7 @@ export function PaperViewer(p: Props) {
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
+    dismissTip();
     stopFly.current?.();
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -374,6 +401,12 @@ export function PaperViewer(p: Props) {
           }
           onClose={() => setShowText(false)}
         />
+      )}
+
+      {tip && !p.scanning && (
+        <p className="viewer-tip" role="note">
+          Колесо мыши — масштаб, двойной щелчок — приблизить место
+        </p>
       )}
 
       <p className="viewer-meta tabnum" aria-label="Сведения о листе">

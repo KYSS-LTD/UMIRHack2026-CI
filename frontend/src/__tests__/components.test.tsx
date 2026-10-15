@@ -107,13 +107,6 @@ describe("Composer", () => {
     expect(screen.getByRole("button", { name: "Проверить" })).toBeEnabled();
   });
 
-  it("fills the question from a suggestion", async () => {
-    const onQuestion = vi.fn();
-    render(<Composer {...base} onQuestion={onQuestion} />);
-    await userEvent.click(screen.getByRole("button", { name: "Какая форма обучения?" }));
-    expect(onQuestion).toHaveBeenCalledWith("Какая форма обучения?");
-  });
-
   it("sends on Enter but not on Shift+Enter", () => {
     const onSubmit = vi.fn();
     render(<Composer {...base} question="Что в документе?" onSubmit={onSubmit} />);
@@ -133,6 +126,26 @@ describe("Composer", () => {
     await userEvent.click(screen.getByRole("button", { name: /Тип документа/ }));
     await userEvent.click(screen.getByRole("option", { name: /Другой документ/ }));
     expect(onDocType).toHaveBeenCalledWith("generic");
+  });
+
+  it("says what to do at the current step", () => {
+    const { rerender } = render(<Composer {...base} />);
+    expect(screen.getByText("Приложите документ или задайте вопрос")).toBeInTheDocument();
+    rerender(<Composer {...base} file={new File(["x"], "a.png", { type: "image/png" })} />);
+    expect(screen.getByText(/Вопрос необязателен/)).toBeInTheDocument();
+    const checked = new File(["x"], "a.png", { type: "image/png" });
+    rerender(<Composer {...base} file={checked} checked />);
+    expect(screen.getByText("Документ проверен — можно уточнить вопросом")).toBeInTheDocument(); // «нажмите Проверить» после проверки не нужно
+    rerender(<Composer {...base} question="Что в документе?" />);
+    expect(screen.queryByText(/Вопрос необязателен/)).not.toBeInTheDocument();
+    expect(screen.getByText(/отправить/)).toBeInTheDocument(); // с текстом вопроса — привычная подсказка про Enter
+  });
+
+  it("explains the send button, also when it is not available yet", () => {
+    const { rerender } = render(<Composer {...base} />);
+    expect(screen.getByRole("button", { name: "Проверить" })).toHaveAttribute("title", "Сначала приложите документ или напишите вопрос");
+    rerender(<Composer {...base} question="Сколько дней?" />);
+    expect(screen.getByRole("button", { name: "Проверить" })).toHaveAttribute("title", "Проверить (Enter)");
   });
 
   it("offers to stop while busy", async () => {
@@ -269,6 +282,14 @@ describe("FieldsCard", () => {
     expect(screen.getByText("Иванов Иван")).toBeInTheDocument();
     expect(screen.getByText("не найдено")).toBeInTheDocument();
     expect(screen.getByText("из 2")).toBeInTheDocument();
+  });
+
+  it("tells that a field can be clicked, and about the pencil only when the card is editable", () => {
+    const { rerender } = render(<FieldsCard fields={[field({})]} activeId={null} onHover={noop} onSelect={noop} />);
+    expect(screen.getByText(/Нажмите на поле — покажу это место на снимке/)).toBeInTheDocument();
+    expect(screen.queryByText(/Прочитано неверно/)).not.toBeInTheDocument();
+    rerender(<FieldsCard fields={[field({})]} activeId={null} onHover={noop} onSelect={noop} onCorrect={async () => true} />);
+    expect(screen.getByText(/Прочитано неверно\? Нажмите на карандаш/)).toBeInTheDocument();
   });
 
   it("highlights on hover and selects on click", async () => {

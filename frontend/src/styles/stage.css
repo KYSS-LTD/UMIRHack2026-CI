@@ -1,10 +1,11 @@
-/* Стол с документом: лоток, примеры и просмотрщик со сканирующим лучом. */
+/* Стол с документом: лоток и просмотрщик со сканирующим лучом. */
 @layer stage {
   /* ---------- пустой лоток ---------- */
-  .tray { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-5); justify-items: center; align-content: center; min-height: 100%; padding: 40px 28px 28px; text-align: center; }
+  .tray { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-5); justify-items: center; align-content: center; min-height: 100%; padding: 40px 28px; text-align: center; }  /* сверху и снизу поровну: содержимое по центру лотка, пунктир не прижимается ко дну */
   .tray > * { min-width: 0; max-width: 100%; }
   .tray-border { position: absolute; inset: 14px; width: calc(100% - 28px); height: calc(100% - 28px); pointer-events: none; }
-  .tray-border rect { x: 1.5px; y: 1.5px; width: calc(100% - 3px); height: calc(100% - 3px); rx: 26px; fill: none; stroke: light-dark(rgb(20 33 58 / .3), rgb(255 255 255 / .22)); stroke-width: 2; stroke-dasharray: 9 11; animation: march 1.6s linear infinite; transition: stroke var(--t-base); }
+  .tray-border rect { x: 1.5px; y: 1.5px; width: calc(100% - 3px); height: calc(100% - 3px); rx: 26px; fill: none; stroke: light-dark(rgb(20 33 58 / .3), rgb(255 255 255 / .22)); stroke-width: 2; stroke-dasharray: 9 11; animation: march 1.6s linear infinite; animation-play-state: paused; transition: stroke var(--t-base); }
+  .tray:hover .tray-border rect { animation-play-state: running; } /* пунктир «идёт» только под курсором */
   .tray.is-over .tray-border rect { stroke: var(--lamp); stroke-dasharray: none; stroke-width: 3; animation: none; }
   @keyframes march { to { stroke-dashoffset: -40; } }
 
@@ -23,15 +24,6 @@
   .tray-actions { justify-content: center; }
   .tray-actions .btn { padding: 11px 20px; }
 
-  .samples { display: grid; gap: 6px; width: 100%; max-width: 640px; margin-top: 4px; }
-  .samples ul { display: flex; gap: 16px; overflow-x: auto; padding: 18px 14px 26px; margin: 0 -14px; list-style: none; scroll-snap-type: x proximity; mask-image: linear-gradient(90deg, transparent, #000 22px, #000 calc(100% - 22px), transparent); }
-  .samples li { flex: none; scroll-snap-align: center; animation: chip-in 640ms var(--spring) both; animation-delay: calc(500ms + var(--i) * 70ms); }
-  .sample { display: grid; gap: 8px; justify-items: center; width: 104px; color: var(--ink-2); font-size: 11.5px; font-weight: 600; line-height: 1.25; }
-  .sample-paper { display: block; width: 96px; height: 130px; border-radius: 6px; overflow: hidden; background: var(--paper); box-shadow: var(--shadow-paper); transform: rotate(var(--tilt, 0deg)); transition: transform 460ms var(--spring), box-shadow var(--t-base); }
-  .sample-paper img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
-  .sample:hover:not(:disabled) .sample-paper { transform: translateY(-10px) rotate(0deg) scale(1.08); box-shadow: 0 2px 4px rgb(20 33 58 / .12), 0 24px 40px rgb(20 33 58 / .3); }
-  .sample:disabled { opacity: .5; cursor: not-allowed; }
-  .sample-title { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 
   /* ---------- просмотрщик ---------- */
   .viewer { position: absolute; inset: 0; display: flex; flex-direction: column; }
@@ -88,6 +80,8 @@
   .tool.wide { padding: 0 12px; }
   .tool.on { background: var(--btn); color: var(--btn-ink); }
   .zoom { min-width: 46px; text-align: center; font-size: var(--fs-sm); color: var(--ink-2); font-weight: 650; }
+  /* подсказка про колесо и двойной щелчок: сверху, исчезает при первом действии или через несколько секунд */
+  .viewer-tip { position: absolute; z-index: 6; left: 50%; top: 14px; transform: translateX(-50%); max-width: calc(100% - 32px); margin: 0; padding: 6px 14px; border-radius: var(--r-pill); background: var(--btn); color: var(--btn-ink); font-size: var(--fs-sm); font-weight: 600; text-align: center; box-shadow: var(--shadow-2); animation: chip-in 500ms 600ms var(--spring) both; pointer-events: none; }
   .viewer-meta { position: absolute; z-index: 5; left: 16px; bottom: 22px; margin: 0; padding: 4px 10px; border-radius: var(--r-pill); background: var(--glass); border: 1px solid var(--line); color: var(--ink-3); font-size: 11.5px; backdrop-filter: blur(8px); pointer-events: none; }
   @media (max-width: 899px) { .viewer-meta { display: none; } }
   /* панель «Распознанный текст» */

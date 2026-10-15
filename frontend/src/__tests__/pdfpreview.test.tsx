@@ -41,6 +41,58 @@ describe("usePagePreview", () => {
   });
 });
 
+describe("PaperViewer hint about the wheel and the double click", () => {
+  const props = {
+    src: "blob:x",
+    pages: null as PagePreview[] | null,
+    fileName: "a.png",
+    pdf: false,
+    scanning: false,
+    progress: 0,
+    stageLabel: "",
+    highlight: null,
+    hover: null,
+    allBoxes: [],
+    showAll: false,
+    revealKey: "t1:done",
+    onToggleAll: () => {},
+    onClear: () => {},
+    docs: [],
+    activeDoc: 0,
+    busy: false,
+    onSelectDoc: () => {},
+    onAnother: () => {},
+  };
+  const show = () =>
+    render(
+      <ToastProvider>
+        <PaperViewer {...props} />
+      </ToastProvider>,
+    );
+
+  beforeEach(() => localStorage.removeItem("dekanat.viewerTip"));
+
+  it("shows the hint until the person touches the sheet, then remembers it", () => {
+    const first = show();
+    expect(screen.getByRole("note")).toHaveTextContent("Колесо мыши — масштаб, двойной щелчок — приблизить место");
+    fireEvent.pointerDown(screen.getByRole("application"), { button: 0, pointerId: 1 });
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    expect(localStorage.getItem("dekanat.viewerTip")).toBe("1");
+    first.unmount();
+    show();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument(); // в следующий раз уже не мешает
+  });
+
+  it("does not show the hint while the document is being read", () => {
+    render(
+      <ToastProvider>
+        <PaperViewer {...props} scanning />
+      </ToastProvider>,
+    );
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+});
+
 describe("PaperViewer keeps the sheet on the desk", () => {
   const base = {
     src: null as string | null,

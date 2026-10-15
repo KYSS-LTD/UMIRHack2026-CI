@@ -10,6 +10,7 @@ import { Thread } from "../components/desk/Thread";
 import { NavBar } from "../components/NavBar";
 import { cardOwners, trimTurns, type Turn, useDesk } from "../hooks/useDesk";
 import { isQuizState, markCorrected, mergeCorrection, optionText, parseReview, splitQuestion } from "../lib/dialog";
+import { useBus } from "../lib/bus";
 import { followUps } from "../lib/followups";
 import { aboutRegulation, suggestionsFor } from "../lib/suggestions";
 import type { AnalysisResult, DialogInfo, DialogReply, FieldResult } from "../types";
@@ -298,6 +299,55 @@ describe("Thread empty state", () => {
     render(<Thread {...props} onSay={onSay} />);
     await userEvent.click(screen.getByRole("button", { name: /Я хочу перевестись/ }));
     expect(onSay).toHaveBeenCalledWith("Я хочу перевестись");
+  });
+
+  it("puts «Что ты умеешь?» first among the starters, highlighted, and asks the secretary about it", async () => {
+    const onSay = vi.fn();
+    render(<Thread {...props} onSay={onSay} />);
+    const starters = screen.getByRole("heading", { name: "Можно начать так" }).closest("section")!;
+    const items = within(starters).getAllByRole("listitem");
+    expect(items).toHaveLength(4);
+    expect(items[0]).toHaveClass("featured");
+    expect(items[0]).toHaveTextContent("Что ты умеешь?");
+    await userEvent.click(within(items[0]!).getByRole("button"));
+    expect(onSay).toHaveBeenCalledWith("Что ты умеешь?");
+  });
+
+  it("lists the regulation questions the server suggests, at most three, and falls back to the usual one", () => {
+    const { rerender } = render(<Thread {...props} rules={["Сколько дней рассматривается заявление?", "Нужна ли медицинская справка при академическом отпуске?", "Сколько стоит обучение?", "Лишний вопрос?"]} />);
+    const starters = screen.getByRole("heading", { name: "Можно начать так" }).closest("section")!;
+    expect(within(starters).getAllByRole("listitem")).toHaveLength(1 + 2 + 3); // «Что ты умеешь?», две анкеты, три вопроса по Положению
+    expect(within(starters).queryByText(/Лишний вопрос/)).not.toBeInTheDocument();
+    expect(within(starters).getByText(/Нужна ли медицинская справка/)).toBeInTheDocument();
+    rerender(<Thread {...props} rules={[]} />);
+    expect(within(screen.getByRole("heading", { name: "Можно начать так" }).closest("section")!).getAllByRole("listitem")).toHaveLength(4);
+  });
+
+  it("offers actions as buttons: check a document, try an example, open the status page", async () => {
+    const onTrySample = vi.fn();
+    const picked = vi.fn();
+    function Listen() {
+      useBus("pick-file", picked);
+      return null;
+    }
+    render(
+      <>
+        <Listen />
+        <Thread {...props} onTrySample={onTrySample} />
+      </>,
+    );
+    const actions = screen.getByRole("group", { name: "Или сразу" });
+    await userEvent.click(within(actions).getByRole("button", { name: /Проверить документ/ }));
+    expect(picked).toHaveBeenCalledTimes(1);
+    await userEvent.click(within(actions).getByRole("button", { name: /Попробовать на примере/ }));
+    expect(onTrySample).toHaveBeenCalledTimes(1);
+    await userEvent.click(within(actions).getByRole("button", { name: /Статус обращения/ }));
+    expect(location.hash).toBe("#/status");
+  });
+
+  it("hides «Попробовать на примере» when there are no examples", () => {
+    render(<Thread {...props} />);
+    expect(screen.queryByRole("button", { name: /Попробовать на примере/ })).not.toBeInTheDocument();
   });
 
   it("does not clutter the thread with storage notes", () => {
