@@ -425,9 +425,11 @@ class TelegramBot:
             drawn = draw_overlay(res.original_pages[p], page_items, p)
             ok, buf = cv2.imencode(".jpg", drawn, [cv2.IMWRITE_JPEG_QUALITY, 85])
             if ok:
-                self.api.send_photo(u["tg_id"], buf.tobytes(), "Найденное подсвечено: зелёным — поля карточки, оранжевым — источник ответа.", "highlight.jpg")
+                found = sum(len(s.boxes) for s in res.answer.sources)
+                caption = (f"Найдено мест: {found} — они пронумерованы." if found > 1 else "Найденное подсвечено: зелёным — поля карточки, оранжевым — источник ответа.")
+                self.api.send_photo(u["tg_id"], buf.tobytes(), caption, "highlight.jpg")
             asked = [b for s in res.answer.sources for b in s.boxes if b.page == p] or [b for b, _, _ in page_items]  # крупно — то, о чём спросили
-            zoom = self._zoom(drawn, asked) if asked else None
+            zoom = self._zoom(drawn, asked) if 0 < len(asked) <= 3 else None  # крупный план — для одного-двух мест; разбросанные вхождения в один кадр не собрать
             if zoom:
                 self.api.send_photo(u["tg_id"], zoom, "Крупно", "zoom.jpg")
 

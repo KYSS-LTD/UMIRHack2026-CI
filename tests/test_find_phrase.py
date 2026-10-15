@@ -163,3 +163,48 @@ def test_the_count_is_declined_correctly():
     for n, word in [(2, "раза"), (3, "раза"), (4, "раза"), (5, "раз"), (11, "раз"), (12, "раз"), (21, "раз"), (22, "раза")]:
         a = qa().answer("Где в документе слово «договор»?", page("\n".join(["Договор"] * n)))  # n строк с одним словом
         assert a.debug["matches"] == n and f"встречается {n} {word}" in a.text, (n, a.text)  # при n > 8 подсвечены первые 8, но счёт полный
+
+
+# ============================================================================ подсветка: подписи и подозрительные рамки
+def test_a_short_word_never_gets_a_line_wide_box():
+    """У слова из двух букв рамка «на всю строку» — сбой границ слова в OCR: такое место не подсвечивается."""
+    pg = page(ORDER)[0]
+    target = next(w for row in pg.rows for w in row.words if w.text == "по")
+    target.x0, target.x1 = 20.0, 1150.0  # OCR «растянул» слово на всю строку
+    a = qa().answer("покажи слово по", [pg])
+    boxes = [b for s in a.sources for b in s.boxes]
+    assert all((b.x1 - b.x0) < 400 for b in boxes), "растянутая рамка не должна попасть на снимок"
+
+
+def test_a_normal_box_of_the_same_word_is_kept():
+    a = qa().answer("покажи слово оповещения", page(ORDER))
+    assert a.verdict == "ok" and len(a.sources[0].boxes) == 1 and (a.sources[0].boxes[0].x1 - a.sources[0].boxes[0].x0) < 200
+
+
+def test_repeated_matches_are_numbered_and_labels_do_not_overlap():
+    from dekanat.highlight import draw_overlay, overlay_items
+    from dekanat.models import Answer, Box, Source
+
+    boxes = [Box(100 + 60 * i, 200, 150 + 60 * i, 224, 0) for i in range(5)]  # пять мест вплотную: длинные одинаковые подписи слиплись бы
+    ans = Answer("ok", "x", "document", [Source("document", "found", "найденное место", "x", boxes)])
+    items = overlay_items([], ans)
+    assert [label for _, label, _ in items] == ["1", "2", "3", "4", "5"]
+    one = overlay_items([], Answer("ok", "x", "document", [Source("document", "found", "найденное место", "x", boxes[:1])]))
+    assert [label for _, label, _ in one] == ["источник ответа"]  # одно место — понятная подпись, без номера
+    img = draw_overlay(np.full((600, 800, 3), 255, np.uint8), items, 0)
+    assert img.shape == (600, 800, 3)
+
+
+def test_labels_are_not_stacked_on_each_other():
+    from dekanat.highlight import PALETTE, draw_overlay
+    from dekanat.models import Box
+
+    base = np.full((600, 900, 3), 255, np.uint8)
+    # два соседних слова с длинными подписями: без защиты плашки легли бы друг на друга
+    items = [(Box(100, 200, 150, 224, 0), "источник ответа", PALETTE["answer"]), (Box(160, 200, 210, 224, 0), "источник ответа", PALETTE["answer"])]
+    out = draw_overlay(base, items, 0)
+    plate = np.array(PALETTE["answer"], np.uint8)[::-1]  # BGR
+    mask = np.all(np.abs(out.astype(int) - plate.astype(int)) < 30, axis=2)
+    ys, xs = np.where(mask[:200])  # плашки подписей лежат выше рамок
+    # вторая плашка либо перенесена, либо не нарисована: ширина закрашенного над рамками не превышает одной подписи
+    assert len(xs) == 0 or (xs.max() - xs.min()) < 400

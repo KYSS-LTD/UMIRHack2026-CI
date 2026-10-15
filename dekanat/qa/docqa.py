@@ -417,6 +417,8 @@ class DocumentQA:
                     i += n
                 else:
                     i += 1
+        letters = sum(len(t) for t in target)
+        hits = [h for h in hits if self._plausible(h[0], h[1], letters)]
         exact = bool(hits)
         if not hits:  # опечатки OCR: сравниваем склеенную фразу с окном слов
             joined = "".join(target)
@@ -438,7 +440,8 @@ class DocumentQA:
                 for sc, i, size in best:
                     if all(i + size <= a or i >= b for a, b in taken):
                         taken.append((i, i + size))
-                        hits.append((page, words[i:i + size], sc, i))
+                        if self._plausible(page, words[i:i + size], letters):
+                            hits.append((page, words[i:i + size], sc, i))
         label = f"«{phrase}»"
         if not hits:
             return Answer("no_answer", f"Фразы {label} в распознанном тексте документа не нашлось. Проверьте написание или попробуйте часть фразы; возможно, этот фрагмент плохо читается на снимке.", "document",
@@ -461,6 +464,18 @@ class DocumentQA:
             text += " Точного совпадения нет — показано самое похожее место (другая форма слова или неточно прочитанный текст); сверьте со снимком."
         src = Source("document", "found", "найденное место", row_text or phrase, boxes)
         return Answer("ok", text, "document", [src], confidence=0.9 if exact else 0.55, debug={"locate": True, "matches": len(hits), "exact": exact})
+
+    @classmethod
+    def _plausible(cls, page: OcrPage, ws: list, letters: int) -> bool:
+        """Рамка найденного по размеру должна быть похожа на искомое: у слова из двух букв рамка «во всю строку» — сбой границ слова в OCR, а не находка;
+        такое место не подсвечивается (иначе человек видит залитую строку, не относящуюся к вопросу). Фраза на двух строках не проверяется."""
+        if not ws or max(w.y1 for w in ws) - min(w.y0 for w in ws) > 2.2 * max(w.y1 - w.y0 for w in ws):
+            return True
+        widths = [(w.x1 - w.x0) / len(t) for row in page.rows for w in row.words if len(t := cls._tok(w.text)) >= 3]
+        if len(widths) < 5:
+            return True
+        span = max(w.x1 for w in ws) - min(w.x0 for w in ws)
+        return span <= (letters + len(ws) - 1) * statistics.median(widths) * 5 + 30
 
     @staticmethod
     def wants_whole_text(question: str) -> bool:
