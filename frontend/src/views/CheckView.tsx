@@ -305,7 +305,7 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
   useBus<SampleItem>("sample", (s) => void loadSample(s));
   useBus<string>("say", (text) => say(text));
   useBus("forget", () => setForgetting(true));
-  useBus("new-desk", clearChat);
+  useBus("new-desk", () => (turns.length || file ? clearChat() : reset()));
   useBus("pick-file", () => composer.current?.pickFile());
   useBus("focus-question", () => composer.current?.focusQuestion());
   // вход или выход: данные теперь другие (у вошедшего — общие с ботом), состояние берём у сервера заново

@@ -2,6 +2,7 @@ import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NavBar } from "../components/NavBar";
 import { getActivity, resetActivity, setActivity } from "../lib/activity";
+import { useBus } from "../lib/bus";
 import { plural } from "../lib/format";
 import { Logo } from "../ui/Logo";
 
@@ -123,5 +124,48 @@ describe("NavBar in the staff-page style", () => {
     expect(screen.getByRole("button", { name: /Поиск и команды/ })).toHaveClass("round-btn");
     expect(screen.getByRole("button", { name: /^Меню/ })).toHaveClass("round-btn");
     expect(screen.queryByText("Ctrl K")).not.toBeInTheDocument();
+  });
+});
+
+describe("the logo", () => {
+  it("leads to the desk and clears the chat", async () => {
+    const cleared = vi.fn();
+    const onRoute = vi.fn();
+    function Listen() {
+      useBus("new-desk", cleared);
+      return null;
+    }
+    render(
+      <>
+        <Listen />
+        <NavBar {...props} onRoute={onRoute} />
+      </>,
+    );
+    const logo = screen.getByRole("link", { name: /Онлайн-деканат — на стол/ });
+    expect(logo).toHaveAttribute("href", "#/check");
+    expect(logo).toHaveAttribute("title", expect.stringContaining("чат очищается")); // о последствиях сказано заранее
+    await userEvent.click(logo);
+    expect(onRoute).toHaveBeenCalledWith("check");
+    await vi.waitFor(() => expect(cleared).toHaveBeenCalledTimes(1));
+  });
+
+  it("opens the desk first and clears afterwards when clicked on another page", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const cleared = vi.fn();
+    function Listen() {
+      useBus("new-desk", cleared);
+      return null;
+    }
+    render(
+      <>
+        <Listen />
+        <NavBar {...props} route="rules" />
+      </>,
+    );
+    await userEvent.click(screen.getByRole("link", { name: /Онлайн-деканат — на стол/ }));
+    expect(cleared).not.toHaveBeenCalled(); // стол ещё не открыт: очищать пока некому
+    await vi.advanceTimersByTimeAsync(100);
+    expect(cleared).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 });

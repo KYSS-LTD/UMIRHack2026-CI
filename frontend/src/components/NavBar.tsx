@@ -140,6 +140,12 @@ export function NavBar({ route, onRoute, theme, onThemeSet, onPalette, onHelp, o
     setTimeout(() => emit("forget"), 80);
   };
 
+  // логотип: на стол и начать заново — чат очищается (с других страниц стол сначала открывается)
+  const home = () => {
+    onRoute("check");
+    setTimeout(() => emit("new-desk"), route === "check" ? 0 : 80);
+  };
+
   // подсветка границы и «свет» следуют за курсором
   const onMove = (e: React.PointerEvent) => {
     const el = island.current;
@@ -152,7 +158,7 @@ export function NavBar({ route, onRoute, theme, onThemeSet, onPalette, onHelp, o
   return (
     <header className="nav" data-hidden={hidden} data-compact={compact} data-busy={activity.busy}>
       <div className="island" ref={island} onPointerMove={onMove}>
-        <a className="brand" href="#/check" onClick={() => onRoute("check")} aria-label="Онлайн-деканат — на стол">
+        <a className="brand" href="#/check" onClick={home} aria-label="Онлайн-деканат — на стол, чат очищается" title="На стол и начать заново: чат очищается">
           <Logo size={36} />
           <span className="brand-text">
             <strong>Онлайн-деканат</strong>
