@@ -20,7 +20,6 @@ import cv2
 from fastapi import HTTPException
 
 from ..accounts import Accounts, display_name
-from ..dialog.docstate import public_fields
 from ..highlight import draw_overlay, overlay_items
 from ..ocr.engine import OcrUnavailable
 from ..ocr.preprocess import UnsupportedFile
@@ -28,8 +27,8 @@ from ..storage.topics import classify_topic
 from ..web.assistant import AssistantCore, remember_document
 from .api import TelegramAPI, TelegramError
 from .notify import Notifier
-from .views import (COMMANDS, MENU, STATUS_TITLES, btn, esc, kb, menu_keyboard, options_keyboard, render_answer, render_document, render_next_steps, render_submission,
-                    render_ticket, render_tickets, short, split_message)
+from .views import (COMMANDS, MENU, STATUS_TITLES, btn, esc, kb, menu_keyboard, options_keyboard, render_answer, render_document, render_next_steps, render_progress,
+                    render_submission, render_ticket, render_tickets, short, split_message)
 
 log = logging.getLogger("dekanat.telegram")
 
@@ -38,6 +37,19 @@ GENERIC_ERROR = "Не получилось выполнить запрос. По
 MAX_TG_FILE = 20 * 1024 * 1024
 FILE_EXT = (".jpg", ".jpeg", ".png", ".pdf")
 _STATUS_ARGS = re.compile(r"^\s*(\d{1,9})\s+([A-Za-z0-9\-]{4,16})\s*$")
+
+# Быстрые вопросы по проверенному документу: одно нажатие вместо набора текста (callback q:<номер>)
+QUICK_QUESTIONS = [("Чего не хватает?", "Чего не хватает в документе?"), ("Хватит для перевода?", "Хватит ли этого документа для перевода?")]
+
+# Короткая подсказка-«тост» при нажатии кнопки: человек сразу видит, что нажатие принято, пока бот работает
+CALLBACK_TOASTS = (("lg:y:", "Подтверждаю вход…"), ("lg:n:", "Отклоняю запрос…"), ("sub:ok", "Отправляю в деканат…"), ("doc:img", "Рисую подсветку…"),
+                   ("q:", "Ищу ответ…"), ("ns:", "Смотрю в Положении…"), ("set:data!", "Удаляю…"), ("set:notify", "Сохраняю…"), ("rem:", "Ставлю напоминание…"),
+                   ("form:transfer", "Начинаем анкету"), ("form:enrollment", "Начинаем анкету"), ("link:", "Привязываю обращение…"))
+
+
+def toast_for(data: str) -> str:
+    return next((text for prefix, text in CALLBACK_TOASTS if data.startswith(prefix)), "")
+
 
 HELLO = ("Здравствуйте! Я цифровой секретарь деканата.\n\n"
          "<b>Что я умею:</b>\n"
@@ -288,13 +300,13 @@ class TelegramBot:
         if not self.file_limiter.hit(u["tg_id"]):
             self._send(u, "Вы прислали много документов за час. Подождите немного или воспользуйтесь сайтом.")
             return
-        wait = self._send(u, "⏳ Читаю документ… Обычно это занимает до полуминуты.")
+        wait = self._send(u, render_progress("load", 0.02))
         self._typing(u, "upload_photo")
         sid = self.accounts.ensure_data_session(u)
         try:
             data = self._file_bytes(file_id)
             with self.ocr_slots:
-                res = self.svc.analyze(data, name, caption.strip(), "auto", document_first=True)
+                res = self.svc.analyze(data, name, caption.strip(), "auto", progress=self._progress_reporter(u, wait), document_first=True)
         except UnsupportedFile as exc:
             return self._edit_or_send(u, wait, esc(str(exc)))
         except OcrUnavailable as exc:
@@ -318,13 +330,34 @@ class TelegramBot:
         state["reminder"] = {"text": remind} if remind else {}
         self.storage.users.save_bot_state(u["id"], state)
         record = self.core.doc_record(sid)
-        text = render_document(record, public_fields(record), res.warnings) + "\n\n" + render_answer(res.answer.to_dict())
-        rows = [[btn("🖼 Показать на снимке", "doc:img"), btn("📝 Составить заявление", "form:any")]]
+        text = render_document(record, [f.to_dict() for f in res.fields], res.warnings) + "\n\n" + render_answer(res.answer.to_dict())
+        rows = [self._quick_row(caption.strip()), [btn("🖼 Показать на снимке", "doc:img"), btn("📝 Составить заявление", "form:any")]]
         second = [btn("🗑 Забыть документ", "doc:forget")]
         if remind:
             second.insert(0, btn("⏰ Напомнить через 3 дня", "rem:3"))
         rows.append(second)
         self._edit_or_send(u, wait, text, kb(*rows))
+
+    def _progress_reporter(self, u: dict, wait: Optional[dict]):
+        """Обновляет сообщение «Читаю документ…» по ходу распознавания (не чаще раза в 1,5 с и только при смене этапа или заметном сдвиге)."""
+        last = {"t": 0.0, "stage": "load", "frac": 0.02}
+
+        def report(stage: str, _label: str, fraction: float) -> None:
+            now = time.time()
+            if not wait or now - last["t"] < 1.5 or (stage == last["stage"] and fraction - last["frac"] < 0.12):
+                return
+            last.update(t=now, stage=stage, frac=fraction)
+            try:
+                self.api.edit_message_text(u["tg_id"], wait["message_id"], render_progress(stage, fraction))
+            except Exception:  # индикатор — удобство, а не условие: сбой правки не должен ронять проверку
+                pass
+
+        return report
+
+    @staticmethod
+    def _quick_row(asked: str = "") -> list:
+        """Кнопки быстрых вопросов (кроме того, что только что задан)."""
+        return [btn(label, f"q:{i}") for i, (label, text) in enumerate(QUICK_QUESTIONS) if text != asked]
 
     def _file_bytes(self, file_id: str) -> bytes:
         if file_id in self._files:
@@ -387,7 +420,9 @@ class TelegramBot:
             ans = self.core.answer_question(sid, text, None)
         state["last_question"] = text
         self.storage.users.save_bot_state(u["id"], state)
-        markup = kb([btn("🖼 Показать на снимке", "doc:img")]) if (record and last) else None
+        markup = None
+        if record and last:
+            markup = kb(self._quick_row(text), [btn("🖼 Показать на снимке", "doc:img")])
         self._send(u, render_answer(ans), markup)
 
     # ------------------------------------------------------------------ анкета
@@ -506,7 +541,7 @@ class TelegramBot:
         if frm.get("is_bot") or not frm.get("id") or (msg.get("chat") or {}).get("type") != "private":
             return
         try:
-            self.api.answer_callback(cq["id"])
+            self.api.answer_callback(cq["id"], toast_for(data))
         except TelegramError:
             pass
         with self._lock(int(frm["id"])):
@@ -519,7 +554,7 @@ class TelegramBot:
                 ans, _, prefix = arg.partition(":")
                 return self._login_answer(u, mid, prefix, ans == "y")
             handler = {"m": self._cb_menu, "o": self._cb_option, "form": self._cb_form, "tpl": self._cb_template, "sub": self._cb_submit, "ns": self._cb_next,
-                       "rem": self._cb_remind, "t": self._cb_ticket, "link": self._cb_link, "set": self._cb_settings, "doc": self._cb_doc}.get(act)
+                       "rem": self._cb_remind, "q": self._cb_quick, "t": self._cb_ticket, "link": self._cb_link, "set": self._cb_settings, "doc": self._cb_doc}.get(act)
             if handler:
                 handler(u, arg, mid)
 
@@ -611,6 +646,11 @@ class TelegramBot:
             return
         self._clear_buttons(u, mid)
         self._send(u, f"Хорошо, напомню через {days} дн.: {esc(short(text, 160))}")
+
+    def _cb_quick(self, u: dict, arg: str, mid) -> None:
+        """Быстрый вопрос кнопкой — то же, что набрать его текстом."""
+        if arg.isdigit() and int(arg) < len(QUICK_QUESTIONS):
+            self._text(u, QUICK_QUESTIONS[int(arg)][1])
 
     def _cb_ticket(self, u: dict, arg: str, mid) -> None:
         row = self.storage.tickets.get_for_user(int(arg), u["id"]) if arg.isdigit() else None

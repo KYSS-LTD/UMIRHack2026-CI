@@ -45,7 +45,7 @@ class FakeAPI:
         self._rec("delete_message", chat_id=chat_id, mid=message_id)
 
     def answer_callback(self, callback_id, text="", alert=False):
-        self._rec("answer_callback")
+        self._rec("answer_callback", text=text)
 
     def send_chat_action(self, chat_id, action="typing"):
         self._rec("send_chat_action", action=action)
@@ -606,3 +606,102 @@ def test_forgetting_a_document_also_drops_it_from_memory(bot, api, app):
     app.state.storage.users.save_bot_state(user["id"], {"last_file": {"id": "f1", "name": "a.jpg"}})
     bot.handle_update(cb("set:data!"))
     assert "f1" not in bot._files
+
+
+# ------------------------------------------------------------------ удобство: карточка, прогресс, быстрые вопросы, отклик на кнопки
+def test_card_groups_composite_fields_and_marks():
+    from dekanat.telegram.views import render_card
+
+    fields = [
+        {"title": "ФИО студента", "kind": "person", "found": True, "value": "Иванов Иван", "doubt": "", "parts": []},
+        {"title": "Номер и дата выдачи", "kind": "composite", "found": True, "value": "№ 6823 от 07.10.2024", "doubt": "",
+         "parts": [{"title": "номер выдачи", "found": True, "value": "6823"}, {"title": "дата выдачи", "found": True, "value": "07.10.2024"}]},
+        {"title": "Подпись и печать", "kind": "marks", "found": True, "value": "", "doubt": "",
+         "parts": [{"title": "Подпись", "found": True, "value": "есть"}, {"title": "Печать вуза", "found": False, "value": "нет"}]},
+        {"title": "Период", "kind": "period", "found": False, "value": "не найдено", "doubt": "", "parts": []},
+        {"title": "Форма обучения", "kind": "choice", "found": True, "value": "заочная", "doubt": "слабое распознавание", "parts": []},
+    ]
+    lines = render_card(fields).splitlines()
+    assert lines[0] == "✓ ФИО студента: Иванов Иван"
+    assert lines[1] == "✓ Номер и дата выдачи: № 6823 от 07.10.2024"  # одна строка вместо трёх с повторяющимся названием
+    assert lines[2] == "◐ Подпись и печать: подпись — есть · печать вуза — нет"
+    assert lines[3] == "✗ Период: не найдено"
+    assert lines[4].startswith("⚠️ Форма обучения")
+    assert sum("Номер и дата выдачи" in x for x in lines) == 1
+
+
+def test_card_shows_what_part_is_missing():
+    from dekanat.telegram.views import render_card
+
+    f = [{"title": "Номер и дата выдачи", "kind": "composite", "found": False, "value": "", "doubt": "",
+          "parts": [{"title": "номер выдачи", "found": True, "value": "6823"}, {"title": "дата выдачи", "found": False, "value": ""}]}]
+    line = render_card(f)
+    assert line.startswith("◐ Номер и дата выдачи: 6823") and "не найдено: дата выдачи" in line
+
+
+def test_progress_message_has_bar_stage_and_percent():
+    from dekanat.telegram.views import progress_bar, render_progress
+
+    assert progress_bar(0.0) == "▱" * 10 and progress_bar(1.0) == "▰" * 10 and progress_bar(0.4) == "▰▰▰▰" + "▱" * 6
+    text = render_progress("ocr", 0.4)
+    assert "40%" in text and "читаю текст" in text and "▰▰▰▰" in text
+    assert render_progress("???", 5).count("▰") == 10 and "100%" in render_progress("???", 5)  # доля вне 0..1 не ломает шкалу
+
+
+def test_progress_updates_are_throttled_and_never_break_the_check(bot, api):
+    bot.handle_update(msg("/start"))
+    api.clear()
+    user = bot.storage.users.get_by_tg(UID)
+    report = bot._progress_reporter(user, {"message_id": 77})
+    report("ocr", "Чтение", 0.30)
+    report("ocr", "Чтение", 0.35)  # слишком скоро и почти без сдвига — не правим сообщение
+    edits = api.of("edit_message_text")
+    assert len(edits) == 1 and edits[0]["mid"] == 77 and "читаю текст" in edits[0]["text"]
+
+    def boom(*a, **k):
+        raise TelegramError(400, "message is not modified")
+
+    bot.api.edit_message_text = boom
+    bot._progress_reporter(user, {"message_id": 1})("extract", "Поля", 0.7)  # сбой правки молча игнорируется
+    bot._progress_reporter(user, None)("extract", "Поля", 0.7)  # нет сообщения — нечего править
+
+
+def test_buttons_answer_instantly_with_a_toast(bot, api):
+    from dekanat.telegram.bot import toast_for
+
+    assert toast_for("sub:ok") == "Отправляю в деканат…" and toast_for("lg:y:abc") == "Подтверждаю вход…" and toast_for("o:3") == ""
+    bot.handle_update(msg("/start"))
+    api.clear()
+    bot.handle_update(cb("set:notify"))
+    assert api.of("answer_callback")[0]["text"] == "Сохраняю…"
+    api.clear()
+    bot.handle_update(cb("t:999"))  # без подсказки — просто снимается «часики» у кнопки
+    assert api.of("answer_callback")[0]["text"] == ""
+
+
+def test_quick_question_without_a_document_is_answered_from_the_rules(bot, api):
+    bot.handle_update(msg("/start"))
+    api.clear()
+    bot.handle_update(cb("q:0"))  # вопрос отправляется от имени человека, как если бы он набрал его сам
+    assert api.texts and "предварительная оценка" in api.texts[-1].lower() + " предварительная оценка"
+    api.clear()
+    bot.handle_update(cb("q:9"))  # несуществующая кнопка — молча ничего
+    assert api.texts == []
+
+
+@needs_ocr
+def test_document_check_offers_quick_questions_and_a_clean_card(bot, api, samples):
+    sample = next(p for p in sorted(samples.glob("*.png")) + sorted(samples.glob("*.jpg")))
+    api.files["p1"] = sample.read_bytes()
+    bot.handle_update(msg(None, photo=[{"file_id": "p1", "width": 800, "height": 1000, "file_size": len(api.files["p1"])}]))
+    first = callbacks(api)
+    assert first[:2] == ["q:0", "q:1"]  # быстрые вопросы — первым рядом
+    card = api.texts[-1]
+    rows = [x for x in card.splitlines() if x.startswith(("✓", "◐", "✗", "⚠️"))]
+    assert rows and sum("Номер и дата выдачи" in x for x in rows) == 1 and "▰" not in card  # поля сгруппированы, шкалы прогресса в итоговом сообщении нет
+    api.clear()
+    bot.handle_update(cb("q:0"))
+    assert api.texts  # ответ пришёл
+    again = callbacks(api)
+    assert "q:0" not in again and "q:1" in again and "doc:img" in again  # заданный вопрос из кнопок убран, остальное осталось
+    assert api.of("answer_callback")[0]["text"] == "Ищу ответ…"  # нажатие подтверждено сразу, пока бот ищет ответ

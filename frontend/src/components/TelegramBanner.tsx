@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAccount } from "../hooks/useAccount";
+import { useActivity } from "../lib/activity";
 import { Icon } from "../ui/Icon";
 import { useToast } from "../ui/Toasts";
 
@@ -47,7 +48,12 @@ export function TelegramBanner() {
   const { ready, user, telegram, miniApp, openLogin } = useAccount();
   const toast = useToast();
   const [snoozed, setSnoozed] = useState(() => bannerSnoozed());
-  if (!ready || user || miniApp || !telegram.login || snoozed) return null;
+  const activity = useActivity();
+  const [engaged, setEngaged] = useState(false);
+  useEffect(() => {
+    if (activity.busy) setEngaged(true); // человек уже работает на столе — баннер не двигает страницу под руками
+  }, [activity.busy]);
+  if (!ready || user || miniApp || !telegram.login || snoozed || engaged) return null;
 
   const later = () => {
     const days = snoozeBanner();

@@ -77,7 +77,16 @@ export function LoginDialog() {
       }
     };
     const t = setInterval(() => void tick(), POLL_MS);
-    return () => (clearInterval(t), ctl.abort());
+    // вернулись из Telegram на вкладку сайта — проверяем сразу, а не через пару секунд
+    const onBack = () => void tick();
+    document.addEventListener("visibilitychange", onBack);
+    window.addEventListener("focus", onBack);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onBack);
+      window.removeEventListener("focus", onBack);
+      ctl.abort();
+    };
   }, [loginOpen, phase, token, signedIn]);
 
   // обратный отсчёт: ссылка живёт ограниченное время

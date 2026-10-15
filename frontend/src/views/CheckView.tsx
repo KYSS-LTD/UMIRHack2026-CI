@@ -15,6 +15,7 @@ import { useObjectUrl } from "../hooks/useObjectUrl";
 import { usePagePreview } from "../hooks/usePagePreview";
 import { resetActivity, setActivity } from "../lib/activity";
 import { useBus } from "../lib/bus";
+import { readDraft, saveDraft } from "../lib/draft";
 import { isQuizState, mergeCorrection, OPEN_STATUS, optionText, statusOfferText } from "../lib/dialog";
 import { fileFromClipboard, isPdf, validateFile } from "../lib/files";
 import { fieldBoxes } from "../lib/format";
@@ -46,7 +47,9 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
   const stageRef = useRef<HTMLElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
-  const [question, setQuestion] = useState("");
+  // недописанный вопрос переживает случайную перезагрузку и переход между разделами (только в этой вкладке, на диск не пишется)
+  const [question, setQuestion] = useState(readDraft);
+  useEffect(() => saveDraft(question), [question]);
   const [docType, setDocType] = useState(AUTO_TYPE);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<Highlight | null>(null);

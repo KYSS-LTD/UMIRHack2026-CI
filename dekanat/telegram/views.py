@@ -145,21 +145,51 @@ def render_answer(ans: dict) -> str:
     return "\n".join(lines)
 
 
-def render_card(items: list[dict], limit: int = 14) -> str:
-    """Карточка полей документа: значение или «не найдено», сомнительное — с пометкой."""
+def render_card(fields: list[dict], limit: int = 14) -> str:
+    """Карточка полей документа (как на сайте): одна строка на поле. Составное поле («номер и дата») — одним значением, подпись и печать — «есть / нет»,
+    сомнительное значение — с пометкой ⚠️, ненайденное — «не найдено»."""
     lines = []
-    for f in items[:limit]:
+    for f in fields[:limit]:
         title = esc(f.get("title"))
-        if f.get("found"):
-            mark = "⚠️" if f.get("doubt") else "✓"
-            lines.append(f"{mark} {title}: {esc(short(f.get('value', ''), 90))}")
+        parts = f.get("parts") or []
+        if parts and f.get("kind") == "marks":
+            found = [bool(p.get("found")) for p in parts]
+            icon = "✓" if all(found) else ("◐" if any(found) else "✗")
+            lines.append(f"{icon} {title}: " + " · ".join(f"{esc(str(p.get('title', '')).lower())} — {'есть' if p.get('found') else 'нет'}" for p in parts))
+        elif parts:
+            found = [bool(p.get("found")) for p in parts]
+            have = " · ".join(esc(short(p.get("value", ""), 60)) for p in parts if p.get("found"))
+            if not any(found):
+                lines.append(f"✗ {title}: не найдено")
+            else:
+                value = esc(short(f.get("value", ""), 90)) if f.get("found") and f.get("value") not in (None, "", "не найдено") else have
+                missing = [str(p.get("title", "")) for p in parts if not p.get("found")]
+                icon = "⚠️" if f.get("doubt") else ("✓" if all(found) else "◐")
+                lines.append(f"{icon} {title}: {value}" + (f" <i>(не найдено: {esc(', '.join(missing))})</i>" if missing else ""))
+        elif f.get("found"):
+            lines.append(f"{'⚠️' if f.get('doubt') else '✓'} {title}: {esc(short(f.get('value', ''), 90))}")
         else:
-            lines.append(f"✗ {title}: " + ("нет" if f.get("kind") == "mark" else "не найдено"))
+            lines.append(f"✗ {title}: не найдено")
     return "\n".join(lines)
 
 
-def render_document(record: Optional[dict], items: list[dict], warnings: Optional[list] = None) -> str:
-    """Шапка проверки документа: тип и карточка полей."""
+def progress_bar(fraction: float, width: int = 10) -> str:
+    full = max(0, min(width, int(round(fraction * width))))
+    return "▰" * full + "▱" * (width - full)
+
+
+STAGE_TITLES_RU = {"load": "открываю и выравниваю снимок", "ocr": "читаю текст", "classify": "определяю тип документа", "extract": "заполняю карточку",
+                   "answer": "ищу основание в Положении"}
+
+
+def render_progress(stage: str, fraction: float) -> str:
+    """Сообщение «Читаю документ…» с этапом и шкалой — чтобы ожидание не выглядело зависанием."""
+    f = max(0.0, min(1.0, fraction))
+    return f"⏳ Читаю документ…\n{progress_bar(f)} {int(round(f * 100))}% · {STAGE_TITLES_RU.get(stage, 'работаю')}"
+
+
+def render_document(record: Optional[dict], fields: list[dict], warnings: Optional[list] = None) -> str:
+    """Шапка проверки документа: тип и карточка полей (поля — в виде FieldResult.to_dict())."""
     if not record:
         return ""
     dt = record.get("doc_type") or {}
@@ -169,8 +199,8 @@ def render_document(record: Optional[dict], items: list[dict], warnings: Optiona
     else:
         head = "📄 <b>Документ</b> <i>(тип не определён — отвечаю по тексту документа)</i>"
     parts = [head]
-    if items:
-        parts += ["", render_card(items)]
+    if fields:
+        parts += ["", render_card(fields)]
     for w in (warnings or [])[:2]:
         parts.append(f"<i>{esc(short(w, 220))}</i>")
     return "\n".join(parts)

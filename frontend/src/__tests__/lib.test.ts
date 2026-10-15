@@ -155,3 +155,35 @@ describe("cropAround", () => {
     expect(g.px).toBeLessThanOrEqual(100);
   });
 });
+
+describe("draft of the question", () => {
+  beforeEach(() => sessionStorage.clear());
+
+  it("keeps a half-written question and forgets it when it is cleared", async () => {
+    const { readDraft, saveDraft } = await import("../lib/draft");
+    expect(readDraft()).toBe("");
+    saveDraft("Хватит ли этой справки");
+    expect(readDraft()).toBe("Хватит ли этой справки");
+    saveDraft("   "); // пустое и из одних пробелов — черновика нет
+    expect(readDraft()).toBe("");
+  });
+
+  it("limits the size and survives a broken storage", async () => {
+    const { readDraft, saveDraft } = await import("../lib/draft");
+    saveDraft("я".repeat(5000));
+    expect(readDraft()).toHaveLength(2000);
+    const broken = {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+      removeItem: () => {
+        throw new Error("blocked");
+      },
+    };
+    expect(readDraft(broken)).toBe("");
+    expect(() => saveDraft("текст", broken)).not.toThrow();
+  });
+});

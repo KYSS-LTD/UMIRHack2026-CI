@@ -8,6 +8,7 @@ import { LoginDialog } from "../components/LoginDialog";
 import { NavBar } from "../components/NavBar";
 import { SNOOZE_DAYS, TelegramBanner, bannerSnoozed, snoozeBanner } from "../components/TelegramBanner";
 import { AccountProvider, useAccount } from "../hooks/useAccount";
+import { resetActivity, setActivity } from "../lib/activity";
 import { initDataFromHash } from "../lib/telegram";
 import type { AccountMe, AccountTicket, AccountUser } from "../types";
 import { ToastProvider } from "../ui/Toasts";
@@ -47,6 +48,7 @@ beforeEach(() => {
   history.replaceState(null, "", "/");
 });
 afterEach(() => {
+  resetActivity();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
@@ -110,6 +112,15 @@ describe("TelegramBanner", () => {
     localStorage.setItem("dekanat.tgBanner", JSON.stringify({ until: Date.now() - 1000, n: 1 }));
     mount(<TelegramBanner />);
     expect(await screen.findByRole("complementary")).toBeInTheDocument();
+  });
+
+  it("steps aside as soon as the person starts working on the desk", async () => {
+    mount(<TelegramBanner />);
+    expect(await screen.findByRole("complementary")).toBeInTheDocument();
+    act(() => setActivity({ busy: true, fraction: 0.2, label: "Чтение текста" }));
+    await waitFor(() => expect(screen.queryByRole("complementary")).not.toBeInTheDocument());
+    act(() => resetActivity());
+    expect(screen.queryByRole("complementary")).not.toBeInTheDocument(); // и не возвращается, пока человек на странице
   });
 
   it("stays away for signed-in people and where the bot is off", async () => {
@@ -195,6 +206,21 @@ describe("LoginDialog", () => {
     await act(() => vi.advanceTimersByTimeAsync(2100));
     await waitFor(() => expect(screen.getByText("вошёл: Мария Орлова")).toBeInTheDocument());
     expect(await screen.findByText(/Начатое на сайте перенесено в аккаунт/)).toBeInTheDocument();
+  });
+
+  it("checks at once when the person comes back from Telegram to the tab", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.spyOn(api.account, "loginStart").mockResolvedValue(start);
+    const poll = vi.spyOn(api.account, "loginPoll").mockResolvedValue({ status: "pending" });
+    mount(<Open />);
+    fireEvent.click(await screen.findByRole("button", { name: "открыть" }));
+    await screen.findByRole("link", { name: /Открыть @/ });
+    await act(async () => {}); // эффекты опроса подключены
+    const before = poll.mock.calls.length;
+    act(() => {
+      window.dispatchEvent(new Event("focus")); // вернулись на вкладку — не ждём очередного опроса
+    });
+    await waitFor(() => expect(poll.mock.calls.length).toBeGreaterThan(before));
   });
 
   it("explains a refusal and offers to try again", async () => {
