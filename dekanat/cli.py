@@ -187,7 +187,7 @@ def cmd_ocr(args) -> int:
     data = path.read_bytes()
     check_format(data, path.name)
     for page in runner.run(load_pages(data, path.name)):
-        q = {k: v for k, v in page.quality.items() if k != "tried"}
+        q = {k: v for k, v in page.quality.items() if k not in ("tried", "photo")}
         print(f"--- страница {page.index + 1}: вариант {page.variant}, наклон {page.deskew_angle}°, качество {q}")
         print(page.text)
     return 0

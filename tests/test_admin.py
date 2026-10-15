@@ -454,3 +454,79 @@ def test_cli_create_and_reset_admin(tmp_path, monkeypatch, capsys):
 
     row = Storage(load_settings()).admins.get_by_username("dean")
     assert verify_password("Second-Pass-12345!", row["pw_hash"]) and not verify_password("First-Pass-12345!", row["pw_hash"])
+
+
+# ------------------------------------------------------------------ типы документов в кабинете
+def test_doctype_routes_need_an_admin(anon):
+    for method, path in [("GET", "/api/admin/doctypes"), ("GET", "/api/admin/doctypes/template"), ("POST", "/api/admin/doctypes/validate"),
+                         ("POST", "/api/admin/doctypes"), ("PUT", "/api/admin/doctypes/study_certificate"), ("DELETE", "/api/admin/doctypes/study_certificate"),
+                         ("GET", "/api/admin/doctypes/study_certificate/yaml")]:
+        assert anon.request(method, path, json={"yaml": "id: x"}).status_code == 401, (method, path)
+
+
+def test_admin_sees_the_list_of_types_with_field_counts(admin):
+    items = admin.get("/api/admin/doctypes").json()
+    study = next(t for t in items if t["id"] == "study_certificate")
+    assert study["title"] and study["fields"] >= 6 and study["units"] >= study["fields"] and study["deletable"] is True
+    assert "ФИО студента" in study["field_titles"] and study["source"].endswith(".yaml")
+
+
+def test_admin_adds_a_new_type_from_a_file_and_it_appears_everywhere(admin):
+    tpl = admin.get("/api/admin/doctypes/template").json()["yaml"]
+    checked = admin.post("/api/admin/doctypes/validate", json={"yaml": tpl}).json()
+    assert checked["ok"] is True and checked["id"] == "my_document" and checked["fields"] == 2 and checked["exists"] is False
+    # файл из «Блокнота»: BOM и переводы строк Windows не мешают
+    windows_file = "﻿" + tpl.replace("\n", "\r\n")
+    added = admin.post("/api/admin/doctypes", json={"yaml": windows_file})
+    assert added.status_code == 200 and added.json()["created"] is True
+    assert any(t["id"] == "my_document" for t in admin.get("/api/doctypes").json())  # его видит и посетитель на столе
+    assert any(t["id"] == "my_document" for t in admin.get("/api/admin/doctypes").json())
+    assert admin.post("/api/admin/doctypes/validate", json={"yaml": tpl}).json()["exists"] is True
+    again = admin.post("/api/admin/doctypes", json={"yaml": tpl})
+    assert again.status_code == 400 and "уже существует" in again.json()["detail"]
+    assert admin.delete("/api/admin/doctypes/my_document").status_code == 200
+    assert not any(t["id"] == "my_document" for t in admin.get("/api/admin/doctypes").json())
+
+
+def test_admin_edits_an_existing_type_and_a_broken_description_changes_nothing(admin):
+    original = admin.get("/api/admin/doctypes/study_certificate/yaml").json()["yaml"]
+    assert "study_certificate" in original
+    broken = admin.put("/api/admin/doctypes/study_certificate", json={"yaml": original.replace("fields:", "fields: [", 1)})
+    assert broken.status_code == 400
+    assert admin.get("/api/admin/doctypes/study_certificate/yaml").json()["yaml"] == original  # файл на диске прежний
+    bad = admin.post("/api/admin/doctypes/validate", json={"yaml": "id: Bad Id\ntitle: X\nfields: []"}).json()
+    assert bad["ok"] is False and bad["error"]
+    wrong_id = admin.put("/api/admin/doctypes/study_certificate", json={"yaml": original.replace("id: study_certificate", "id: other_type", 1)})
+    assert wrong_id.status_code == 400 and "не совпадает" in wrong_id.json()["detail"]
+    renamed = original.replace("title: Справка об обучении", "title: Справка об обучении (проба)", 1)
+    assert renamed != original
+    assert admin.put("/api/admin/doctypes/study_certificate", json={"yaml": renamed}).status_code == 200
+    assert any(t["title"].endswith("(проба)") for t in admin.get("/api/doctypes").json())
+    assert admin.put("/api/admin/doctypes/study_certificate", json={"yaml": original}).status_code == 200
+
+
+def test_oversized_description_is_refused_and_missing_type_is_a_404(admin):
+    assert admin.post("/api/admin/doctypes/validate", json={"yaml": "x" * 250_000}).json()["ok"] is False
+    assert admin.post("/api/admin/doctypes", json={"yaml": "# " + "я" * 250_000}).status_code == 400
+    assert admin.get("/api/admin/doctypes/nothing/yaml").status_code == 404
+    assert admin.delete("/api/admin/doctypes/nothing").status_code == 404
+
+
+def test_the_last_type_cannot_be_deleted_and_editing_can_be_switched_off(admin, app):
+    for t in [t["id"] for t in admin.get("/api/admin/doctypes").json()][:-1]:
+        assert admin.delete(f"/api/admin/doctypes/{t}").status_code == 200
+    last = admin.get("/api/admin/doctypes").json()
+    assert len(last) == 1 and last[0]["deletable"] is False
+    assert admin.delete(f"/api/admin/doctypes/{last[0]['id']}").status_code == 400
+    app.state.svc.settings.raw["server"]["allow_edit"] = False
+    tpl = admin.get("/api/admin/doctypes/template").json()["yaml"]
+    assert admin.post("/api/admin/doctypes", json={"yaml": tpl}).status_code == 403
+
+
+def test_doctype_changes_from_the_cabinet_are_audited(admin):
+    tpl = admin.get("/api/admin/doctypes/template").json()["yaml"]
+    admin.post("/api/admin/doctypes", json={"yaml": tpl})
+    admin.delete("/api/admin/doctypes/my_document")
+    log = admin.get("/api/admin/audit?object_type=doctype").json()
+    assert {"doctype.save", "doctype.delete"} <= {e["action"] for e in log}
+    assert all(e["actor"] == ADMIN_USER for e in log if e["object_id"] == "my_document")

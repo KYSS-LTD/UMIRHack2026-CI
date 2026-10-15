@@ -23,11 +23,14 @@ from .. import __version__
 from ..accounts import Accounts
 from ..admin import AdminAuth
 from ..admin.routes import build_admin_router
-from ..config import ConfigError, Settings, load_settings, parse_doc_type_yaml
+from ..assistant import AssistantCore, ServiceError, SessionLocks, remember_document
+from ..config import Settings, load_settings
+from ..doctypes import NEW_TYPE_TEMPLATE, DocTypeError, DocTypeManager
 from ..templates import TemplateStore
 from ..export import result_record
 from ..kb.documents import BASE_ID, KnowledgeBaseError
 from ..kb.manager import KnowledgeBaseManager
+from ..ocr import photo as photo_quality
 from ..ocr.engine import OcrUnavailable
 from ..document_processing.formats import check_format
 from ..ocr.preprocess import UnsupportedFile, load_pages
@@ -37,36 +40,12 @@ from ..storage.topics import classify_topic
 from ..telegram.notify import Notifier
 from ..telegram.service import TelegramService
 from .account import build_account_router
-from .assistant import AssistantCore, SessionLocks, build_assistant_router, remember_document
+from .assistant import build_assistant_router
 from .jobs import JobManager
 from .session import COOKIE_SID, WebSessions
 
 log = logging.getLogger("dekanat.web")
 STATIC = Path(__file__).parent / "static"
-
-NEW_TYPE_TEMPLATE = """# Новый тип документа. Опишите поля — код менять не нужно.
-id: my_document            # латиница, строчные буквы, цифры и «_»
-title: Название документа
-short_title: Документ
-genitive: документа        # «Не хватает ... документа»
-aliases: [название документа]
-classify:
-  keywords:                # по этим фразам тип определяется автоматически
-    - {phrase: название документа, weight: 6}
-fields:
-  - id: student_name
-    title: ФИО студента
-    kind: person           # person | org | text | date | number | choice | period | grade | group | course | composite | marks
-    labels: [ФИО студента, ФИО, Студент]
-    mention: [ФИО студента, ФИО]
-    missing_phrase: ФИО студента
-  - id: doc_date
-    title: Дата
-    kind: date
-    labels: [Дата, Дата выдачи]
-    missing_phrase: даты
-"""
-
 
 PAGES = Path(__file__).parent / "static" / "pages"
 # страница администратора не использует встроенные скрипты и стили, поэтому ей можно задать строгую политику
@@ -99,6 +78,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     auth = AdminAuth(storage, settings)
     kbm = KnowledgeBaseManager(svc, storage, max_bytes)
+    type_mgr = DocTypeManager(svc, storage)
     templates = TemplateStore(storage.templates_dir, storage.templates)
     _bootstrap_admin(auth, storage)
     try:
@@ -165,6 +145,10 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             storage.events.log(scenario, category, status, sid)
         except Exception:  # статистика не должна ломать основной сценарий
             log.exception("Не удалось записать событие статистики")
+
+    @app.exception_handler(ServiceError)
+    async def _service_error(_, exc):  # noqa: ANN001
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status)  # ядро ассистента не знает про HTTP: статус отдаёт сайт
 
     @app.exception_handler(UnsupportedFile)
     async def _unsupported(_, exc):  # noqa: ANN001
@@ -319,6 +303,24 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         except UnsupportedFile as exc:
             raise HTTPException(400, str(exc)) from exc
 
+    @app.post("/api/quality")
+    async def photo_check(file: UploadFile = File(...)):
+        """Быстрая проверка снимка до отправки (без OCR): размытие, темнота, блики, мелкий текст. Файл не сохраняется.
+        У PDF пикселей «съёмки» нет — их не проверяем. Итоговая оценка с учётом распознавания приходит вместе с результатом проверки."""
+        data, _ = await _read_upload(file, "")
+        name = file.filename or ""
+
+        def work():
+            check_format(data, name, max_bytes)
+            if (data or b"")[:5] == b"%PDF":
+                return {**photo_quality.assess_document([]), "skipped": "pdf"}
+            return photo_quality.assess_document([photo_quality.assess_image(load_pages(data, name, 1)[0])])
+
+        try:
+            return await run_in_threadpool(work)
+        except UnsupportedFile as exc:
+            raise HTTPException(400, str(exc)) from exc
+
     @app.get("/api/jobs/{job_id}")
     def job_status(job_id: str):
         job = jobs.get(job_id)
@@ -356,11 +358,17 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         return {"name": svc.regulation_name, "clauses": row["clauses"]}
 
     # ------------------------------------------------------------------ типы документов
-    def _type_path(type_id: str) -> Path:
-        spec = svc.doc_types.get(type_id)
-        if spec and spec.source:
-            return svc.settings.doc_types_dir / spec.source
-        return svc.settings.doc_types_dir / f"{type_id}.yaml"
+    # Прежние адреса (текстовое тело, правка из внешних инструментов); кабинет сотрудника работает через /api/admin/doctypes, логика общая.
+    def _guard_edit(request: Request) -> str:
+        if not allow_edit:
+            raise HTTPException(403, "Редактирование отключено (server.allow_edit: false)")
+        return auth.actor_for_edit(request)
+
+    def _typed(fn):
+        try:
+            return fn()
+        except DocTypeError as exc:
+            raise HTTPException(exc.status, str(exc)) from exc
 
     @app.get("/api/doctypes/template", response_class=PlainTextResponse)
     def template():
@@ -368,61 +376,21 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @app.get("/api/doctypes/{type_id}/yaml", response_class=PlainTextResponse)
     def type_yaml(type_id: str):
-        path = _type_path(type_id)
-        if type_id not in svc.doc_types or not path.exists():
-            raise HTTPException(404, "Тип документа не найден")
-        return path.read_text(encoding="utf-8")
+        return _typed(lambda: type_mgr.yaml(type_id))
 
     @app.post("/api/doctypes/validate")
     def validate(body: str = Body(..., media_type="text/plain")):
-        try:
-            spec = parse_doc_type_yaml(body, "редактор")
-        except ConfigError as exc:
-            return {"ok": False, "error": str(exc)}
-        units = sum(len(f.parts) or 1 for f in spec.fields)
-        return {"ok": True, "id": spec.id, "title": spec.title, "fields": len(spec.fields), "units": units}
+        return type_mgr.validate(body)
 
     @app.put("/api/doctypes/{type_id}")
     def save_type(type_id: str, request: Request, body: str = Body(..., media_type="text/plain")):
-        if not allow_edit:
-            raise HTTPException(403, "Редактирование отключено (server.allow_edit: false)")
-        actor = auth.actor_for_edit(request)
-        try:
-            spec = parse_doc_type_yaml(body, f"{type_id}.yaml")
-        except ConfigError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        if type_id != "new" and spec.id != type_id:
-            raise HTTPException(400, f"id в YAML («{spec.id}») не совпадает с редактируемым типом («{type_id}»)")
-        if type_id == "new" and spec.id in svc.doc_types:
-            raise HTTPException(400, f"Тип с id «{spec.id}» уже существует — измените id")
-        path = _type_path(spec.id)
-        previous = path.read_text(encoding="utf-8") if path.exists() else None
-        path.write_text(body if body.endswith("\n") else body + "\n", encoding="utf-8")
-        try:
-            svc.reload()
-        except Exception as exc:  # откатываем, чтобы не сломать сервис
-            if previous is None:
-                path.unlink(missing_ok=True)
-            else:
-                path.write_text(previous, encoding="utf-8")
-            svc.reload()
-            raise HTTPException(400, f"Конфиг не принят: {exc}") from exc
-        storage.audit.log(actor, "doctype.save", "doctype", spec.id, {"sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(), "created": previous is None})
-        return {"ok": True, "id": spec.id, "title": spec.title}
+        actor = _guard_edit(request)
+        return _typed(lambda: type_mgr.save(type_id, body, actor))
 
     @app.delete("/api/doctypes/{type_id}")
     def delete_type(type_id: str, request: Request):
-        if not allow_edit:
-            raise HTTPException(403, "Редактирование отключено (server.allow_edit: false)")
-        actor = auth.actor_for_edit(request)
-        if type_id not in svc.doc_types:
-            raise HTTPException(404, "Тип документа не найден")
-        if len(svc.doc_types) <= 1:
-            raise HTTPException(400, "Нельзя удалить последний тип документа")
-        _type_path(type_id).unlink(missing_ok=True)
-        svc.reload()
-        storage.audit.log(actor, "doctype.delete", "doctype", type_id)
-        return {"ok": True}
+        actor = _guard_edit(request)
+        return _typed(lambda: type_mgr.delete(type_id, actor))
 
     # ------------------------------------------------------------------ примеры документов
     samples_dir = settings.path("samples_dir", "data/samples")
@@ -445,7 +413,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     # ------------------------------------------------------------------ ассистент и администратор
     app.include_router(build_assistant_router(core, sessions))
     app.include_router(build_account_router(core, sessions, accounts, tg, settings))
-    app.include_router(build_admin_router(svc, storage, auth, kbm, templates, max_bytes, notifier, tg))
+    app.include_router(build_admin_router(svc, storage, auth, kbm, templates, max_bytes, notifier, tg, type_mgr))
 
     def _page(name: str) -> FileResponse:
         path = PAGES / name

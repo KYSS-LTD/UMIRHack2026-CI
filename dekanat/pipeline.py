@@ -30,6 +30,7 @@ from .kb.documents import BASE_ID, doc_clauses
 from .llm import LLMService
 from .models import Answer, Clause, FieldResult, OcrPage
 from .ocr import OcrOptions, OcrRunner, TesseractEngine
+from .ocr import photo as photo_quality
 from .ocr.preprocess import load_pages
 from .qa import QAEngine
 from .qa.docqa import GENERIC_WORDS, DocumentQA
@@ -86,6 +87,7 @@ class AnalysisResult:
     warnings: list[str] = field(default_factory=list)
     original_pages: list[np.ndarray] = field(default_factory=list)
     type_titles: dict = field(default_factory=dict)
+    photo_quality: dict = field(default_factory=dict)  # качество снимка: уровень, причины и советы (dekanat/ocr/photo.py)
 
     @property
     def text(self) -> str:
@@ -115,6 +117,7 @@ class AnalysisResult:
                 ],
                 "text": self.text,
             },
+            "photo_quality": self.photo_quality,
             "fields": [f.to_dict() for f in self.fields],
             "answer": self.answer.to_dict(),
             "warnings": self.warnings,
@@ -238,6 +241,11 @@ class Dekanat:
             report("ocr", f"Читаю текст{suffix}" + (f": {hint}" if hint else ""), min(frac, 0.7))
 
         pages = self.runner.run(originals, step)
+        for orig, page in zip(originals, pages):
+            try:
+                page.quality["photo"] = photo_quality.assess_page(orig, page)
+            except Exception:  # оценка снимка — подсказка, она не должна ломать проверку
+                log.exception("Не удалось оценить качество снимка")
         with self._lock:
             if self._cache_size:
                 self._ocr_cache[key] = pages
@@ -262,6 +270,7 @@ class Dekanat:
         cls: Optional[Classification] = None
         fields: list[FieldResult] = []
         ocr_notes: list[str] = []
+        photo: dict = {}
         titles = {tid: d.title for tid, d in self.doc_types.items()}
         if data:
             originals, pages, cached = self._ocr(data, filename, progress)
@@ -269,10 +278,9 @@ class Dekanat:
             if cached:
                 timings["ocr_cached"] = True
             has_text = any(p.words for p in pages)
+            photo = photo_quality.assess_document([p.quality["photo"] for p in pages if p.quality.get("photo")])
             if not has_text:
                 warnings.append("Текст на изображении не распознан. Сфотографируйте документ ровнее, при хорошем освещении и без бликов.")
-            elif any(p.quality.get("score", 100) < 45 for p in pages):
-                ocr_notes.append("Качество снимка невысокое — часть данных могла быть прочитана неверно. Если ответ кажется странным, пришлите более чёткое фото.")
             report("classify", "Определяю тип документа", 0.74)
             if doc_type == GENERIC_ID:
                 how = "generic"
@@ -319,11 +327,17 @@ class Dekanat:
         else:
             text_qa = (lambda q: self.docqa.answer(q, pages)) if (document_first and any(p.words for p in pages)) else None
             answer = self.qa.answer(question, spec, fields or None, ocr_notes, document_first=document_first, document_text=text_qa)
+        if photo.get("retake") and any(p.words for p in pages):
+            if answer.intent == "no_document_type":  # тип не определён из-за снимка, а не из-за документа: совет «выберите тип» — не главное
+                answer.text = photo_quality.retake_text(photo)
+            line = photo_quality.summary_line(photo)
+            if line and line not in answer.notes:
+                answer.notes.append(line)
         self._attach_explanation(question, answer)
         timings["answer"] = round(time.time() - t2, 2)
         timings["total"] = round(time.time() - t0, 2)
         report("done", "Готово", 1.0)
-        return AnalysisResult(spec, how, cls, pages, fields, answer, timings, warnings, originals, titles)
+        return AnalysisResult(spec, how, cls, pages, fields, answer, timings, warnings, originals, titles, photo)
 
     def answer_for_fields(self, question: str, doc_type_id: Optional[str], fields: list[FieldResult], document_first: bool = False) -> Answer:
         """Ответ по уже готовой карточке (например, исправленной пользователем) без повторного OCR."""

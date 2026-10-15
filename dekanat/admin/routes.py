@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from ..templates import TemplateError, TemplateExists, TemplateNotFound, TemplateStore
 from ..templates.docx_templates import MAX_TEMPLATE_BYTES
 from ..kb.check import load_golden, run_check
+from ..doctypes import NEW_TYPE_TEMPLATE, DocTypeError
 from ..kb.documents import KnowledgeBaseError
 from ..storage import TICKET_STATUSES, TICKET_TYPES
 from ..storage.topics import all_topics
@@ -56,6 +57,10 @@ class KbPatch(BaseModel):
     active: Optional[bool] = None
 
 
+class DocTypeIn(BaseModel):
+    yaml: str = Field(max_length=400_000)
+
+
 class NamePatch(BaseModel):
     name: str = Field(max_length=200)
 
@@ -90,7 +95,7 @@ def load_reply_templates(path: Path) -> list:
     return good or DEFAULT_REPLIES
 
 
-def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_bytes: int, notifier=None, telegram=None) -> APIRouter:
+def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_bytes: int, notifier=None, telegram=None, doctypes=None) -> APIRouter:
     router = APIRouter(prefix="/api/admin", tags=["admin"])
     admin = Depends(auth.require)
 
@@ -219,6 +224,43 @@ def build_admin_router(svc, storage, auth, kbm, templates: TemplateStore, max_by
     @router.get("/templates/{template_id}/history")
     def template_history(template_id: str, who: dict = admin):
         return {"versions": storage.templates.versions(template_id), "log": storage.audit.list("template", template_id, limit=100)}
+
+    # ------------------------------------------------------------------ типы документов
+    def _type_call(fn, *args, write: bool = False):
+        if write and not svc.settings.get("server.allow_edit", True):
+            raise HTTPException(403, "Редактирование отключено (server.allow_edit: false)")
+        try:
+            return fn(*args)
+        except DocTypeError as exc:
+            raise HTTPException(exc.status, str(exc)) from exc
+
+    @router.get("/doctypes")
+    def list_doctypes(who: dict = admin):
+        return doctypes.list()
+
+    @router.get("/doctypes/template")
+    def doctype_template(who: dict = admin):
+        return {"yaml": NEW_TYPE_TEMPLATE}
+
+    @router.post("/doctypes/validate")
+    def validate_doctype(body: DocTypeIn, who: dict = admin):
+        return doctypes.validate(body.yaml)
+
+    @router.get("/doctypes/{type_id}/yaml")
+    def doctype_yaml(type_id: str, who: dict = admin):
+        return {"id": type_id, "yaml": _type_call(doctypes.yaml, type_id)}
+
+    @router.post("/doctypes")
+    def add_doctype(body: DocTypeIn, who: dict = admin):
+        return _type_call(doctypes.save, "new", body.yaml, who["username"], write=True)
+
+    @router.put("/doctypes/{type_id}")
+    def replace_doctype(type_id: str, body: DocTypeIn, who: dict = admin):
+        return _type_call(doctypes.save, type_id, body.yaml, who["username"], write=True)
+
+    @router.delete("/doctypes/{type_id}")
+    def delete_doctype(type_id: str, who: dict = admin):
+        return _type_call(doctypes.delete, type_id, who["username"], write=True)
 
     # ------------------------------------------------------------------ база знаний
     def _kb_call(fn, *args, **kwargs):

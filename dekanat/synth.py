@@ -903,8 +903,19 @@ def generate_samples(out: Path, seed: int = 2024) -> int:
     img = degrade(render_order(rng, fonts[0]), 1, rng)
     img.save(out / "sample_09.jpg", "JPEG", quality=84)
     manifest.append({"file": "sample_09.jpg", "title": "Приказ (не из вуза): вопрос по тексту документа", "question": "Что приказано в п. 1.2?", "doc_type": "generic"})
+    manifest.append(bad_photo_sample(out))
     (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return len(manifest)
+
+
+def bad_photo_sample(out: Path) -> dict:
+    """Справка о практике (sample_06), снятая плохо: мелко, не в фокусе и в полутьме. Показывает, как сервис советует переснять."""
+    from PIL import ImageEnhance, ImageFilter
+
+    img = Image.open(out / "sample_06.png").convert("RGB")
+    img = img.resize((1600, round(1600 * img.height / img.width)), Image.BICUBIC).filter(ImageFilter.GaussianBlur(3.4))
+    ImageEnhance.Brightness(img).enhance(0.5).save(out / "sample_10.jpg", "JPEG", quality=60)
+    return {"file": "sample_10.jpg", "title": "Справка о практике: снимок размытый и тёмный", "question": "Подойдёт ли эта справка о практике?", "doc_type": "practice_certificate"}
 
 
 def main(argv: Optional[list[str]] = None) -> int:

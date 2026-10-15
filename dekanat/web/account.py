@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from ..accounts import AccountError, Accounts, describe_device, public_user
 from ..telegram.auth import TelegramAuthError, verify_webapp_init_data
 from ..telegram.service import TelegramService
-from .assistant import AssistantCore, AttemptLimiter
+from ..assistant import AssistantCore, AttemptLimiter
 from .session import COOKIE_SID, WebSessions
 
 log = logging.getLogger("dekanat.account")

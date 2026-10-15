@@ -104,7 +104,7 @@ def test_editing_can_be_disabled(tmp_settings):
 
 def test_samples_are_served_safely(client):
     items = client.get("/api/samples").json()
-    assert len(items) == 9 and client.get(f"/api/samples/{items[0]['file']}").status_code == 200
+    assert len(items) == 10 and client.get(f"/api/samples/{items[0]['file']}").status_code == 200
     assert client.get("/api/samples/..%2Fmanifest.json").status_code == 404
     assert client.get("/api/samples/secret.txt").status_code == 404
 

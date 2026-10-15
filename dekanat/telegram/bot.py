@@ -17,7 +17,6 @@ from collections import OrderedDict
 from typing import Any, Optional
 
 import cv2
-from fastapi import HTTPException
 
 from ..accounts import Accounts, display_name
 from ..highlight import draw_overlay, overlay_items
@@ -25,7 +24,7 @@ from ..ocr.engine import OcrUnavailable
 from ..ocr.preprocess import UnsupportedFile
 from ..qa.docqa import wants_to_see
 from ..storage.topics import classify_topic
-from ..web.assistant import AssistantCore, remember_document
+from ..assistant import AssistantCore, ServiceError, remember_document
 from .api import TelegramAPI, TelegramError
 from .notify import Notifier
 from .views import (COMMANDS, MENU, STATUS_TITLES, btn, esc, kb, menu_keyboard, options_keyboard, render_answer, render_document, render_next_steps, render_progress,
@@ -202,7 +201,7 @@ class TelegramBot:
         sid = self.accounts.ensure_data_session(u)
         try:
             res = self.core.message(sid, text, defer=True)
-        except HTTPException as exc:
+        except ServiceError as exc:
             self._send(u, esc(exc.detail))
             return
         if res["reply"]["kind"] != "passthrough":
@@ -254,7 +253,7 @@ class TelegramBot:
             return
         try:
             row = self.core.ticket_status(int(m.group(1)), m.group(2), f"tg:{u['tg_id']}")
-        except HTTPException as exc:
+        except ServiceError as exc:
             self._send(u, esc(exc.detail))
             return
         full = self.storage.tickets.get(row["id"]) or {}
@@ -489,7 +488,7 @@ class TelegramBot:
             row = self.core.download_row(sid, download["id"])
             with open(row["path"], "rb") as f:
                 data = f.read()
-        except (HTTPException, OSError):
+        except (ServiceError, OSError):
             self._send(u, "Документ готов, но его не удалось отправить в чат: скачайте его на сайте.")
             return
         self.api.send_document(u["tg_id"], data, row["filename"], "📄 Заявление готово. Проверьте данные перед использованием.")
@@ -501,7 +500,7 @@ class TelegramBot:
             res = self.core.message(sid, phrase, defer=True)
             if res["reply"]["kind"] == "offer":  # анкета предлагается по смыслу фразы — человек уже нажал кнопку, подтверждаем за него
                 res = self.core.message(sid, "да", defer=True)
-        except HTTPException as exc:
+        except ServiceError as exc:
             self._send(u, esc(exc.detail))
             return
         self._dialog(u, sid, res)
@@ -515,8 +514,8 @@ class TelegramBot:
                        "dialog": result["dialog"], "download": result["download"]}
             else:
                 res = self.core.message(sid, "сформировать", defer=True)
-        except HTTPException as exc:
-            if exc.status_code == 400 and "шаблон" in str(exc.detail).lower():
+        except ServiceError as exc:
+            if exc.status == 400 and "шаблон" in str(exc.detail).lower():
                 rows = [[btn(short(t["name"], 40), f"tpl:{t['id']}")] for t in self.core.available_templates()[:8]]
                 self._send(u, "Выберите шаблон заявления:", kb(*rows))
             else:
@@ -553,7 +552,7 @@ class TelegramBot:
         contact = f"@{u['username']}" if state.get("contact") and u.get("username") else ""
         try:
             res = self.core.submit(sid, confirm, False, contact, source="bot")
-        except HTTPException as exc:
+        except ServiceError as exc:
             self._send(u, esc(exc.detail))
             return
         if not res.get("sent"):
@@ -637,7 +636,7 @@ class TelegramBot:
         sid = self.accounts.ensure_data_session(u)
         try:
             res = self.core.message(sid, text, defer=True)
-        except HTTPException as exc:
+        except ServiceError as exc:
             self._send(u, esc(exc.detail))
             return
         self._dialog(u, sid, res)
