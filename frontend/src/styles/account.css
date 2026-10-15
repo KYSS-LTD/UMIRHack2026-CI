@@ -1,30 +1,48 @@
 /* Необязательный аккаунт: баннер входа, окно входа через Telegram, кабинет. Спокойная «бумага», цвет — только там, где он что-то значит. */
 @layer views {
-  /* ---------- баннер «Войти через Telegram» ---------- */
+  /* ---------- баннер «Войти через Telegram»: плоский бланк (бумага, тонкие линии, ни градиентов, ни свечения) ---------- */
   .tg-banner {
-    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s-4) var(--s-5); align-items: center;
-    max-width: 1180px; margin: 0 auto var(--s-6); padding: var(--s-5) var(--s-6);
-    border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-1);
-    animation: row-in 460ms var(--glide) both;
+    display: grid; gap: var(--s-4); max-width: 1180px; margin: 0 auto var(--s-6); padding: var(--s-5) var(--s-6);
+    background: var(--surface); background-image: none; border: 1px solid var(--line-strong); border-radius: var(--r-md); box-shadow: none;
+    animation: row-in 360ms var(--glide) both;
   }
-  .tg-ic { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: var(--link); background: color-mix(in srgb, var(--link) 12%, transparent); }
-  .tg-copy h2 { margin: 0 0 6px; font-size: var(--fs-md); letter-spacing: -.01em; }
-  .tg-copy ul { display: grid; gap: 3px; margin: 0 0 8px; padding: 0; list-style: none; color: var(--ink-2); font-size: var(--fs-sm); }
-  .tg-copy li { position: relative; padding-left: 16px; }
-  .tg-copy li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 5px; height: 5px; border-radius: 50%; background: var(--ink-3); }
-  .tg-copy p { margin: 0; font-size: var(--fs-xs); }
-  .tg-actions { display: grid; gap: var(--s-2); justify-items: stretch; }
+  .tg-head { display: flex; align-items: center; gap: var(--s-4); }
+  .tg-mark { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 1.5px solid var(--link); border-radius: 10px; color: var(--link); }
+  .tg-head .eyebrow { margin: 0; }
+  .tg-head h2 { margin: 2px 0 0; font-size: var(--fs-md); letter-spacing: -.01em; }
+
+  .tg-perks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; border-block: 1px dashed var(--line-strong); }
+  .tg-perks li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; align-content: start; padding: var(--s-4); }
+  .tg-perks li + li { border-left: 1px dashed var(--line-strong); }
+  .tg-perks svg { grid-row: 1 / span 2; margin-top: 2px; color: var(--ink-3); }
+  .tg-perks b { font-size: var(--fs-sm); }
+  .tg-perks span { color: var(--ink-2); font-size: var(--fs-xs); line-height: 1.45; }
+
+  .tg-steps { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-6); margin: 0; padding: 0; list-style: none; counter-reset: tg-step; color: var(--ink-2); font-size: var(--fs-sm); }
+  .tg-steps li { display: flex; align-items: center; gap: 8px; counter-increment: tg-step; }
+  .tg-steps li::before {
+    content: counter(tg-step); display: grid; place-items: center; width: 20px; height: 20px; border: 1.5px solid var(--line-strong); border-radius: 50%;
+    color: var(--ink-3); font-size: 11px; font-weight: 700;
+  }
+
+  .tg-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3) var(--s-5); }
+  .tg-fine { flex: 1 1 380px; margin: 0; max-width: 66ch; color: var(--ink-3); font-size: var(--fs-xs); line-height: 1.5; }
+  .tg-fine b { color: var(--ink-2); font-weight: 650; }
+  .tg-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
   .tg-actions .btn { white-space: nowrap; }
-  @media (max-width: 760px) {
-    .tg-banner { grid-template-columns: auto minmax(0, 1fr); padding: var(--s-4); }
-    .tg-actions { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 860px) {
+    .tg-perks { grid-template-columns: 1fr; }
+    .tg-perks li + li { border-left: 0; border-top: 1px dashed var(--line-strong); }
   }
   @media (max-width: 560px) {
-    .tg-banner { gap: 12px 14px; padding: 14px; }
-    .tg-ic { width: 36px; height: 36px; }
-    .tg-copy li:nth-child(3) { display: none; } /* на телефоне — два главных плюса, остальное в окне входа */
+    .tg-banner { gap: var(--s-3); padding: var(--s-4); }
+    .tg-steps { display: none; } /* шаги — в окне входа; на телефоне баннер короче */
+    .tg-perks span { display: none; }
+    .tg-perks li { padding: var(--s-2) var(--s-3); grid-template-columns: auto 1fr; align-items: center; }
+    .tg-perks svg { grid-row: auto; margin: 0; }
+    .tg-actions { width: 100%; }
+    .tg-actions .btn { flex: 1 1 auto; }
   }
-  @media (max-width: 420px) { .tg-actions { grid-template-columns: 1fr; } }
   [data-tg] .tg-banner { display: none; }
 
   /* ---------- после отправки обращения: ответ в Telegram ---------- */

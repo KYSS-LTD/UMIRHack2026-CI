@@ -97,6 +97,20 @@ describe("TelegramBanner", () => {
     expect(within(banner).getByRole("button", { name: "Напомнить позже" })).toBeInTheDocument();
   });
 
+  it("is a detailed form: three benefits with explanations, the three steps and what is stored", async () => {
+    mount(<TelegramBanner />);
+    const banner = await screen.findByRole("complementary", { name: /Вход через Telegram/ });
+    const perks = within(banner).getAllByRole("listitem").filter((li) => li.closest("ul"));
+    expect(perks).toHaveLength(3);
+    expect(within(banner).getByText("Анкета везде")).toBeInTheDocument();
+    expect(within(banner).getByText("Ответ в Telegram")).toBeInTheDocument();
+    expect(within(banner).getByText("Обращения без кода")).toBeInTheDocument();
+    const steps = within(within(banner).getByRole("list", { name: "Как войти" })).getAllByRole("listitem");
+    expect(steps.map((x) => x.textContent)).toEqual(["Нажмите «Войти»", "Откройте бота и подтвердите вход", "Вернитесь на сайт — вход выполнится сам"]);
+    expect(within(banner).getByText(/Из Telegram мы получаем только имя и @имя/)).toBeInTheDocument();
+    expect(within(banner).getByText(/телефон и почту не запрашиваем/)).toBeInTheDocument();
+  });
+
   it("'remind me later' hides it now and keeps it hidden after a reload", async () => {
     const { unmount } = mount(<TelegramBanner />);
     await userEvent.click(await screen.findByRole("button", { name: "Напомнить позже" }));

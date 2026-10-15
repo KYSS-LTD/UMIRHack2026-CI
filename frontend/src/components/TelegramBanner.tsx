@@ -63,26 +63,53 @@ export function TelegramBanner() {
 
   return (
     <aside className="tg-banner" aria-label="Вход через Telegram">
-      <span className="tg-ic" aria-hidden="true">
-        <Icon name="telegram" size={22} />
-      </span>
-      <div className="tg-copy">
-        <h2>Войдите через Telegram — по желанию</h2>
-        <ul>
-          <li>Начали анкету на телефоне — закончите на компьютере</li>
-          <li>Ответ деканата придёт прямо в Telegram</li>
-          <li>Свои обращения видно без кода</li>
-        </ul>
-        <p className="faint">Без входа всё работает как раньше.</p>
-      </div>
-      <div className="tg-actions">
-        <button type="button" className="btn primary" onClick={openLogin}>
-          <Icon name="telegram" size={16} /> Войти через Telegram
-        </button>
-        <button type="button" className="btn ghost" onClick={later}>
-          Напомнить позже
-        </button>
-      </div>
+      <header className="tg-head">
+        <span className="tg-mark" aria-hidden="true">
+          <Icon name="telegram" size={20} />
+        </span>
+        <div>
+          <p className="eyebrow">Необязательно · вход через Telegram</p>
+          <h2>Войдите через Telegram — по желанию</h2>
+        </div>
+      </header>
+
+      <ul className="tg-perks">
+        <li>
+          <Icon name="swap" size={18} />
+          <b>Анкета везде</b>
+          <span>Начали анкету на телефоне — закончите на компьютере: анкета и документ общие для сайта и бота.</span>
+        </li>
+        <li>
+          <Icon name="bell" size={18} />
+          <b>Ответ в Telegram</b>
+          <span>Ответ деканата придёт прямо в Telegram: и новый статус обращения, и напоминание, что принести.</span>
+        </li>
+        <li>
+          <Icon name="inbox" size={18} />
+          <b>Обращения без кода</b>
+          <span>Свои обращения видны сразу, номер и код вводить не нужно. Старое обращение можно привязать по коду.</span>
+        </li>
+      </ul>
+
+      <ol className="tg-steps" aria-label="Как войти">
+        <li>Нажмите «Войти»</li>
+        <li>Откройте бота и подтвердите вход</li>
+        <li>Вернитесь на сайт — вход выполнится сам</li>
+      </ol>
+
+      <footer className="tg-foot">
+        <p className="tg-fine">
+          <b>Без входа всё работает как раньше.</b> Из Telegram мы получаем только имя и @имя — телефон и почту не запрашиваем. Аккаунт можно удалить в любой момент.
+        </p>
+        <div className="tg-actions">
+          <button type="button" className="btn primary" onClick={openLogin}>
+            <Icon name="telegram" size={16} /> Войти через Telegram
+          </button>
+          <button type="button" className="btn ghost" onClick={later}>
+            Напомнить позже
+          </button>
+        </div>
+      </footer>
     </aside>
   );
 }
