@@ -17,3 +17,6 @@ data/output/
 *.db
 *.db-wal
 *.db-shm
+
+# токен Telegram-бота (его читает start.ps1): секрет, в репозиторий не попадает
+.telegram-token
