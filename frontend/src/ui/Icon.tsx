@@ -13,7 +13,6 @@ const PATHS = {
   alert: ["M12 3l10 18H2z", "M12 10v5M12 18h.01"],
   question: [circle(12, 12, 9), "M9.6 9.6a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1.1 1-1.1 1.7M12 17h.01"],
   doc: ["M7 3h7l5 5v13H7z", "M14 3v5h5M10 13h6M10 17h6"],
-  more: [circle(6, 12, 1.4), circle(12, 12, 1.4), circle(18, 12, 1.4)],
   camera: ["M4 8h3l2-3h6l2 3h3v11H4z", circle(12, 13.5, 3.5)],
   arrowRight: ["M5 12h14M13 6l6 6-6 6"],
   book: ["M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z", "M5 17a3 3 0 0 1 3-3h10"],

@@ -87,11 +87,6 @@
   .tool:active { transform: scale(.9); }
   .tool.wide { padding: 0 12px; }
   .tool.on { background: var(--btn); color: var(--btn-ink); }
-  /* редкие действия (контраст, сохранить) — под «Ещё», чтобы на панели были только нужные каждый раз */
-  .tool-more { position: relative; display: inline-flex; }
-  .tool-more-list { position: absolute; right: 0; bottom: calc(100% + 10px); display: grid; gap: 2px; padding: 5px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line-strong); box-shadow: var(--shadow-3); animation: chip-in 320ms var(--spring) both; }
-  .tool-more-list .tool { justify-content: flex-start; white-space: nowrap; }
-  .tool-more-list .tool.wide span { display: inline; }
   .zoom { min-width: 46px; text-align: center; font-size: var(--fs-sm); color: var(--ink-2); font-weight: 650; }
   .viewer-meta { position: absolute; z-index: 5; left: 16px; bottom: 22px; margin: 0; padding: 4px 10px; border-radius: var(--r-pill); background: var(--glass); border: 1px solid var(--line); color: var(--ink-3); font-size: 11.5px; backdrop-filter: blur(8px); pointer-events: none; }
   @media (max-width: 899px) { .viewer-meta { display: none; } }

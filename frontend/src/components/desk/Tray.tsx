@@ -14,9 +14,6 @@ interface Props {
   onError: (message: string) => void;
 }
 
-/** «Сфотографировать» нужна только там, где есть камера под рукой (телефон, планшет); на компьютере она дублировала бы «Выбрать файл». */
-const TOUCH = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
-
 /** Пустой стол: лоток для документа и «примеры на столе». Принимает файл по клику, перетаскиванию и из буфера. */
 export function Tray({ maxMb, samples, dragging, busy, onFile, onSample, onError }: Props) {
   const input = useRef<HTMLInputElement>(null);
@@ -51,7 +48,7 @@ export function Tray({ maxMb, samples, dragging, busy, onFile, onSample, onError
       <div className="tray-text">
         <h2>{dragging ? "Отпустите — я прочитаю" : "Положите документ на стол"}</h2>
         <p className="muted">
-          Фото, скан или PDF до {maxMb} МБ. Перетащите файл сюда или вставьте из буфера (<kbd>Ctrl</kbd>+<kbd>V</kbd>){TOUCH ? ", можно сфотографировать" : ""}.
+          Фото, скан или PDF до {maxMb} МБ. Перетащите файл сюда, вставьте из буфера (<kbd>Ctrl</kbd>+<kbd>V</kbd>) или сфотографируйте.
         </p>
       </div>
 
@@ -59,11 +56,9 @@ export function Tray({ maxMb, samples, dragging, busy, onFile, onSample, onError
         <button type="button" className="btn primary" disabled={busy} onClick={() => input.current?.click()}>
           <Icon name="inbox" /> Выбрать файл
         </button>
-        {TOUCH && (
-          <button type="button" className="btn ghost camera-btn" disabled={busy} onClick={() => camera.current?.click()}>
-            <Icon name="camera" /> Сфотографировать
-          </button>
-        )}
+        <button type="button" className="btn ghost camera-btn" disabled={busy} onClick={() => camera.current?.click()}>
+          <Icon name="camera" /> Сфотографировать
+        </button>
       </div>
 
       {samples.length > 0 && (

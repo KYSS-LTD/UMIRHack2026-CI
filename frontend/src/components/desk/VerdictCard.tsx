@@ -76,6 +76,12 @@ export function VerdictCard({ answer, warnings, images, resolveBoxes, onFocusSou
         <Reveal text={answer.text} />
       </p>
 
+      <div className="v-actions">
+        <button type="button" className={`link copy-answer ${copied ? "done" : ""}`} onClick={() => void copy()}>
+          <Icon name={copied ? "check" : "copy"} size={14} key={copied ? "ok" : "copy"} /> {copied ? "Скопировано" : "Копировать ответ"}
+        </button>
+      </div>
+
       {missing.length > 0 && (
         <ul className="v-missing" aria-label="Чего не хватает">
           {missing.map((m, i) => (
@@ -125,11 +131,6 @@ export function VerdictCard({ answer, warnings, images, resolveBoxes, onFocusSou
           <small className="faint">уверенность</small>
         </div>
       </footer>
-      <div className="v-actions">
-        <button type="button" className={`link copy-answer ${copied ? "done" : ""}`} onClick={() => void copy()}>
-          <Icon name={copied ? "check" : "copy"} size={14} key={copied ? "ok" : "copy"} /> {copied ? "Скопировано" : "Копировать ответ"}
-        </button>
-      </div>
 
       {clause && (
         <blockquote className="quote">

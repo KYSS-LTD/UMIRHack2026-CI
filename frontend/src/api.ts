@@ -13,7 +13,6 @@ import type {
   Health,
   JobSnapshot,
   MessageResult,
-  PhotoQuality,
   RegulationInfo,
   SampleItem,
   SubmissionPreview,
@@ -81,12 +80,6 @@ export const api = {
     const form = new FormData();
     form.append("file", file, fileName || (file as File).name || "document");
     return request<PagePreview>("/api/preview", { method: "POST", body: form, signal });
-  },
-  /** Быстрая проверка снимка до отправки (без распознавания): размытие, темнота, блики, мелкий текст. */
-  async photoQuality(file: Blob, fileName: string, signal?: AbortSignal): Promise<PhotoQuality> {
-    const form = new FormData();
-    form.append("file", file, fileName || (file as File).name || "document");
-    return request<PhotoQuality>("/api/quality", { method: "POST", body: form, signal });
   },
   cancelJob: (id: string) => request<{ ok: boolean }>(`/api/jobs/${id}`, { method: "DELETE" }).catch(() => ({ ok: false })),
 

@@ -234,19 +234,10 @@ describe("TypeRail", () => {
     expect(onChoose).toHaveBeenCalledWith("study_certificate");
   });
 
-  it("shows a confidently detected type in one line and opens the list on «Изменить»", async () => {
+  it("marks the current type and the generic mode", () => {
     render(<TypeRail info={info({ id: "study_certificate", title: "Справка об обучении", confidence: 0.9 })} types={types} busy={false} hasFile onChoose={noop} />);
-    expect(screen.getByText("Справка об обучении")).toBeInTheDocument();
-    expect(screen.queryByRole("radio")).not.toBeInTheDocument(); // уверенно определённый тип не требует выбора
-    await userEvent.click(screen.getByRole("button", { name: "Изменить" }));
     expect(screen.getByRole("radio", { name: /Справка об обучении/ })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: /Другой документ/ })).toHaveAttribute("aria-checked", "false");
-  });
-
-  it("opens the list by itself when the type is uncertain", () => {
-    render(<TypeRail info={info({ id: "study_certificate", title: "Справка об обучении", confidence: 0.5, uncertain: true })} types={types} busy={false} hasFile onChoose={noop} />);
-    expect(screen.getAllByRole("radio").length).toBeGreaterThan(1);
-    expect(screen.queryByRole("button", { name: "Изменить" })).not.toBeInTheDocument();
   });
 
   it("renders nothing without a file", () => {

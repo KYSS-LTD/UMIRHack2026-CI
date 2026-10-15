@@ -117,23 +117,6 @@ export interface PagePreview {
   data_url: string;
 }
 
-/** Что не так со снимком и как снять лучше (dekanat/ocr/photo.py). */
-export interface PhotoIssue {
-  code: string;
-  severity: "info" | "warn" | "bad";
-  title: string;
-  hint: string;
-}
-
-export interface PhotoQuality {
-  level: "good" | "fair" | "poor";
-  /** рекомендуем переснять: текст читается плохо */
-  retake: boolean;
-  issues: PhotoIssue[];
-  /** PDF не снимают камерой — его не оцениваем */
-  skipped?: "pdf";
-}
-
 export interface AnalysisResult {
   doc_type: DocTypeInfo;
   ocr: { engine: string | null; pages: OcrPageInfo[]; text: string };
@@ -141,7 +124,6 @@ export interface AnalysisResult {
   answer: Answer;
   warnings: string[];
   timings: Record<string, number | boolean>;
-  photo_quality?: PhotoQuality;
   images: PagePreview[];
   export: Record<string, unknown>;
   /** повторная проверка того же файла: поля, исправленные пользователем раньше («поле» или «поле.часть») */

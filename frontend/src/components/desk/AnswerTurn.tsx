@@ -7,7 +7,6 @@ import { Icon } from "../../ui/Icon";
 import { Avatar } from "./Avatar";
 import { FieldsCard } from "./FieldsCard";
 import type { Highlight } from "./highlight";
-import { PhotoNotice } from "./PhotoNotice";
 import { TypeRail } from "./TypeRail";
 import { VerdictCard } from "./VerdictCard";
 
@@ -31,7 +30,6 @@ interface Props {
   /** false — уточняющий вопрос по уже показанному документу: только ответ, карточка документа — в первом ответе */
   docCard?: boolean;
   onShowCard?: () => void;
-  onRetake?: () => void;
 }
 
 /** Ответ секретаря. Активный — раскрыт целиком, прежние — свёрнуты в строку (плавно, без прыжков). */
@@ -62,7 +60,6 @@ export function AnswerTurn(p: Props) {
         </button>
         <div className="fold" aria-hidden={!p.active} inert={!p.active}>
           <div className="fold-inner">
-            {p.docCard !== false && result.photo_quality && <PhotoNotice quality={result.photo_quality} onRetake={p.onRetake} />}
             <VerdictCard
               key={turn.revision ?? 0}
               answer={result.answer}

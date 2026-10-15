@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef } from "react";
 import { cardOwners, type Turn } from "../../hooks/useDesk";
-import { emit } from "../../lib/bus";
 import { relativeTime, VERDICT_META } from "../../lib/format";
 import type { HistoryEntry } from "../../lib/history";
 import type { Box, Delivery, DialogInfo, DocTypeSummary, FieldResult, PartResult, Source, SubmitResult, TemplateInfo } from "../../types";
 import { Icon } from "../../ui/Icon";
 import { AnswerTurn } from "./AnswerTurn";
 import { Avatar } from "./Avatar";
+import { DemoLoop } from "./DemoLoop";
 import { DialogTurn, TypingTurn } from "./DialogTurn";
 import type { Highlight } from "./highlight";
 import { ProcessTurn } from "./ProcessTurn";
@@ -44,12 +44,23 @@ interface Props {
   onCorrect: (turn: Turn, unit: string, value: string) => Promise<boolean>;
   /** идёт очистка чата: реплики уходят с ленты, затем стол пустеет */
   sweeping?: boolean;
-  /** «Загрузить другой снимок» в совете переснять */
-  onRetake?: () => void;
 }
 
-/** Три шага вместо описи возможностей: на пустом столе должно быть понятно, что делать первым. */
-const STEPS = ["Положите фото, скан или PDF на стол", "Задайте вопрос — или сразу нажмите «Проверить»", "Получите ответ со ссылкой на пункт и подсветкой на снимке"];
+/** Что умеет секретарь — как опись в деле: римская нумерация на полях, тонкие линейки, без плашек. */
+const LEDGER: { title: string; text: string }[] = [
+  { title: "Читаю снимок", text: "фото, скан или PDF; наклон, тень и блики не помеха." },
+  { title: "Заполняю карточку", text: "ФИО, вуз, период, номер, печать; чего нет — пишу «не найдено», неверное можно поправить." },
+  { title: "Отвечаю по Положению", text: "со ссылкой на пункт и подсветкой места на снимке." },
+  { title: "Собираю заявление", text: "короткая анкета о переводе или зачислении, готовый DOCX и, если захотите, отправка в деканат." },
+];
+const ROMAN = ["I", "II", "III", "IV", "V"];
+
+/** С чего начать — как оглавление: вопрос, отточие, что получится. */
+const STARTERS: [string, string][] = [
+  ["Я хочу перевестись", "анкета и заявление"],
+  ["Как к вам поступить?", "анкета на зачисление"],
+  ["Сколько дней рассматривается заявление?", "ответ по Положению"],
+];
 
 export function Thread(p: Props) {
   const end = useRef<HTMLDivElement>(null);
@@ -60,11 +71,9 @@ export function Thread(p: Props) {
   // новая реплика или готовый ответ — плавно прокручиваем диалог вниз
   useEffect(() => {
     if (!lastId) return;
-    // готовый ответ по документу показываем с начала: сначала вывод и совет по снимку, а не конец карточки полей
-    const fromTop = lastPhase === "done" && !last?.chat;
-    const t = setTimeout(() => (fromTop ? document.getElementById(`turn-${lastId}`) : end.current)?.scrollIntoView({ behavior: "smooth", block: fromTop ? "start" : "end" }), 80);
+    const t = setTimeout(() => end.current?.scrollIntoView({ behavior: "smooth", block: "end" }), 80);
     return () => clearTimeout(t);
-  }, [lastId, lastPhase]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [lastId, lastPhase]);
 
   const typeTitle = (id: string) => p.types.find((t) => t.id === id)?.title ?? id;
   const owners = useMemo(() => cardOwners(p.turns), [p.turns]);
@@ -82,24 +91,36 @@ export function Thread(p: Props) {
         <h1>
           Покажите документ — получите <em>ответ со ссылкой на пункт</em>
         </h1>
-        <ol className="steps" aria-label="Как это работает">
-          {STEPS.map((t, i) => (
-            <li key={t}>
-              <span aria-hidden="true">{i + 1}</span>
-              {t}
+        <p className="lead">Секретарь прочитает фото справки или заявления, заполнит карточку полей и честно скажет, чего не хватает — или что ответа нет. Нужно заявление — проведёт короткую анкету и соберёт документ.</p>
+        <DemoLoop />
+        <ol className="ledger" aria-label="Что умеет секретарь">
+          {LEDGER.map((c, i) => (
+            <li key={c.title} style={{ ["--i" as string]: i }}>
+              <span className="ledger-no" aria-hidden="true">
+                {ROMAN[i]}
+              </span>
+              <p>
+                <strong>{c.title}</strong> — {c.text}
+              </p>
             </li>
           ))}
         </ol>
-        <p className="other-ways">
-          Нет документа?{" "}
-          <button type="button" className="link" disabled={p.busy} onClick={() => p.onSay("Я хочу перевестись")}>
-            Составить заявление
-          </button>
-          {" · "}
-          <button type="button" className="link" onClick={() => emit("focus-question")}>
-            Спросить по Положению
-          </button>
-        </p>
+        <section className="starts" aria-labelledby="starts-title">
+          <h2 id="starts-title" className="eyebrow">
+            Можно начать так
+          </h2>
+          <ul role="list">
+            {STARTERS.map(([q, hint], i) => (
+              <li key={q} style={{ ["--i" as string]: i }}>
+                <button type="button" className="start-line" disabled={p.busy} onClick={() => p.onSay(q)}>
+                  <span className="start-q">«{q}»</span>
+                  <span className="start-hint">{hint}</span>
+                  <Icon name="arrowRight" size={14} className="start-arrow" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
         {p.history.length > 0 && (
           <section className="hist" aria-labelledby="hist-title">
             <div className="hist-head">
@@ -169,7 +190,6 @@ export function Thread(p: Props) {
               onCorrect={(unit, value) => p.onCorrect(t, unit, value)}
               docCard={(owners.get(t.id) ?? t.id) === t.id}
               onShowCard={() => showCard(owners.get(t.id) ?? t.id)}
-              onRetake={p.onRetake}
             />
           )}
           {t.phase === "error" && (
