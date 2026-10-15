@@ -639,3 +639,10 @@ button.danger.solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
   *, *::before, *::after { animation-duration: .001ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
 }
 @media print { header.top, .ambient, button, .ledger-tabs { display: none !important; } body { background: #fff; } .sheet { box-shadow: none; } }
+
+/* типы документов: редактор описания */
+textarea.code-area { min-height: 300px; font-family: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace; font-size: 12.5px; line-height: 1.55; tab-size: 2; white-space: pre; overflow: auto; }
+.chip.soft { background: transparent; border: 1px solid var(--line); color: var(--ink-3); }
+.item .chips { margin-top: 6px; }
+/* открытое меню действий лежит поверх соседних строк списка (у строк своя анимация, и каждая рисуется отдельным слоем) */
+.item:has(.more-list.on), .item:focus-within { position: relative; z-index: 6; }

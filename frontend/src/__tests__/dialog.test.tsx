@@ -285,19 +285,21 @@ describe("Thread empty state", () => {
     onCorrect: async () => true,
   };
 
-  it("lists what the secretary does as a numbered ledger, not as cards", () => {
+  it("tells a newcomer what to do in three steps instead of listing every feature", () => {
     render(<Thread {...props} />);
-    const ledger = screen.getByRole("list", { name: "Что умеет секретарь" });
-    expect(within(ledger).getAllByRole("listitem")).toHaveLength(4);
-    expect(ledger).toHaveTextContent("Собираю заявление");
+    const steps = screen.getByRole("list", { name: "Как это работает" });
+    expect(within(steps).getAllByRole("listitem")).toHaveLength(3);
+    expect(steps).toHaveTextContent("Положите фото, скан или PDF на стол");
+    expect(screen.queryByRole("list", { name: "Что умеет секретарь" })).not.toBeInTheDocument();
     expect(document.querySelector(".caps")).toBeNull();
   });
 
-  it("starts the questionnaire or a question from the table of contents", async () => {
+  it("keeps the questionnaire and regulation questions as quiet secondary ways in", async () => {
     const onSay = vi.fn();
     render(<Thread {...props} onSay={onSay} />);
-    await userEvent.click(screen.getByRole("button", { name: /Я хочу перевестись/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Составить заявление" }));
     expect(onSay).toHaveBeenCalledWith("Я хочу перевестись");
+    expect(screen.getByRole("button", { name: "Спросить по Положению" })).toBeInTheDocument();
   });
 
   it("does not clutter the thread with storage notes", () => {
@@ -403,6 +405,24 @@ describe("document card is shown once per file", () => {
   it("keeps the card on the first answer about the file", () => {
     render(<AnswerTurn {...props} />);
     expect(screen.getByText("Что найдено в документе")).toBeInTheDocument();
+  });
+
+  const poor = { level: "poor" as const, retake: true, issues: [{ code: "blur", severity: "bad" as const, title: "Снимок размытый", hint: "Держите телефон неподвижно." }] };
+
+  it("advises to retake a poor photo on the first answer and offers a new file", async () => {
+    const onRetake = vi.fn();
+    render(<AnswerTurn {...props} turn={check("b", { result: result({ photo_quality: poor }) })} onRetake={onRetake} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Снимок размытый");
+    await userEvent.click(screen.getByRole("button", { name: /Загрузить другой снимок/ }));
+    expect(onRetake).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not repeat the photo advice under follow-up questions or for a good photo", () => {
+    const { rerender } = render(<AnswerTurn {...props} turn={check("b", { result: result({ photo_quality: poor }) })} docCard={false} />);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    rerender(<AnswerTurn {...props} turn={check("b", { result: result({ photo_quality: { level: "good", retake: false, issues: [] } }) })} />);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Качество снимка")).not.toBeInTheDocument();
   });
 });
 

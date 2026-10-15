@@ -1,10 +1,12 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { useObjectUrl } from "../../hooks/useObjectUrl";
+import { usePhotoCheck } from "../../hooks/usePhotoCheck";
 import { ACCEPT, validateFile } from "../../lib/files";
 import { formatBytes } from "../../lib/format";
 import { SUGGESTION_TITLES } from "../../lib/suggestions";
 import type { DocTypeSummary, Suggestion } from "../../types";
 import { Icon } from "../../ui/Icon";
+import { PhotoNotice } from "./PhotoNotice";
 import { TypePicker } from "./TypePicker";
 
 export interface ComposerHandle {
@@ -30,6 +32,8 @@ interface Props {
   recall?: string;
   /** своя подсказка-заглушка (например, пока идёт анкета) вместо сменяющихся вопросов */
   placeholder?: string;
+  /** пустой стол: нет ни документа, ни реплик — подсказки вопросов и выбор типа пока не нужны, остаётся поле и «Проверить» */
+  idle?: boolean;
 }
 
 const MAX_LEN = 600;
@@ -41,6 +45,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(p, r
   const [focused, setFocused] = useState(false);
   const [ph, setPh] = useState(0);
   const thumb = useObjectUrl(p.file);
+  const photo = usePhotoCheck(p.file);
   const canRun = !!(p.file || p.question.trim());
 
   useImperativeHandle(ref, () => ({ focusQuestion: () => area.current?.focus(), pickFile: () => picker.current?.click() }));
@@ -79,16 +84,18 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(p, r
         if (canRun && !p.busy) p.onSubmit();
       }}
     >
-      <div className="suggest-strip" role="group" aria-label="Подсказки вопросов">
-        {groups.flatMap(([kind, list]) =>
-          list.map((s, i) => (
-            <button key={`${kind}:${s.text}`} type="button" className={`sg kind-${kind}`} disabled={p.busy} title={SUGGESTION_TITLES[kind]} style={{ ["--i" as string]: i }} onClick={() => (p.onQuestion(s.text), area.current?.focus())}>
-              <i aria-hidden="true" />
-              {s.text}
-            </button>
-          )),
-        )}
-      </div>
+      {!p.idle && (
+        <div className="suggest-strip" role="group" aria-label="Подсказки вопросов">
+          {groups.flatMap(([kind, list]) =>
+            list.map((s, i) => (
+              <button key={`${kind}:${s.text}`} type="button" className={`sg kind-${kind}`} disabled={p.busy} title={SUGGESTION_TITLES[kind]} style={{ ["--i" as string]: i }} onClick={() => (p.onQuestion(s.text), area.current?.focus())}>
+                <i aria-hidden="true" />
+                {s.text}
+              </button>
+            )),
+          )}
+        </div>
+      )}
 
       {p.file && (
         <div className="dock-file">
@@ -102,6 +109,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(p, r
           </button>
         </div>
       )}
+      {photo && <PhotoNotice quality={photo} compact />}
 
       <div className="dock-field">
         <textarea
@@ -139,10 +147,11 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(p, r
         <button type="button" className="round-btn" aria-label="Прикрепить документ" title="Прикрепить документ" disabled={p.busy} onClick={() => picker.current?.click()}>
           <Icon name="attach" size={18} />
         </button>
-        <TypePicker value={p.docType} types={p.types} disabled={p.busy} onChange={p.onDocType} />
+        {!p.idle && <TypePicker value={p.docType} types={p.types} disabled={p.busy} onChange={p.onDocType} />}
         <span className="grow" />
         <span id="dock-hint" className="dock-hint faint">
-          {p.question.length > MAX_LEN - 80 ? <span className="tabnum">{p.question.length}/{MAX_LEN}</span> : <><kbd>Enter</kbd> — отправить<span className="dock-hint-more">, <kbd>Shift</kbd>+<kbd>Enter</kbd> — новая строка</span></>}
+          {p.question.length > MAX_LEN - 80 && <span className="tabnum">{p.question.length}/{MAX_LEN}</span>}
+          <span className="sr-only">Enter — отправить, Shift и Enter — новая строка</span>
         </span>
         {p.busy ? (
           <button type="button" className="send stop" onClick={p.onCancel} aria-label="Остановить проверку">

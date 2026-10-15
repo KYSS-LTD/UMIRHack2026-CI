@@ -499,6 +499,7 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
             editableId={busy ? null : editableId}
             onCorrect={correct}
             sweeping={sweeping}
+            onRetake={() => composer.current?.pickFile()}
           />
         </div>
         {away && turns.length > 0 && (
@@ -523,6 +524,7 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
           onError={(m) => toast.show(m, "error")}
           recall={lastTurn?.question}
           placeholder={quiz ? "Ваш ответ на вопрос анкеты" : undefined}
+          idle={!turns.length && !file}
         />
       </section>
 

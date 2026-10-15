@@ -57,6 +57,7 @@ export function PaperViewer(p: Props) {
   const toast = useToast();
   const imgRef = useRef<HTMLImageElement>(null);
   const [enhance, setEnhance] = useState(false);
+  const [moreTools, setMoreTools] = useState(false);
   const [showText, setShowText] = useState(false);
   const stage = useRef<HTMLDivElement>(null);
   const plane = useRef<HTMLDivElement>(null);
@@ -414,15 +415,25 @@ export function PaperViewer(p: Props) {
             <span>Текст</span>
           </button>
         )}
-        <button type="button" className={`tool wide ${enhance ? "on" : ""}`} aria-pressed={enhance} onClick={() => setEnhance((v) => !v)} title="Повысить контраст: поможет прочитать бледный или тёмный снимок">
-          <Icon name="contrast" />
-          <span>Контраст</span>
-        </button>
-        {src && (
-          <button type="button" className="tool" onClick={save} aria-label="Сохранить снимок с подсветкой" title="Сохранить снимок с подсветкой (PNG)">
-            <Icon name="download" />
+        <span className="tool-more">
+          <button type="button" className="tool" aria-expanded={moreTools} aria-label="Ещё: контраст, сохранить снимок" title="Ещё" onClick={() => setMoreTools((v) => !v)}>
+            <Icon name="more" />
           </button>
-        )}
+          {moreTools && (
+            <span className="tool-more-list" role="group" aria-label="Дополнительные действия">
+              <button type="button" className={`tool wide ${enhance ? "on" : ""}`} aria-pressed={enhance} onClick={() => setEnhance((v) => !v)} title="Повысить контраст: поможет прочитать бледный или тёмный снимок">
+                <Icon name="contrast" />
+                <span>Контраст</span>
+              </button>
+              {src && (
+                <button type="button" className="tool wide" onClick={save} title="Сохранить снимок с подсветкой (PNG)">
+                  <Icon name="download" />
+                  <span>Сохранить</span>
+                </button>
+              )}
+            </span>
+          )}
+        </span>
       </div>
     </section>
   );
