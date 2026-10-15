@@ -1420,6 +1420,12 @@ async function viewTypes(panel) {
   let saveBtn = null;
   let checked = null; // последний разбор описания: {ok, id, ...}
 
+  const HINT_EMPTY = "Выберите файл или вставьте описание выше";
+  const sync = (r) => {
+    const ready = !!r && r.ok && (editing || !r.exists);
+    hint.classList.toggle("hidden", ready);
+    hint.textContent = !r ? HINT_EMPTY : !r.ok ? "Исправьте описание — кнопка станет активной" : "Измените id в описании, чтобы добавить новый тип";
+  };
   const showVerdict = (r) => {
     checked = r;
     verdict.classList.remove("hidden", "ok", "bad");
@@ -1433,9 +1439,10 @@ async function viewTypes(panel) {
         : `Описание верное: «${r.title}», id «${r.id}», ${r.fields} ${plural(r.fields, ["поле", "поля", "полей"])} (${r.field_titles.slice(0, 6).join(", ")}${r.field_titles.length > 6 ? "…" : ""}).`;
     }
     saveBtn.disabled = !(r.ok && (editing || !r.exists));
+    sync(r);
   };
   const check = async () => {
-    if (!area.value.trim()) { verdict.classList.add("hidden"); saveBtn.disabled = true; return; }
+    if (!area.value.trim()) { verdict.classList.add("hidden"); saveBtn.disabled = true; sync(null); return; }
     showVerdict(await api("POST", "/api/admin/doctypes/validate", { yaml: area.value }));
   };
   const setText = (text) => { area.value = text; return guarded(check); };
@@ -1445,7 +1452,7 @@ async function viewTypes(panel) {
   const pick = filePick("t-file", ".yaml,.yml,.txt", "Файл описания типа, .yaml", async (f) => {
     if (f) { editing = null; heading.textContent = "новый тип"; await setText(await f.text()); }
   });
-  const reset = () => { editing = null; heading.textContent = "новый тип"; area.value = ""; pick.reset(); verdict.classList.add("hidden"); saveBtn.disabled = true; saveBtn.lastChild.textContent = "Добавить тип"; };
+  const reset = () => { editing = null; heading.textContent = "новый тип"; area.value = ""; pick.reset(); verdict.classList.add("hidden"); saveBtn.disabled = true; saveBtn.lastChild.textContent = "Добавить тип"; sync(null); };
   saveBtn = button("Добавить тип", () => guarded(async () => {
     const r = editing
       ? await api("PUT", `/api/admin/doctypes/${encodeURIComponent(editing)}`, { yaml: area.value })
@@ -1467,14 +1474,16 @@ async function viewTypes(panel) {
   const template = button("Взять шаблон", () => guarded(async () => {
     editing = null; heading.textContent = "новый тип"; pick.reset(); saveBtn.lastChild.textContent = "Добавить тип";
     await setText((await api("GET", "/api/admin/doctypes/template")).yaml);
-  }), "small ghost", "doc");
-  const clearBtn = button("Очистить", reset, "small ghost", "x");
-  const tools = el("div", "actions");
+  }), "small", "doc");
+  const clearBtn = button("Очистить", reset, "small", "x");
+  const tools = el("div", "form-actions");
   tools.append(template, clearBtn);
+  // пока кнопка не активна, под ней сказано, чего не хватает (как на вкладке «База знаний»)
+  const hint = el("span", "hint", HINT_EMPTY);
   const actions = el("div", "form-actions block");
-  actions.append(saveBtn);
+  actions.append(saveBtn, hint);
   right.appendChild(sheet("Добавить или изменить тип", heading, pick.node, field("Описание (YAML)", area, "t-yaml", "— можно править прямо здесь"), verdict, tools, actions,
-    el("p", "sheet-note", "Новый тип появляется на столе сразу, без перезапуска. Тип распознаётся по ключевым фразам из блока classify, а пункты Положения для него подбираются по названиям полей. Неверное описание не сохраняется: прежний файл остаётся как был.")));
+    el("p", "sheet-note", "Новый тип появляется на столе сразу, без перезапуска. Неверное описание не сохраняется: прежний файл остаётся как был.")));
 
   const listBody = el("div", "items");
   items.forEach((d, i) => {
