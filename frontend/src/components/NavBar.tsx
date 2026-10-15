@@ -28,6 +28,9 @@ interface Props {
   onThemeSet: (t: Theme) => void;
   onPalette: () => void;
   onHelp: () => void;
+  /** «?»: пошаговые подсказки; tourNew — подсказками ещё не пользовались (на кнопке точка) */
+  onTour?: () => void;
+  tourNew?: boolean;
   /** сотрудник вошёл: в переключателе появляется «Сотрудникам» (как «Стол декана | Сотрудникам» на странице сотрудников) */
   staff?: boolean;
   /** необязательный аккаунт (вход через Telegram); без свойства в панели нет ничего, связанного со входом */
@@ -127,7 +130,7 @@ function Menu({ theme, onThemeSet, onHelp, onForget, account }: { theme: Theme; 
   );
 }
 
-export function NavBar({ route, onRoute, theme, onThemeSet, onPalette, onHelp, staff = false, account }: Props) {
+export function NavBar({ route, onRoute, theme, onThemeSet, onPalette, onHelp, onTour, tourNew = false, staff = false, account }: Props) {
   const { hidden, compact } = useNavScroll();
   const activity = useActivity();
   const island = useRef<HTMLDivElement>(null);
@@ -185,6 +188,11 @@ export function NavBar({ route, onRoute, theme, onThemeSet, onPalette, onHelp, s
             <a className="acc-chip" href="#/account" aria-current={route === "account" ? "page" : undefined} aria-label={`Аккаунт: ${account.user.name}`} title={account.user.name} onClick={() => onRoute("account")}>
               {account.user.name.trim().charAt(0).toUpperCase() || "?"}
             </a>
+          )}
+          {onTour && (
+            <button type="button" className="round-btn tour-btn" onClick={onTour} aria-label="Подсказки: как пользоваться" title="Подсказки: как пользоваться" data-new={tourNew || undefined}>
+              <Icon name="question" size={16} />
+            </button>
           )}
           <button type="button" className="round-btn" onClick={onPalette} aria-label="Поиск и команды (Ctrl+K)" title="Поиск и команды (Ctrl+K)">
             <Icon name="search" size={16} />

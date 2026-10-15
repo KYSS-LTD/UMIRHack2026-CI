@@ -4,6 +4,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { LoginDialog } from "./components/LoginDialog";
 import { NavBar, type Route } from "./components/NavBar";
 import { TelegramBanner } from "./components/TelegramBanner";
+import { Tour } from "./components/Tour";
 import { AccountProvider, useAccount } from "./hooks/useAccount";
 import { useFetch } from "./hooks/useFetch";
 import { useTheme } from "./hooks/useTheme";
@@ -46,6 +47,23 @@ function Shell() {
   const [hash, setHash] = useState(() => parseHash(location.hash));
   const [help, setHelp] = useState(false);
   const [palette, setPalette] = useState(false);
+  const [tour, setTour] = useState(false);
+  const [tourNew, setTourNew] = useState(() => {
+    try {
+      return localStorage.getItem("dekanat.tourSeen") !== "1";
+    } catch {
+      return false; // без хранилища точку «новое» не показываем: она бы не пропала
+    }
+  });
+  const closeTour = useCallback(() => {
+    setTour(false);
+    setTourNew(false);
+    try {
+      localStorage.setItem("dekanat.tourSeen", "1");
+    } catch {
+      /* не страшно */
+    }
+  }, []);
   const health = useFetch(api.health);
   const types = useFetch(api.doctypes);
   const samples = useFetch(api.samples);
@@ -96,6 +114,7 @@ function Shell() {
   }, []);
 
   useBus("help", () => setHelp(true));
+  useBus("tour", () => setTour(true));
 
   // вкладка браузера показывает ход проверки, даже если окно в фоне
   useEffect(() => {
@@ -138,7 +157,7 @@ function Shell() {
       <a className="skip" href="#main">
         К содержимому
       </a>
-      <NavBar route={hash.route} onRoute={(r) => setHash({ route: r, clause: null })} theme={theme.theme} onThemeSet={theme.set} staff={!!health.data?.admin?.authenticated} onPalette={() => setPalette(true)} onHelp={() => setHelp(true)} account={account.telegram.login || account.user ? nav : undefined} />
+      <NavBar route={hash.route} onRoute={(r) => setHash({ route: r, clause: null })} theme={theme.theme} onThemeSet={theme.set} staff={!!health.data?.admin?.authenticated} onPalette={() => setPalette(true)} onHelp={() => setHelp(true)} onTour={() => setTour(true)} tourNew={tourNew} account={account.telegram.login || account.user ? nav : undefined} />
 
       <main id="main" tabIndex={-1} className={`route route-${hash.route}`}>
         {health.error && (
@@ -171,6 +190,7 @@ function Shell() {
 
       <CommandPalette open={palette} onClose={() => setPalette(false)} samples={samples.data ?? []} onNavigate={navigate} onTheme={theme.cycle} account={account.telegram.login || account.user ? nav : undefined} />
       <LoginDialog />
+      <Tour open={tour} route={hash.route} onClose={closeTour} />
 
       <Dialog open={help} title="Горячие клавиши" onClose={() => setHelp(false)}>
         <dl className="shortcuts">
