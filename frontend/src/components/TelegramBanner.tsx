@@ -67,39 +67,30 @@ export function TelegramBanner() {
         <span className="tg-mark" aria-hidden="true">
           <Icon name="telegram" size={20} />
         </span>
-        <div>
-          <p className="eyebrow">Необязательно · вход через Telegram</p>
-          <h2>Войдите через Telegram — по желанию</h2>
-        </div>
+        <h2>Вы можете войти через Telegram, чтобы:</h2>
       </header>
 
       <ul className="tg-perks">
         <li>
           <Icon name="swap" size={18} />
-          <b>Анкета везде</b>
+          <b>Продолжать анкету на любом устройстве</b>
           <span>Начали анкету на телефоне — закончите на компьютере: анкета и документ общие для сайта и бота.</span>
         </li>
         <li>
           <Icon name="bell" size={18} />
-          <b>Ответ в Telegram</b>
+          <b>Получать ответ деканата в Telegram</b>
           <span>Ответ деканата придёт прямо в Telegram: и новый статус обращения, и напоминание, что принести.</span>
         </li>
         <li>
           <Icon name="inbox" size={18} />
-          <b>Обращения без кода</b>
-          <span>Свои обращения видны сразу, номер и код вводить не нужно. Старое обращение можно привязать по коду.</span>
+          <b>Видеть свои обращения без номера и кода</b>
+          <span>Обращения привязываются к аккаунту сами; старое можно добавить по номеру и коду.</span>
         </li>
       </ul>
 
-      <ol className="tg-steps" aria-label="Как войти">
-        <li>Нажмите «Войти»</li>
-        <li>Откройте бота и подтвердите вход</li>
-        <li>Вернитесь на сайт — вход выполнится сам</li>
-      </ol>
-
       <footer className="tg-foot">
         <p className="tg-fine">
-          <b>Без входа всё работает как раньше.</b> Из Telegram мы получаем только имя и @имя — телефон и почту не запрашиваем. Аккаунт можно удалить в любой момент.
+          <b>Без входа всё работает как раньше.</b> Из Telegram мы получаем только имя и @имя — телефон и почту не запрашиваем.
         </p>
         <div className="tg-actions">
           <button type="button" className="btn primary" onClick={openLogin}>

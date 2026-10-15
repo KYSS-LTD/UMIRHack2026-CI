@@ -8,7 +8,6 @@
   }
   .tg-head { display: flex; align-items: center; gap: var(--s-4); }
   .tg-mark { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 1.5px solid var(--link); border-radius: 10px; color: var(--link); }
-  .tg-head .eyebrow { margin: 0; }
   .tg-head h2 { margin: 2px 0 0; font-size: var(--fs-md); letter-spacing: -.01em; }
 
   .tg-perks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; border-block: 1px dashed var(--line-strong); }
@@ -17,13 +16,6 @@
   .tg-perks svg { grid-row: 1 / span 2; margin-top: 2px; color: var(--ink-3); }
   .tg-perks b { font-size: var(--fs-sm); }
   .tg-perks span { color: var(--ink-2); font-size: var(--fs-xs); line-height: 1.45; }
-
-  .tg-steps { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-6); margin: 0; padding: 0; list-style: none; counter-reset: tg-step; color: var(--ink-2); font-size: var(--fs-sm); }
-  .tg-steps li { display: flex; align-items: center; gap: 8px; counter-increment: tg-step; }
-  .tg-steps li::before {
-    content: counter(tg-step); display: grid; place-items: center; width: 20px; height: 20px; border: 1.5px solid var(--line-strong); border-radius: 50%;
-    color: var(--ink-3); font-size: 11px; font-weight: 700;
-  }
 
   .tg-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3) var(--s-5); }
   .tg-fine { flex: 1 1 380px; margin: 0; max-width: 66ch; color: var(--ink-3); font-size: var(--fs-xs); line-height: 1.5; }
@@ -36,7 +28,6 @@
   }
   @media (max-width: 560px) {
     .tg-banner { gap: var(--s-3); padding: var(--s-4); }
-    .tg-steps { display: none; } /* шаги — в окне входа; на телефоне баннер короче */
     .tg-perks span { display: none; }
     .tg-perks li { padding: var(--s-2) var(--s-3); grid-template-columns: auto 1fr; align-items: center; }
     .tg-perks svg { grid-row: auto; margin: 0; }

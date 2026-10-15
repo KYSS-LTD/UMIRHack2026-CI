@@ -85,28 +85,26 @@ describe("banner snooze", () => {
 });
 
 describe("TelegramBanner", () => {
-  it("offers the login with the benefits and says it is optional", async () => {
+  it("says plainly what signing in gives, one benefit per line", async () => {
     mount(<TelegramBanner />);
     const banner = await screen.findByRole("complementary", { name: /Вход через Telegram/ });
-    expect(within(banner).getByText(/по желанию/)).toBeInTheDocument();
+    expect(within(banner).getByRole("heading", { name: "Вы можете войти через Telegram, чтобы:" })).toBeInTheDocument();
     expect(within(banner).getByText(/на телефоне — закончите на компьютере/)).toBeInTheDocument();
     expect(within(banner).getByText(/придёт прямо в Telegram/)).toBeInTheDocument();
-    expect(within(banner).getByText(/без кода/)).toBeInTheDocument();
+    expect(within(banner).getByText(/Видеть свои обращения без номера и кода/)).toBeInTheDocument();
     expect(within(banner).getByText("Без входа всё работает как раньше.")).toBeInTheDocument();
     expect(within(banner).getByRole("button", { name: /Войти через Telegram/ })).toBeInTheDocument();
     expect(within(banner).getByRole("button", { name: "Напомнить позже" })).toBeInTheDocument();
   });
 
-  it("is a detailed form: three benefits with explanations, the three steps and what is stored", async () => {
+  it("lists the benefits with explanations and does not repeat that it is optional", async () => {
     mount(<TelegramBanner />);
     const banner = await screen.findByRole("complementary", { name: /Вход через Telegram/ });
-    const perks = within(banner).getAllByRole("listitem").filter((li) => li.closest("ul"));
+    const perks = within(banner).getAllByRole("listitem");
     expect(perks).toHaveLength(3);
-    expect(within(banner).getByText("Анкета везде")).toBeInTheDocument();
-    expect(within(banner).getByText("Ответ в Telegram")).toBeInTheDocument();
-    expect(within(banner).getByText("Обращения без кода")).toBeInTheDocument();
-    const steps = within(within(banner).getByRole("list", { name: "Как войти" })).getAllByRole("listitem");
-    expect(steps.map((x) => x.textContent)).toEqual(["Нажмите «Войти»", "Откройте бота и подтвердите вход", "Вернитесь на сайт — вход выполнится сам"]);
+    expect(perks.map((li) => li.querySelector("b")?.textContent)).toEqual(["Продолжать анкету на любом устройстве", "Получать ответ деканата в Telegram", "Видеть свои обращения без номера и кода"]);
+    const text = banner.textContent ?? "";
+    expect((text.match(/необязательн|по желанию/gi) ?? []).length).toBe(0); // «необязательно» не повторяется: про это сказано одной фразой внизу
     expect(within(banner).getByText(/Из Telegram мы получаем только имя и @имя/)).toBeInTheDocument();
     expect(within(banner).getByText(/телефон и почту не запрашиваем/)).toBeInTheDocument();
   });
