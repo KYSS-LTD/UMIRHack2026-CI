@@ -1373,7 +1373,7 @@ async function viewKb(panel) {
   const reindex = button("Обновить поиск", () => guarded(async () => {
     const r = await api("POST", "/api/admin/reindex");
     toast(`Поиск обновлён: ${r.clauses} ${plural(r.clauses, ["пункт", "пункта", "пунктов"])} из ${r.documents} ${plural(r.documents, ["документа", "документов", "документов"])}`.replace("1 документов", "1 документа"));
-  }), "small ghost", "refresh");
+  }), "small", "refresh");
   reindex.title = "Пересобрать поиск по всем включённым документам";
   const check = button("Проверить ответы", () => guarded(async () => {
     const r = await api("POST", "/api/admin/kb/check");
@@ -1386,7 +1386,7 @@ async function viewKb(panel) {
       el("p", "sheet-note", "Вопросы и ожидаемые пункты — в config/golden_questions.yaml; они написаны для учебного Положения. Заменили Положение — замените и вопросы."));
     historyBox.appendChild(c);
     c.scrollIntoView({ behavior: REDUCED ? "auto" : "smooth", block: "nearest" });
-  }), "small ghost", "check");
+  }), "small", "check");
   check.title = "Задать секретарю контрольные вопросы и сверить ответы с ожидаемыми пунктами";
   const kbTools = el("div", "actions");
   kbTools.append(check, reindex);

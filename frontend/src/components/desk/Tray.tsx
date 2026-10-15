@@ -14,6 +14,23 @@ interface Props {
 export function Tray({ maxMb, dragging, busy, onFile, onError }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
+  const sheets = useRef<HTMLDivElement>(null);
+
+  // стопка листов чуть наклоняется к курсору, как настоящая лежащая на столе; на сенсорных экранах не нужно
+  const tilt = (e: React.PointerEvent<HTMLElement>) => {
+    const el = sheets.current;
+    if (!el || e.pointerType === "touch") return;
+    const r = e.currentTarget.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const nx = ((e.clientX - r.left) / r.width) * 2 - 1;
+    const ny = ((e.clientY - r.top) / r.height) * 2 - 1;
+    el.style.setProperty("--ry", `${(nx * 9).toFixed(1)}deg`);
+    el.style.setProperty("--rx", `${(-ny * 7).toFixed(1)}deg`);
+  };
+  const level = () => {
+    sheets.current?.style.setProperty("--ry", "0deg");
+    sheets.current?.style.setProperty("--rx", "0deg");
+  };
 
   const accept = (f: File | undefined | null) => {
     if (!f) return;
@@ -23,14 +40,14 @@ export function Tray({ maxMb, dragging, busy, onFile, onError }: Props) {
   };
 
   return (
-    <section className={`tray ${dragging ? "is-over" : ""}`} aria-label="Положите документ на стол">
+    <section className={`tray ${dragging ? "is-over" : ""}`} aria-label="Положите документ на стол" onPointerMove={tilt} onPointerLeave={level}>
       <svg className="tray-border" aria-hidden="true" preserveAspectRatio="none">
         <rect x="1.5" y="1.5" width="calc(100% - 3px)" height="calc(100% - 3px)" rx="26" />
       </svg>
       <input ref={input} type="file" hidden accept={ACCEPT} data-testid="file-input" onChange={(e) => (accept(e.target.files?.[0]), (e.target.value = ""))} />
       <input ref={camera} type="file" hidden accept="image/jpeg,image/png" capture="environment" onChange={(e) => (accept(e.target.files?.[0]), (e.target.value = ""))} />
 
-      <div className="sheets" aria-hidden="true">
+      <div className="sheets" ref={sheets} aria-hidden="true">
         <span className="sheet s1" />
         <span className="sheet s2" />
         <span className="sheet s3">

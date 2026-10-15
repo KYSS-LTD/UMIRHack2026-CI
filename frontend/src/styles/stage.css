@@ -9,13 +9,27 @@
   .tray.is-over .tray-border rect { stroke: var(--lamp); stroke-dasharray: none; stroke-width: 3; animation: none; }
   @keyframes march { to { stroke-dashoffset: -40; } }
 
-  .sheets { position: relative; width: 190px; height: 132px; }
+  .sheets { position: relative; width: 190px; height: 132px; margin-bottom: 18px; transform: perspective(760px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform 420ms var(--glide); }
   .sheet { position: absolute; inset: 0; border-radius: 10px; background: var(--paper); box-shadow: var(--shadow-paper); transition: transform 640ms var(--spring); }
   .s1 { transform: rotate(-9deg) translate(-18px, 4px); background: #f2ecdb; }
   .s2 { transform: rotate(7deg) translate(18px, 2px); background: #f7f1e1; }
   .s3 { display: grid; gap: 8px; align-content: start; padding: 18px 16px; }
   .s3 i { display: block; height: 7px; border-radius: 4px; background: #d9d2c0; }
   .s3 i:nth-child(1) { width: 60%; background: var(--stamp); opacity: .55; } .s3 i.short { width: 40%; }
+  /* наведение: листы расходятся веером, верхний приподнимается, а его строки «пишутся» слева направо; кнопки отзываются */
+  .tray:hover:not(.is-over) .s1 { transform: rotate(-15deg) translate(-36px, 6px); }
+  .tray:hover:not(.is-over) .s2 { transform: rotate(13deg) translate(36px, 4px); }
+  .tray:hover:not(.is-over) .s3 { transform: translateY(-12px); }
+  .tray:hover:not(.is-over) .s3 i { transform-origin: left center; animation: tray-write 620ms var(--ease) both; }
+  .tray:hover:not(.is-over) .s3 i:nth-child(2) { animation-delay: 90ms; } .tray:hover:not(.is-over) .s3 i:nth-child(3) { animation-delay: 180ms; } .tray:hover:not(.is-over) .s3 i:nth-child(4) { animation-delay: 270ms; }
+  @keyframes tray-write { from { transform: scaleX(0); } }
+  .tray-actions .btn:hover:not(:disabled) svg { animation: tray-nudge 560ms var(--spring); }
+  @keyframes tray-nudge { 35% { transform: translateY(-4px) rotate(-10deg) scale(1.15); } }
+  @media (prefers-reduced-motion: reduce) {
+    .sheets { transform: none; }
+    .tray:hover:not(.is-over) .s1, .tray:hover:not(.is-over) .s2, .tray:hover:not(.is-over) .s3 { transform: revert-layer; }
+    .tray:hover:not(.is-over) .s3 i, .tray-actions .btn:hover svg { animation: none; }
+  }
   .tray.is-over .s1 { transform: rotate(-20deg) translate(-50px, -8px); }
   .tray.is-over .s2 { transform: rotate(18deg) translate(50px, -6px); }
   .tray.is-over .s3 { transform: translateY(-16px) scale(1.06); }

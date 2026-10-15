@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { parseHash, staffCanEdit } from "../App";
 import { ChatBar } from "../components/desk/ChatBar";
 import { Composer } from "../components/desk/Composer";
+import { Tray } from "../components/desk/Tray";
 import { FieldsCard } from "../components/desk/FieldsCard";
 import { TypeRail } from "../components/desk/TypeRail";
 import { VerdictCard } from "../components/desk/VerdictCard";
@@ -169,6 +170,31 @@ describe("staffCanEdit", () => {
   it("stays hidden for everyone in the open (legacy) mode and when editing is switched off", () => {
     expect(staffCanEdit(health({ can_edit: true, admin: { authenticated: false, protect_edit: false } }))).toBe(false);
     expect(staffCanEdit(health({ can_edit: false, allow_edit: false, admin: { authenticated: true } }))).toBe(false);
+  });
+});
+
+describe("Tray hover", () => {
+  const mount = () => render(<Tray maxMb={25} dragging={false} busy={false} onFile={noop} onError={noop} />);
+
+  it("tilts the stack of sheets towards the mouse and levels it when the mouse leaves", () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, width: 400, height: 300, right: 400, bottom: 300, x: 0, y: 0, toJSON: () => ({}) });
+    const { container } = mount();
+    const tray = container.querySelector(".tray")!;
+    const sheets = container.querySelector<HTMLElement>(".sheets")!;
+    fireEvent.pointerMove(tray, { clientX: 400, clientY: 0 }); // правый верхний угол
+    expect(sheets.style.getPropertyValue("--ry")).toBe("9.0deg");
+    expect(sheets.style.getPropertyValue("--rx")).toBe("7.0deg");
+    fireEvent.pointerLeave(tray);
+    expect(sheets.style.getPropertyValue("--ry")).toBe("0deg");
+    expect(sheets.style.getPropertyValue("--rx")).toBe("0deg");
+    vi.restoreAllMocks();
+  });
+
+  it("does not tilt for a finger on a touch screen", () => {
+    const { container } = mount();
+    const sheets = container.querySelector<HTMLElement>(".sheets")!;
+    fireEvent.pointerMove(container.querySelector(".tray")!, { clientX: 10, clientY: 10, pointerType: "touch" });
+    expect(sheets.style.getPropertyValue("--ry")).toBe("");
   });
 });
 
