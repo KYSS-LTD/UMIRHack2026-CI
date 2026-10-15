@@ -74,7 +74,7 @@ def cmd_results(args) -> int:
     import copy
 
     from .config import Settings, load_settings
-    from .official import OfficialExporter, check_report, write_results
+    from .tools.official import OfficialExporter, check_report, write_results
     from .pipeline import Dekanat
 
     data = Path(args.data)
@@ -181,7 +181,7 @@ def cmd_ocr(args) -> int:
 
     st = load_settings()
     runner = OcrRunner(TesseractEngine(st.get("ocr.tesseract_cmd"), str(st.get("ocr.languages", "rus+eng")), st.get("ocr.tessdata_dir")), OcrOptions())
-    from .document_processing import check_format
+    from .ocr.formats import check_format
 
     path = Path(args.image)
     data = path.read_bytes()
@@ -376,13 +376,13 @@ def cmd_validate(args) -> int:
 
 
 def cmd_synth(args) -> int:
-    from . import synth
+    from .tools import synth
 
     return synth.main(args.rest)
 
 
 def cmd_eval(args) -> int:
-    from .evaluate import print_report, run_eval, run_qa_oracle
+    from .tools.evaluate import print_report, run_eval, run_qa_oracle
 
     app = _app()
     if args.oracle:
@@ -491,7 +491,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     raw = list(sys.argv[1:] if argv is None else argv)
     if raw and raw[0] == "synth":  # аргументы генератора передаём как есть
-        from . import synth
+        from .tools import synth
 
         return synth.main(raw[1:])
     args = build_parser().parse_args(raw)

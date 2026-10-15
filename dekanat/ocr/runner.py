@@ -14,7 +14,7 @@ import numpy as np
 
 from ..models import OcrPage, Row, Word
 from . import preprocess as pp
-from .engine import OcrUnavailable, TesseractEngine
+from .engine import TesseractEngine
 
 log = logging.getLogger(__name__)
 

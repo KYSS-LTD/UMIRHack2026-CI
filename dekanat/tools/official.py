@@ -8,7 +8,7 @@
   answers     — по одному ответу на каждый вопрос из questions.json: answerable, value, answer, sources.
 
 Какие ключи у типа и как они называются, описано в блоке `official:` YAML типа документа (config/doc_types), код менять не нужно.
-Требования к полям берутся из текста Положения (dekanat/kb/requirements.py), поэтому пункты в sources — настоящие пункты того
+Требования к полям берутся из текста Положения (dekanat/knowledge_base/requirements.py), поэтому пункты в sources — настоящие пункты того
 Положения, которое загружено (в нашем случае rules.md из набора).
 """
 
@@ -20,11 +20,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from .config import DocTypeSpec
-from .models import FieldResult
-from .pipeline import AnalysisResult, Dekanat
-from .qa.engine import build_units
-from .textutil import normalize
+from ..config import DocTypeSpec
+from ..models import FieldResult
+from ..pipeline import AnalysisResult, Dekanat
+from ..textutil import normalize
 
 VERSION = "1.0"
 NOT_FOUND = "не найдено"
@@ -124,7 +123,6 @@ class OfficialExporter:
     def validation(self, dt: DocTypeSpec, fields: list[FieldResult], values: dict[str, Any]) -> dict:
         """Предварительная проверка: чего не хватает и какие пункты Положения этого требуют (всё выводится из текста Положения)."""
         req = self.svc.requirements.for_type(dt.id)
-        units = build_units(dt, fields)
         items = official_fields(dt)
         required: dict[str, Any] = {}
         for it in items:

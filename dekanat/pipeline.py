@@ -21,12 +21,12 @@ import numpy as np
 from .classify import Classification, classify
 from .config import DocTypeSpec, Settings, load_doc_types, load_settings
 from .extract import FieldExtractor
-from .document_processing.formats import check_format
-from .document_processing.validation import validate_fields
+from .ocr.formats import check_format
+from .extract.validation import validate_fields
 from .extract.locate import boxes_for_words, locate_fragment
 from .extract.values import parse_value
-from .kb import ClauseIndex, RequirementModel, load_regulation, load_synonym_groups, parse_regulation_text
-from .kb.documents import BASE_ID, doc_clauses
+from .knowledge_base import ClauseIndex, RequirementModel, load_regulation, load_synonym_groups, parse_regulation_text
+from .knowledge_base.documents import BASE_ID, doc_clauses
 from .llm import LLMService
 from .models import Answer, Clause, FieldResult, OcrPage
 from .ocr import OcrOptions, OcrRunner, TesseractEngine

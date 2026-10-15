@@ -55,7 +55,7 @@ def samples():
 @pytest.fixture(scope="session")
 def synth_set(tmp_path_factory):
     """Небольшой синтетический набор: чистые сканы и лёгкие фото, по одному документу каждого типа."""
-    from dekanat import synth
+    from dekanat.tools import synth
 
     out = tmp_path_factory.mktemp("synth")
     synth.generate(out, n_per_type=3, levels=(0, 1), seed=21)

@@ -6,7 +6,7 @@
 
 import pytest
 
-from dekanat.evaluate import fields_from_truth
+from dekanat.tools.evaluate import fields_from_truth
 from test_qa import LEAVE, PRACTICE, STUDY
 
 # (тип, чего нет в документе, вопрос, ожидаемый вердикт, ожидаемый пункт или None)

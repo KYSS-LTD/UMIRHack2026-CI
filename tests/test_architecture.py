@@ -14,12 +14,12 @@ PKG = Path(__file__).resolve().parent.parent / "dekanat"
 # слой -> пакеты и модули верхнего уровня. Импортировать можно свой слой и нижележащие, не выше.
 LAYERS = [
     ("foundation", {"models", "config", "textutil"}),
-    ("document", {"ocr", "extract", "classify", "document_processing", "highlight"}),
-    ("knowledge", {"kb", "knowledge_base", "qa", "llm"}),
+    ("document", {"ocr", "extract", "classify", "highlight"}),
+    ("knowledge", {"knowledge_base", "qa", "llm"}),
     ("pipeline", {"pipeline", "export"}),  # export — запись результата проверки в JSON: часть конвейера, её используют и сайт, и пакетный режим
     ("services", {"dialog", "storage", "templates", "accounts", "mailer", "assistant", "doctypes"}),
     ("adapters", {"web", "telegram", "admin"}),
-    ("tools", {"cli", "evaluate", "official", "synth", "__main__"}),
+    ("tools", {"cli", "tools", "__main__"}),
 ]
 RANK = {name: i for i, (_layer, names) in enumerate(LAYERS) for name in names}
 LAYER_OF = {name: layer for layer, names in LAYERS for name in names}

@@ -12,15 +12,14 @@ from __future__ import annotations
 import bisect
 import re
 import statistics
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Iterator, Optional
 
 from ..config import DocTypeSpec, FieldSpec, PartSpec, expand_macros
 from ..models import Box, FieldResult, OcrPage, PartResult, Row, Word
-from ..textutil import is_blank_value
 from .labels import LabelHit, compile_labels, find_hits, row_median_height
 from .marks import MarkDetection, detect_marks
-from .values import Parsed, find_dates, parse_value, repair_text
+from .values import find_dates, parse_value, repair_text
 
 _SEP_ONLY = re.compile(r"^[:;\-–—.,|_]+$")
 _ORG_WORDS = re.compile(r"университет|институт|академи|колледж|техникум|училищ|\bвуз\b|филиал|\bооо\b|\bао\b|\bпао\b|\bип\b|школ|лице|больниц|центр|предприяти|компани", re.IGNORECASE)
@@ -392,9 +391,9 @@ class FieldExtractor:
         parts: list[PartResult] = []
         boxes_all: list[Box] = []
         for part in f.parts:
-            present, conf, boxes, how = False, 0.0, [], "image"
+            present, conf, boxes = False, 0.0, []
             if explicit is not None:
-                present, conf, how = explicit, 0.9, "text"
+                present, conf = explicit, 0.9
             elif self.marks_enabled:
                 best = None
                 for pi, ctx in ctxs.items():

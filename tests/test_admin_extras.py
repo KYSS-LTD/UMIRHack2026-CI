@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conftest import admin_login
-from dekanat.kb.check import load_golden, run_check
+from dekanat.knowledge_base.check import load_golden, run_check
 from dekanat.web.app import create_app
 
 

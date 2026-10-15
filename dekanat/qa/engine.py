@@ -17,8 +17,8 @@ from typing import Callable, Optional
 
 from ..config import DocTypeSpec, FieldSpec, PartSpec
 from ..extract.labels import label_stems
-from ..kb.index import ClauseIndex
-from ..kb.requirements import RequirementModel, Requirement, cue_level, unit_id
+from ..knowledge_base.index import ClauseIndex
+from ..knowledge_base.requirements import RequirementModel, Requirement, cue_level, unit_id
 from ..models import NOT_FOUND, Answer, Box, Clause, FieldResult, Source
 from ..textutil import STOPWORDS, normalize, sentences, stem, stem_eq, tokenize
 from ..llm import LLMService
@@ -458,7 +458,6 @@ class QAEngine:
     # ------------------------------------------------------------------ вопрос о значении поля
     def _fact(self, question: str, dt: DocTypeSpec, units: dict[str, UnitView], uid: str) -> Answer:
         u = units[uid]
-        res = u.result
         if u.present:
             if u.field.kind == "marks":
                 text = f"{u.title[:1].upper()}{u.title[1:]}: есть."

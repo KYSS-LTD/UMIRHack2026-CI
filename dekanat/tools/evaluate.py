@@ -18,9 +18,9 @@ from typing import Any, Optional
 
 from rapidfuzz import fuzz
 
-from .config import DocTypeSpec
-from .models import FieldResult, PartResult
-from .pipeline import Dekanat
+from ..config import DocTypeSpec
+from ..models import FieldResult, PartResult
+from ..pipeline import Dekanat
 
 
 def _norm(s: Any) -> str:

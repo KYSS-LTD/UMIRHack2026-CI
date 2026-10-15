@@ -9,7 +9,7 @@ import pytest
 from PIL import Image
 
 from conftest import needs_ocr
-from dekanat.evaluate import _unit_value, unit_correct
+from dekanat.tools.evaluate import _unit_value, unit_correct
 from dekanat.ocr import preprocess as pp
 
 pytestmark = needs_ocr

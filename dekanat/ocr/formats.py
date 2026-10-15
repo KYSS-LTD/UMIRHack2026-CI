@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from ..ocr.preprocess import UnsupportedFile
+from .preprocess import UnsupportedFile
 
 SUPPORTED_FORMATS = ("JPG", "JPEG", "PNG", "PDF")
 UNSUPPORTED_TEXT = "Не удалось прочитать файл: поддерживаются только JPG, JPEG, PNG и PDF."

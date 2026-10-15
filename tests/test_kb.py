@@ -1,4 +1,4 @@
-from dekanat.kb import ClauseIndex, RequirementModel, load_regulation, load_synonym_groups, parse_regulation_text
+from dekanat.knowledge_base import ClauseIndex, RequirementModel, load_regulation, load_synonym_groups, parse_regulation_text
 
 from conftest import ROOT
 

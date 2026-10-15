@@ -9,7 +9,7 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Iterable, Optional
 
 from .pipeline import AnalysisResult
 

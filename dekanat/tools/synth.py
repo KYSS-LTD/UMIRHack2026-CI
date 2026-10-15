@@ -309,7 +309,6 @@ def make_spec(rng: random.Random, doc_type: str, layout: str, absent_override: O
     absent = set(absent_override) if absent_override is not None else _pick_defects(rng, ALL_UNITS[doc_type])
     units: dict = {}
     meta: dict = {"person": person.fio, "absent": sorted(absent)}
-    today = dt.date(2024, 1, 10)
     if doc_type == "study_certificate":
         y = rng.choice([2020, 2021, 2022, 2023])
         start, end = dt.date(y, 9, 1), dt.date(y + rng.choice([4, 4, 5]), rng.choice([6, 7]), 30)
@@ -524,8 +523,6 @@ def render(spec: DocSpec, rng: random.Random, fonts: tuple[Path, Path]) -> Image
                 y2 += c.lh
         y = y2 + 40
     title_text = {"study_certificate": "СПРАВКА ОБ ОБУЧЕНИИ", "academic_leave": "ЗАЯВЛЕНИЕ НА АКАДЕМИЧЕСКИЙ ОТПУСК", "practice_certificate": "СПРАВКА О ПРАКТИКЕ"}[spec.doc_type]
-
-    stamp_pos = None
     if spec.layout in ("form", "table"):
         if spec.doc_type == "study_certificate" and spec.layout == "form":
             for line in c.wrap(org_name, PAGE_W - 2 * MARGIN, bold=True, size=size + 2):
@@ -549,7 +546,6 @@ def render(spec: DocSpec, rng: random.Random, fonts: tuple[Path, Path]) -> Image
         else:
             col = int(PAGE_W * 0.4)
             x0, x1 = MARGIN - 20, PAGE_W - MARGIN + 20
-            top = y - 8
             for label, value in rows:
                 vlines = c.wrap(value, x1 - x0 - col - 30)
                 h = max(1, len(vlines)) * c.lh + 18

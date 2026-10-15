@@ -125,7 +125,7 @@ def test_unreadable_files_are_refused_with_a_clear_error(name, data):
 
 
 def test_only_jpg_jpeg_png_and_pdf_are_accepted_and_by_content(base, cases):
-    from dekanat.document_processing.formats import check_format
+    from dekanat.ocr.formats import check_format
 
     for cid, name, data, _, _ in cases:
         assert check_format(data, name) in ("jpeg", "png", "pdf"), cid

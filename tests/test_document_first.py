@@ -15,7 +15,7 @@ DOC = {"document_first": True}
 
 def doc_answer(app, question, **absent):
     """Ответ по карточке справки об обучении в режиме «сначала документ»."""
-    from dekanat.evaluate import fields_from_truth
+    from dekanat.tools.evaluate import fields_from_truth
 
     units = dict(STUDY)
     for k in absent.get("absent", ()):
@@ -90,7 +90,7 @@ class TestRegulationOnlyWhenNamed:
 
 
 def doc_fields(app):
-    from dekanat.evaluate import fields_from_truth
+    from dekanat.tools.evaluate import fields_from_truth
 
     return fields_from_truth(app.doc_types["study_certificate"], dict(STUDY))
 

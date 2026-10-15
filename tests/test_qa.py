@@ -2,7 +2,7 @@
 
 import pytest
 
-from dekanat.evaluate import fields_from_truth
+from dekanat.tools.evaluate import fields_from_truth
 
 STUDY = {
     "student_name": "Иванов Иван Иванович", "university": "Южный университет", "direction": "09.03.01 Информатика",

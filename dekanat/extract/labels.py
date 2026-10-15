@@ -133,8 +133,6 @@ def find_hits(rows: list[Row], labels: list[LabelDef], page: int = 0) -> list[La
                 prev_txt = row.words[w0 - 1].text if w0 > 0 else ""
                 start_ok = w0 == 0 or gap_before(row, w0) > 1.8 * mh or prev_txt.endswith((",", ";", "|")) or _SEP_WORD.match(prev_txt) is not None
                 last_txt = row.words[w1 - 1].text
-                nxt = row.words[w1] if w1 < len(row.words) else None
-                sep_ok = last_txt.endswith(":") or (nxt is not None and (_SEP_WORD.match(nxt.text) is not None or nxt.x0 - row.words[w1 - 1].x1 > 1.8 * mh)) or nxt is None
                 if not (start_ok or (last_txt.endswith(":") and sum(len(t) for t in lab.stems) >= 4)):
                     continue
                 row_hits.append(LabelHit(lab.field_id, lab.part_id, page, ri, w0, w1, len(lab.stems), lab.text))

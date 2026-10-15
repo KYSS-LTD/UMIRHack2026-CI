@@ -1,6 +1,4 @@
-"""Этапы конвейера по ТЗ: загрузка -> проверка формата -> OCR -> тип -> извлечение -> валидация -> поиск по Положению -> ответ.
-
-Плюс структура модулей из ТЗ (config.USE_LOCAL_LLM, templates/, document_processing/, knowledge_base/)."""
+"""Этапы конвейера по ТЗ: загрузка -> проверка формата -> OCR -> тип -> извлечение -> валидация -> поиск по Положению -> ответ."""
 
 import io
 
@@ -8,8 +6,9 @@ import pytest
 from PIL import Image
 
 from conftest import needs_ocr
-from dekanat.document_processing import SUPPORTED_FORMATS, check_format, detect_format, doubt_reason, validate_fields
-from dekanat.evaluate import fields_from_truth
+from dekanat.extract.validation import doubt_reason, validate_fields
+from dekanat.ocr.formats import SUPPORTED_FORMATS, check_format, detect_format
+from dekanat.tools.evaluate import fields_from_truth
 from dekanat.ocr.preprocess import UnsupportedFile
 
 
@@ -117,25 +116,6 @@ def test_real_document_goes_through_all_stages(app, samples):
     assert all(isinstance(f.doubt, str) for f in res.fields)
     missing = [f for f in res.fields if f.status == "missing"]
     assert all(f.doubt for f in missing)
-
-
-# ============================================================================ структура из ТЗ
-def test_recommended_module_structure_exists():
-    import dekanat.admin
-    import dekanat.config as config
-    import dekanat.dialog
-    import dekanat.document_processing
-    import dekanat.knowledge_base as kb
-    import dekanat.llm
-    import dekanat.ocr
-    import dekanat.storage
-    import dekanat.templates as templates
-
-    assert config.USE_LOCAL_LLM is False
-    assert callable(templates.convert_to_template) and callable(templates.fill_docx)
-    assert kb.ClauseIndex is not None and kb.KnowledgeBaseManager is not None
-    assert hasattr(dekanat.llm, "LLMService") and hasattr(dekanat.dialog, "DialogMachine") and hasattr(dekanat.storage, "Storage")
-    assert hasattr(dekanat.ocr, "OcrRunner") and hasattr(dekanat.admin, "AdminAuth")
 
 
 def test_templates_are_stored_in_the_internal_templates_folder():

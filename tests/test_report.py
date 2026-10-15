@@ -1,6 +1,6 @@
 """Структурированный ответ (`answer.report`): вывод, факты документа, пункты, отсутствующее и сомнительное, оговорка о решении деканата."""
 
-from dekanat.evaluate import fields_from_truth
+from dekanat.tools.evaluate import fields_from_truth
 from dekanat.models import DISCLAIMER
 
 STUDY = {

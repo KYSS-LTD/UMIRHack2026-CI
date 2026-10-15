@@ -9,7 +9,7 @@ from conftest import ROOT, needs_ocr
 from dekanat.cli import main
 from dekanat.config import ConfigError, parse_doc_type
 from dekanat.models import FieldResult, PartResult
-from dekanat.official import NOT_FOUND, OfficialExporter, OField, check_report, field_value, official_fields
+from dekanat.tools.official import NOT_FOUND, OfficialExporter, OField, check_report, field_value, official_fields
 
 # ключи из README набора организаторов
 KEYS = {
@@ -175,7 +175,7 @@ def test_results_command_explains_a_wrong_folder(tmp_path, capsys):
 
 
 def test_a_clause_saying_a_field_is_not_required_is_not_a_requirement():
-    from dekanat.kb.requirements import cue_level
+    from dekanat.knowledge_base.requirements import cue_level
 
     assert cue_level("Печать вуза и подпись сотрудника деканата для предварительной проверки заявления не требуются.") == 0
     assert cue_level("Обязательна подпись студента.") == 3

@@ -4,7 +4,7 @@ import pytest
 from PIL import Image, ImageDraw, ImageFont
 
 from conftest import needs_ocr
-from dekanat import synth
+from dekanat.tools import synth
 from dekanat.config import parse_doc_type_yaml
 from dekanat.pipeline import Dekanat
 

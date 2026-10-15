@@ -11,7 +11,7 @@ import pytest
 
 from conftest import ROOT, FakeBackend, make_llm
 from dekanat.config import Settings, load_settings
-from dekanat.evaluate import fields_from_truth
+from dekanat.tools.evaluate import fields_from_truth
 from dekanat.llm import LLMConfig, LLMService, LLMUnavailable, OllamaBackend, prompts
 from dekanat.llm.schemas import SchemaError, ground_extraction, validate_explanation, ExtractedField
 from dekanat.models import Clause

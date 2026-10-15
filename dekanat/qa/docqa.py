@@ -14,8 +14,8 @@ from typing import Optional
 
 from rapidfuzz import fuzz
 
-from ..extract.values import find_dates, parse_person
-from ..kb.index import ClauseIndex
+from ..extract.values import find_dates
+from ..knowledge_base.index import ClauseIndex
 from ..models import Answer, Box, Clause, OcrPage, Row, Source
 from ..textutil import clean_value, is_blank_value, normalize, sentences, stem, tokenize
 
