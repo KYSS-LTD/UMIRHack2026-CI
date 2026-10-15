@@ -104,7 +104,7 @@ def document_card() -> Image.Image:
     bar(34, 40, 180, 14, INK3 + (255,))
     bar(34, 66, 120, 10, (0xC9, 0xC0, 0xA6))
     # строки «справки»; на двух — подсветка найденных полей
-    rows = [(146, 230), (174, 280), (302, 250), (330, 190), (358, 270), (390, 160)]
+    rows = [(146, 230), (174, 280), (302, 250), (330, 190)]
     for y, w in rows:
         bar(34, y, w, 11, (0xC9, 0xC0, 0xA6))
     # зелёная рамка: поле из карточки
@@ -198,13 +198,18 @@ def build() -> Image.Image:
 
     # правая часть: документ с подсветкой, штамп и ответ в чате
     card = document_card()
-    cx, cy = 1018, 268
-    paste_layer(img, _centered(card, cx, cy), offset=(0, 18), blur=30, alpha=80)
+    card = _scaled(card, 0.84)  # лист и всё справа — с воздухом по краям, без наложений друг на друга
+    cx, cy = 1002, 262
+    paste_layer(img, _centered(card, cx, cy), offset=(0, 16), blur=28, alpha=75)
     bubble = chat_bubble()
-    paste_layer(img, _centered(bubble, 985, 584), offset=(0, 10), blur=18, alpha=70)
-    stamp = stamp_layer("В ПОРЯДКЕ")
-    paste_layer(img, _centered(stamp, 1100, 392), with_shadow=False)
+    paste_layer(img, _centered(bubble, 990, 586), offset=(0, 10), blur=18, alpha=70)
+    stamp = _scaled(stamp_layer("В ПОРЯДКЕ"), 0.86)
+    paste_layer(img, _centered(stamp, 1050, 372), with_shadow=False)
     return img
+
+
+def _scaled(layer: Image.Image, k: float) -> Image.Image:
+    return layer.resize((int(layer.width * k), int(layer.height * k)), Image.LANCZOS)
 
 
 def _centered(layer: Image.Image, cx: float, cy: float) -> Image.Image:
