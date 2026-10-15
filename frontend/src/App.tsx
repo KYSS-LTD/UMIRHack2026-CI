@@ -3,7 +3,6 @@ import { api } from "./api";
 import { CommandPalette } from "./components/CommandPalette";
 import { LoginDialog } from "./components/LoginDialog";
 import { NavBar, type Route } from "./components/NavBar";
-import { TelegramBanner } from "./components/TelegramBanner";
 import { Tour } from "./components/Tour";
 import { AccountProvider, useAccount } from "./hooks/useAccount";
 import { useFetch } from "./hooks/useFetch";
@@ -179,7 +178,6 @@ function Shell() {
             )}
           </p>
         )}
-        {hash.route === "check" && <TelegramBanner />}
         <div className="route-body" key={hash.route}>
           {hash.route === "check" && <CheckView types={typeList} samples={samples.data ?? []} health={health.data} onOpenClause={openClause} />}
           {hash.route === "rules" && <RegulationView focusClause={hash.clause} editable={editable} />}

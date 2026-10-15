@@ -1,41 +1,5 @@
-/* Необязательный аккаунт: баннер входа, окно входа через Telegram, кабинет. Спокойная «бумага», цвет — только там, где он что-то значит. */
+/* Необязательный аккаунт: окно входа через Telegram, кабинет. Спокойная «бумага», цвет — только там, где он что-то значит. */
 @layer views {
-  /* ---------- баннер «Войти через Telegram»: плоский бланк (бумага, тонкие линии, ни градиентов, ни свечения) ---------- */
-  .tg-banner {
-    display: grid; gap: var(--s-4); max-width: 1180px; margin: 0 auto var(--s-6); padding: var(--s-5) var(--s-6);
-    background: var(--surface); background-image: none; border: 1px solid var(--line-strong); border-radius: var(--r-md); box-shadow: none;
-    animation: row-in 360ms var(--glide) both;
-  }
-  .tg-head { display: flex; align-items: center; gap: var(--s-4); }
-  .tg-mark { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 1.5px solid var(--link); border-radius: 10px; color: var(--link); }
-  .tg-head h2 { margin: 2px 0 0; font-size: var(--fs-md); letter-spacing: -.01em; }
-
-  .tg-perks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; border-block: 1px dashed var(--line-strong); }
-  .tg-perks li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; align-content: start; padding: var(--s-4); }
-  .tg-perks li + li { border-left: 1px dashed var(--line-strong); }
-  .tg-perks svg { grid-row: 1 / span 2; margin-top: 2px; color: var(--ink-3); }
-  .tg-perks b { font-size: var(--fs-sm); }
-  .tg-perks span { color: var(--ink-2); font-size: var(--fs-xs); line-height: 1.45; }
-
-  .tg-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3) var(--s-5); }
-  .tg-fine { flex: 1 1 380px; margin: 0; max-width: 66ch; color: var(--ink-3); font-size: var(--fs-xs); line-height: 1.5; }
-  .tg-fine b { color: var(--ink-2); font-weight: 650; }
-  .tg-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-  .tg-actions .btn { white-space: nowrap; }
-  @media (max-width: 860px) {
-    .tg-perks { grid-template-columns: 1fr; }
-    .tg-perks li + li { border-left: 0; border-top: 1px dashed var(--line-strong); }
-  }
-  @media (max-width: 560px) {
-    .tg-banner { gap: var(--s-3); padding: var(--s-4); }
-    .tg-perks span { display: none; }
-    .tg-perks li { padding: var(--s-2) var(--s-3); grid-template-columns: auto 1fr; align-items: center; }
-    .tg-perks svg { grid-row: auto; margin: 0; }
-    .tg-actions { width: 100%; }
-    .tg-actions .btn { flex: 1 1 auto; }
-  }
-  [data-tg] .tg-banner { display: none; }
-
   /* ---------- после отправки обращения: ответ в Telegram ---------- */
   .tg-note { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin: 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); color: var(--ink-2); font-size: var(--fs-sm); }
   .tg-note span { flex: 1 1 220px; min-width: 0; }

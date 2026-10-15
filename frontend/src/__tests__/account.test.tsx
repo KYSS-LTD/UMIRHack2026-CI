@@ -6,9 +6,8 @@ import { parseHash } from "../App";
 import { SubmitPanel } from "../components/desk/SubmitPanel";
 import { LoginDialog } from "../components/LoginDialog";
 import { NavBar } from "../components/NavBar";
-import { SNOOZE_DAYS, TelegramBanner, bannerSnoozed, snoozeBanner } from "../components/TelegramBanner";
 import { AccountProvider, useAccount } from "../hooks/useAccount";
-import { resetActivity, setActivity } from "../lib/activity";
+import { resetActivity } from "../lib/activity";
 import { initDataFromHash } from "../lib/telegram";
 import type { AccountMe, AccountTicket, AccountUser } from "../types";
 import { ToastProvider } from "../ui/Toasts";
@@ -65,117 +64,14 @@ describe("Telegram Mini App bridge", () => {
   });
 });
 
-describe("banner snooze", () => {
-  it("postpones for longer each time and then is quiet", () => {
-    const t0 = 1_800_000_000_000;
-    expect(bannerSnoozed(t0)).toBe(false);
-    expect(snoozeBanner(t0)).toBe(SNOOZE_DAYS[0]);
-    expect(bannerSnoozed(t0 + 2 * 86_400_000)).toBe(true);
-    expect(bannerSnoozed(t0 + 4 * 86_400_000)).toBe(false);
-    expect(snoozeBanner(t0 + 4 * 86_400_000)).toBe(SNOOZE_DAYS[1]);
-    expect(snoozeBanner(t0 + 12 * 86_400_000)).toBe(SNOOZE_DAYS[2]);
-    expect(snoozeBanner(t0 + 50 * 86_400_000)).toBe(SNOOZE_DAYS[2]); // дальше — раз в месяц
-  });
-
-  it("survives broken storage", () => {
-    localStorage.setItem("dekanat.tgBanner", "{not json");
-    expect(bannerSnoozed()).toBe(false);
-    expect(() => snoozeBanner()).not.toThrow();
-  });
-});
-
-describe("TelegramBanner", () => {
-  it("says plainly what signing in gives, one benefit per line", async () => {
-    mount(<TelegramBanner />);
-    const banner = await screen.findByRole("complementary", { name: /Вход через Telegram/ });
-    expect(within(banner).getByRole("heading", { name: "Вы можете войти через Telegram, чтобы:" })).toBeInTheDocument();
-    expect(within(banner).getByText(/на телефоне — закончите на компьютере/)).toBeInTheDocument();
-    expect(within(banner).getByText(/придёт прямо в Telegram/)).toBeInTheDocument();
-    expect(within(banner).getByText(/Видеть свои обращения без номера и кода/)).toBeInTheDocument();
-    expect(within(banner).getByText("Без входа всё работает как раньше.")).toBeInTheDocument();
-    expect(within(banner).getByRole("button", { name: /Войти через Telegram/ })).toBeInTheDocument();
-    expect(within(banner).getByRole("button", { name: "Напомнить позже" })).toBeInTheDocument();
-  });
-
-  it("lists the benefits with explanations and does not repeat that it is optional", async () => {
-    mount(<TelegramBanner />);
-    const banner = await screen.findByRole("complementary", { name: /Вход через Telegram/ });
-    const perks = within(banner).getAllByRole("listitem");
-    expect(perks).toHaveLength(3);
-    expect(perks.map((li) => li.querySelector("b")?.textContent)).toEqual(["Продолжать анкету на любом устройстве", "Получать ответ деканата в Telegram", "Видеть свои обращения без номера и кода"]);
-    const text = banner.textContent ?? "";
-    expect((text.match(/необязательн|по желанию/gi) ?? []).length).toBe(0); // «необязательно» не повторяется: про это сказано одной фразой внизу
-    expect(within(banner).getByText(/Из Telegram мы получаем только имя и @имя/)).toBeInTheDocument();
-    expect(within(banner).getByText(/телефон и почту не запрашиваем/)).toBeInTheDocument();
-  });
-
-  it("'remind me later' hides it now and keeps it hidden after a reload", async () => {
-    const { unmount } = mount(<TelegramBanner />);
-    await userEvent.click(await screen.findByRole("button", { name: "Напомнить позже" }));
-    expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
-    expect(await screen.findByText(/напомню через 3 дня/)).toBeInTheDocument();
-    unmount();
-    mount(<TelegramBanner />);
-    await waitFor(() => expect(api.account.me).toHaveBeenCalled());
-    expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
-  });
-
-  it("comes back once the reminder period is over", async () => {
-    localStorage.setItem("dekanat.tgBanner", JSON.stringify({ until: Date.now() - 1000, n: 1 }));
-    mount(<TelegramBanner />);
-    expect(await screen.findByRole("complementary")).toBeInTheDocument();
-  });
-
-  it("steps aside as soon as the person starts working on the desk", async () => {
-    mount(<TelegramBanner />);
-    expect(await screen.findByRole("complementary")).toBeInTheDocument();
-    act(() => setActivity({ busy: true, fraction: 0.2, label: "Чтение текста" }));
-    await waitFor(() => expect(screen.queryByRole("complementary")).not.toBeInTheDocument());
-    act(() => resetActivity());
-    expect(screen.queryByRole("complementary")).not.toBeInTheDocument(); // и не возвращается, пока человек на странице
-  });
-
-  it("stays away for signed-in people and where the bot is off", async () => {
-    const { unmount } = mount(<TelegramBanner />, signed);
-    await waitFor(() => expect(api.account.me).toHaveBeenCalled());
-    expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
-    unmount();
-    mount(<TelegramBanner />, { user: null, telegram: { enabled: false, login: false, bot: null, mini_app: false } });
-    await waitFor(() => expect(api.account.me).toHaveBeenCalledTimes(2));
-    expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
-  });
-
-  it("opens the login window", async () => {
-    function Probe() {
-      const a = useAccount();
-      return <output>{a.loginOpen ? "open" : "closed"}</output>;
-    }
-    mount(
-      <>
-        <TelegramBanner />
-        <Probe />
-      </>,
-    );
-    await userEvent.click(await screen.findByRole("button", { name: /Войти через Telegram/ }));
-    expect(screen.getByText("open")).toBeInTheDocument();
-  });
-});
-
 describe("Mini App sign-in", () => {
-  it("exchanges the signed data for a session before the page content appears and hides the banner", async () => {
+  it("exchanges the signed data for a session before the page content appears", async () => {
     history.replaceState(null, "", "/?tg=1");
     const webapp = vi.spyOn(api.account, "webapp").mockResolvedValue({ user: USER });
-    mount(
-      <>
-        <TelegramBanner />
-        <p>содержимое</p>
-      </>,
-      signed,
-    );
+    mount(<p>содержимое</p>, signed);
     expect(await screen.findByText("содержимое")).toBeInTheDocument();
     expect(webapp).toHaveBeenCalledWith("signed-data");
     expect(document.documentElement.dataset.tg).toBe("1");
-    expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
   });
 
   it("carries on as a normal visitor if the sign-in fails", async () => {
@@ -187,6 +83,16 @@ describe("Mini App sign-in", () => {
 });
 
 describe("LoginDialog", () => {
+  it("keeps the reasons to sign in inside the window, not on the desk", async () => {
+    vi.spyOn(api.account, "loginStart").mockResolvedValue({ token: "t", link: "https://t.me/b?start=login_t", expires_in: 300, bot: "b" });
+    mount(<Open />);
+    expect(screen.queryByRole("complementary", { name: /Вход через Telegram/ })).not.toBeInTheDocument(); // плашки на столе больше нет
+    fireEvent.click(await screen.findByRole("button", { name: "открыть" }));
+    expect(await screen.findByText("Зачем входить и что с данными")).toBeInTheDocument();
+    expect(screen.getByText(/Ответы деканата приходят в Telegram/)).toBeInTheDocument();
+    expect(screen.getByText(/Вход необязателен: без него сайт работает как раньше/)).toBeInTheDocument();
+  });
+
   function Open() {
     const a = useAccount();
     return (
