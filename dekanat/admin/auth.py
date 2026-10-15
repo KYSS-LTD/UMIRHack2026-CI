@@ -23,7 +23,7 @@ class AdminAuth:
         self.protect_edit = bool(g("admin.protect_edit", True))
         self.session_seconds = float(g("admin.session_hours", 8)) * 3600
         self.min_length = int(g("admin.min_password_length", 10))
-        self.throttle = LoginThrottle(int(g("admin.max_login_failures", 5)), float(g("admin.lockout_minutes", 15)) * 60)
+        self.throttle = LoginThrottle(int(g("admin.max_login_failures", 0)), float(g("admin.lockout_minutes", 0)) * 60)
         self._secure = str(g("server.cookie_secure", "auto")).strip().lower()
 
     # ------------------------------------------------------------------ текущий администратор

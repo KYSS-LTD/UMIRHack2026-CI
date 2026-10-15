@@ -27,6 +27,12 @@
   @media (max-width: 420px) { .tg-actions { grid-template-columns: 1fr; } }
   [data-tg] .tg-banner { display: none; }
 
+  /* ---------- после отправки обращения: ответ в Telegram ---------- */
+  .tg-note { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin: 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); color: var(--ink-2); font-size: var(--fs-sm); }
+  .tg-note span { flex: 1 1 220px; min-width: 0; }
+  .tg-note.ok { justify-content: flex-start; color: var(--ok); background: var(--ok-soft); }
+  .tg-note svg { flex: none; }
+
   /* ---------- окно входа ---------- */
   .login { display: grid; gap: var(--s-4); }
   .login-steps { display: grid; gap: var(--s-4); margin: 0; padding: 0; list-style: none; counter-reset: step; }

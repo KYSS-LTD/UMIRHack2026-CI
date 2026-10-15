@@ -283,6 +283,17 @@ def test_ticket_of_signed_in_user_is_linked_and_visible_without_code(client, app
     assert stranger.get("/api/account/tickets").json()["tickets"] == []
 
 
+def test_ticket_sent_before_login_appears_in_the_account_after_login(client, app, desk):
+    t = submit_ticket(client)  # обращение отправлено анонимно, из этого же браузера
+    assert client.get("/api/account/tickets").status_code == 401
+    done = sign_in_via_bot(client, app)
+    assert done["moved"]["ticket"] == t["ticket_id"]
+    assert [x["id"] for x in client.get("/api/account/tickets").json()["tickets"]] == [t["ticket_id"]]
+    app.state.storage.db.execute("DELETE FROM notifications")
+    assert desk.patch(f"/api/admin/tickets/{t['ticket_id']}", json={"status": "done", "reply": "Готово"}).status_code == 200
+    assert [q["chat_id"] for q in app.state.storage.notifications.due(10)] == [USER["id"]]  # ответ придёт в Telegram
+
+
 def test_staff_reply_reaches_user_in_telegram(client, app, desk):
     sign_in_via_bot(client, app)
     t = submit_ticket(client)

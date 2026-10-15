@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { api } from "../api";
 import { parseHash } from "../App";
+import { SubmitPanel } from "../components/desk/SubmitPanel";
 import { LoginDialog } from "../components/LoginDialog";
 import { NavBar } from "../components/NavBar";
 import { SNOOZE_DAYS, TelegramBanner, bannerSnoozed, snoozeBanner } from "../components/TelegramBanner";
@@ -377,5 +378,57 @@ describe("AccountView", () => {
     await userEvent.click(await screen.findByRole("button", { name: /Выйти/ }));
     expect(out).toHaveBeenCalledTimes(1);
     expect(await screen.findByRole("heading", { name: "Вход через Telegram" })).toBeInTheDocument();
+  });
+});
+
+describe("after sending a ticket", () => {
+  const preview = { delivery: { channel: "queue", available: true, reason: "" }, payload: { request: "перевод", fields: { ФИО: "Иванов Иван" } }, excluded: [], attachment: true, state: "completed" as const, already_sent: null, blocked: [], ticket_code: "", mail: { available: false, reason: "почта не настроена" } };
+  const delivery = { channel: "queue", available: true, reason: "" };
+
+  beforeEach(() => {
+    vi.spyOn(api.assistant, "submission").mockResolvedValue(preview);
+    vi.spyOn(api.assistant, "submit").mockResolvedValue({ sent: true, ticket_id: 7, code: "K7M2-QX9P", message: "Обращение передано." });
+  });
+
+  async function sendTicket() {
+    await userEvent.click(await screen.findByRole("button", { name: /Передать в деканат/ }));
+    await userEvent.click(await screen.findByRole("checkbox", { name: /Подтверждаю/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Отправить/ }));
+    await screen.findByText(/№ 7 · K7M2-QX9P/);
+  }
+
+  it("offers a visitor to get the answer in Telegram and promises the ticket will follow the account", async () => {
+    function Probe() {
+      return <output>{useAccount().loginOpen ? "login-open" : "login-closed"}</output>;
+    }
+    mount(
+      <>
+        <SubmitPanel delivery={delivery} />
+        <Probe />
+      </>,
+    );
+    await sendTicket();
+    expect(screen.getByText(/Обращение привяжется к аккаунту само/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Получать ответ в Telegram/ }));
+    expect(screen.getByText("login-open")).toBeInTheDocument();
+  });
+
+  it("tells a signed-in person that the answer will come to Telegram", async () => {
+    mount(<SubmitPanel delivery={delivery} />, signed);
+    await sendTicket();
+    expect(screen.getByText(/Ответ деканата придёт вам в Telegram/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Получать ответ в Telegram/ })).not.toBeInTheDocument();
+  });
+
+  it("says so when the notifications are off", async () => {
+    mount(<SubmitPanel delivery={delivery} />, { user: { ...USER, notify: false }, telegram: TG });
+    await sendTicket();
+    expect(screen.getByText(/Уведомления в Telegram выключены/)).toBeInTheDocument();
+  });
+
+  it("stays silent where Telegram is not enabled", async () => {
+    mount(<SubmitPanel delivery={delivery} />, { user: null, telegram: { enabled: false, login: false, bot: null, mini_app: false } });
+    await sendTicket();
+    expect(screen.queryByText(/Telegram/)).not.toBeInTheDocument();
   });
 });

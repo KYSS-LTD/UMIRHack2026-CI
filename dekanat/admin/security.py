@@ -65,17 +65,27 @@ def check_password_policy(password: str, username: str = "", min_length: int = 1
 
 
 class LoginThrottle:
-    """Блокировка после серии неудачных входов (по логину и по адресу клиента). Хранится в памяти процесса."""
+    """Необязательная блокировка после серии неудачных входов (по логину и по адресу клиента). Хранится в памяти процесса.
 
-    def __init__(self, max_failures: int = 5, lockout_seconds: float = 900.0):
-        self.max = max(1, max_failures)
-        self.lockout = lockout_seconds
+    По умолчанию выключена (`max_failures <= 0` или `lockout_seconds <= 0`): неверный пароль просто отклоняется, без ожидания.
+    Включать её стоит там, где сервис доступен из интернета.
+    """
+
+    def __init__(self, max_failures: int = 0, lockout_seconds: float = 0.0):
+        self.max = max(0, max_failures)
+        self.lockout = max(0.0, lockout_seconds)
         self._fail: dict[str, list[float]] = defaultdict(list)
         self._until: dict[str, float] = {}
         self._lock = threading.Lock()
 
+    @property
+    def enabled(self) -> bool:
+        return self.max > 0 and self.lockout > 0
+
     def remaining(self, *keys: str) -> float:
         """Сколько секунд ещё действует блокировка (0 — вход разрешён)."""
+        if not self.enabled:
+            return 0.0
         now = time.monotonic()
         with self._lock:
             left = [self._until[k] - now for k in keys if k in self._until and self._until[k] > now]
@@ -86,6 +96,8 @@ class LoginThrottle:
         return max(left, default=0.0)
 
     def failure(self, *keys: str) -> None:
+        if not self.enabled:
+            return
         now = time.monotonic()
         with self._lock:
             for k in keys:

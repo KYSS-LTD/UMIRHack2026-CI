@@ -197,6 +197,30 @@ def test_cannot_take_someones_ticket(accounts, storage):
     assert storage.tickets.get_for_user(t["id"], other["id"]) is None
 
 
+def test_ticket_sent_before_login_is_claimed_by_the_account(accounts, storage):
+    """Обращение, отправленное из этого браузера до входа, привязывается к аккаунту: ответ деканата придёт в Telegram без ввода номера и кода."""
+    cookie = storage.sessions.create(accounts.anon_ttl)
+    t = make_ticket(storage)
+    storage.sessions.save_state(cookie, {"state": "completed", "ticket_id": t["id"], "ticket_code": "ABCD-2345"})
+    user, _, moved = login(accounts, storage, cookie=cookie)
+    assert moved["ticket"] == t["id"]
+    assert storage.tickets.owner_of(t["id"]) == user["id"]
+
+
+def test_claiming_never_takes_a_ticket_from_another_account(accounts, storage):
+    owner, _ = accounts.upsert_tg({**PROFILE, "id": 600})
+    t = make_ticket(storage, owner["id"])
+    cookie = storage.sessions.create(accounts.anon_ttl)
+    storage.sessions.save_state(cookie, {"state": "completed", "ticket_id": t["id"]})  # чужой номер в состоянии не даёт прав
+    _, _, moved = login(accounts, storage, cookie=cookie)
+    assert moved["ticket"] is None and storage.tickets.owner_of(t["id"]) == owner["id"]
+
+
+def test_login_without_a_ticket_claims_nothing(accounts, storage):
+    _, _, moved = login(accounts, storage)
+    assert moved["ticket"] is None
+
+
 def test_delete_account_removes_data_but_keeps_ticket(accounts, storage):
     user, sid, _ = login(accounts, storage)
     storage.sessions.save_state(accounts.data_sid(sid), {"state": "review"})

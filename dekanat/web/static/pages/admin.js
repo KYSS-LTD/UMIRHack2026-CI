@@ -72,6 +72,26 @@ function showLogin(note) {
   $("btn-logout").classList.add("hidden");
   $("who").classList.add("hidden");
   showBanner($("banner"), note ? "warn" : "ok", note || "");
+  requestAnimationFrame(() => $("u").focus({ preventScroll: true }));
+}
+
+/** Поле пароля с кнопкой «показать / скрыть» внутри. Сам input остаётся тем же элементом: id, autocomplete и подписи не меняются. */
+function passwordBox(input) {
+  const box = el("div", "pw-box");
+  const eye = el("button", "pw-eye", null, { type: "button", "aria-label": "Показать пароль", "aria-pressed": "false", title: "Показать пароль" });
+  eye.appendChild(icon("eye"));
+  eye.addEventListener("click", () => {
+    const show = input.type === "password";
+    input.type = show ? "text" : "password";
+    eye.setAttribute("aria-pressed", String(show));
+    eye.setAttribute("aria-label", show ? "Скрыть пароль" : "Показать пароль");
+    eye.title = eye.getAttribute("aria-label");
+    eye.replaceChildren(icon(show ? "eyeOff" : "eye"));
+    input.focus();
+  });
+  input.replaceWith(box);
+  box.append(input, eye);
+  return box;
 }
 
 let toastTimer = 0;
@@ -551,7 +571,7 @@ async function viewOverview(panel) {
     }), [1, 2, 3, 4]) : chart.node);
   };
   drawMode("chart");
-  const daysSheet = sheet("Обращения по дням", total ? asTable : null, total ? holder : empty("Пока тихо", "За выбранный период обращений не было."), total ? foot : document.createComment(""));
+  const daysSheet = sheet("Вопросы и проверки по дням", total ? asTable : null, total ? holder : empty("Пока тихо", "За выбранный период вопросов и проверок документов не было."), total ? foot : document.createComment(""));
 
   // ---- темы и исходы
   const topicsBody = el("div");
@@ -1450,6 +1470,8 @@ async function viewHistory(panel) {
 async function viewAccount(panel) {
   const cur = el("input", null, null, { type: "password", id: "pw-cur", autocomplete: "current-password" });
   const nw = el("input", null, null, { type: "password", id: "pw-new", autocomplete: "new-password" });
+  const curBox = passwordBox(cur);
+  const nwBox = passwordBox(nw);
   const btn = button("Сменить пароль", () => guarded(async () => {
     await api("POST", "/api/admin/password", { current: cur.value, new: nw.value });
     cur.value = "";
@@ -1460,9 +1482,9 @@ async function viewAccount(panel) {
   actions.appendChild(btn);
   const rules = el("ul", "rules");
   for (const text of ["Не короче 10 символов и не из простых — «пароль123» не подойдёт.", "После смены пароля вы останетесь здесь, а входы с других устройств завершатся.",
-    "После нескольких неверных попыток вход на время закрывается — это защита от подбора.", "Вход, смена пароля и все правки попадают в историю."]) rules.appendChild(el("li", null, text));
+    "Каждый неудачный вход записывается в историю изменений.", "Вход, смена пароля и все правки попадают в историю."]) rules.appendChild(el("li", null, text));
   const grid = el("div", "grid-2 even");
-  grid.append(sheet("Смена пароля", null, field("Текущий пароль", cur, "pw-cur"), field("Новый пароль", nw, "pw-new"), actions), sheet("Как защищён кабинет", null, rules));
+  grid.append(sheet("Смена пароля", null, field("Текущий пароль", curBox, "pw-cur"), field("Новый пароль", nwBox, "pw-new"), actions), sheet("Как защищён кабинет", null, rules));
   panel.appendChild(grid);
 }
 
@@ -1488,22 +1510,32 @@ async function start() {
 
 $("login-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
+  const submit = $("login-form").querySelector('button[type="submit"]');
+  const idle = submit.textContent;
+  submit.disabled = true;
+  submit.textContent = "Входим…";
   try {
     await api("POST", "/api/admin/login", { username: $("u").value, password: $("p").value });
     $("p").value = "";
+    $("p").type = "password";
     start();
   } catch (e) {
     showBanner($("banner"), "bad", e.message);
     $("login").animate && !REDUCED && $("login").animate([{ transform: "translateX(-6px)" }, { transform: "translateX(6px)" }, { transform: "none" }], { duration: 320 });
+    $("p").focus();
+    $("p").select();
+  } finally {
+    submit.disabled = false;
+    submit.textContent = idle;
   }
 });
-const reveal = el("button", "link-btn reveal", "Показать", { type: "button", "aria-controls": "p" });
-reveal.addEventListener("click", () => {
-  const hidden = $("p").type === "password";
-  $("p").type = hidden ? "text" : "password";
-  reveal.textContent = hidden ? "Скрыть" : "Показать";
-});
-document.querySelector('label[for="p"]').appendChild(reveal);
+// пароль: «глаз» внутри поля и предупреждение о Caps Lock
+const loginPassword = passwordBox($("p"));
+const caps = el("p", "caps-hint hidden", "Включён Caps Lock — пароль чувствителен к регистру.", { role: "status" });
+loginPassword.after(caps);
+$("p").addEventListener("keydown", (ev) => caps.classList.toggle("hidden", !(ev.getModifierState && ev.getModifierState("CapsLock"))));
+$("p").addEventListener("keyup", (ev) => caps.classList.toggle("hidden", !(ev.getModifierState && ev.getModifierState("CapsLock"))));
+$("p").addEventListener("blur", () => caps.classList.add("hidden"));
 $("btn-logout").prepend(icon("logout"));
 $("btn-logout").addEventListener("click", async () => {
   await api("POST", "/api/admin/logout").catch(() => null);

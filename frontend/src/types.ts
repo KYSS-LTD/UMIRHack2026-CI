@@ -207,7 +207,7 @@ export interface LoginStart {
   bot?: string;
 }
 
-export type LoginPoll = { status: "pending" | "denied" | "expired" } | { status: "confirmed"; user: AccountUser; moved: { dialog: boolean; document: boolean; files: number } };
+export type LoginPoll = { status: "pending" | "denied" | "expired" } | { status: "confirmed"; user: AccountUser; moved: { dialog: boolean; document: boolean; files: number; ticket?: number | null } };
 
 /** Обращение вошедшего: код не нужен, статус виден сразу. */
 export interface AccountTicket {

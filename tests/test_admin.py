@@ -54,6 +54,13 @@ def test_password_hashing_and_policy():
     assert check_password_policy("Correct-Horse-9", "bob") is None
 
 
+def test_throttle_is_off_by_default():
+    t = LoginThrottle()
+    for _ in range(50):
+        t.failure("u:bob", "ip:1.2.3.4")
+    assert t.remaining("u:bob", "ip:1.2.3.4") == 0 and not t.enabled
+
+
 def test_throttle_locks_after_repeated_failures():
     t = LoginThrottle(3, 60)
     for _ in range(3):
@@ -94,8 +101,21 @@ def test_token_is_stored_only_as_a_hash(app, anon):
     assert ADMIN_PASS not in str(app.state.storage.db.query("SELECT pw_hash FROM admins")[0]["pw_hash"])
 
 
-def test_login_is_locked_after_repeated_failures(app, anon):
+def test_wrong_password_never_locks_the_login_by_default(app, anon):
+    """Неверный пароль просто отклоняется: никакого ожидания, верный пароль принимается сразу после любого числа ошибок."""
     app.state.auth.create_admin(ADMIN_USER, ADMIN_PASS)
+    for _ in range(12):
+        assert anon.post("/api/admin/login", json={"username": ADMIN_USER, "password": "wrong-password-1"}).status_code == 401
+    assert anon.post("/api/admin/login", json={"username": ADMIN_USER, "password": ADMIN_PASS}).status_code == 200
+    entries = app.state.storage.audit.list("admin", None, 50, 0)
+    assert sum(1 for e in entries if e["action"] == "admin.login_failed") == 12  # попытки по-прежнему попадают в историю
+
+
+def test_lockout_can_still_be_switched_on(tmp_settings):
+    tmp_settings.raw["admin"].update(max_login_failures=5, lockout_minutes=15)
+    app = create_app(tmp_settings)
+    app.state.auth.create_admin(ADMIN_USER, ADMIN_PASS)
+    anon = TestClient(app)
     for _ in range(5):
         assert anon.post("/api/admin/login", json={"username": ADMIN_USER, "password": "wrong-password-1"}).status_code == 401
     locked = anon.post("/api/admin/login", json={"username": ADMIN_USER, "password": ADMIN_PASS})  # даже верный пароль в блокировке не принимается

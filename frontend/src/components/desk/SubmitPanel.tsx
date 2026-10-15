@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { api } from "../../api";
+import { useAccount } from "../../hooks/useAccount";
 import type { Delivery, SubmissionPreview, SubmitResult } from "../../types";
 import { Icon } from "../../ui/Icon";
 
@@ -18,6 +19,7 @@ export function SubmitPanel({ delivery, onSent }: { delivery: Delivery | null; o
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState<SubmitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const account = useAccount();
 
   // предпросмотр нужен сразу: он же говорит, можно ли вообще отправлять (задолженности, неполные данные)
   useEffect(() => {
@@ -70,6 +72,30 @@ export function SubmitPanel({ delivery, onSent }: { delivery: Delivery | null; o
     </div>
   );
 
+  /** Telegram: вошедшему ответ придёт в чат; остальным — предложение войти (по желанию). Обращение из этой сессии привяжется к аккаунту само. */
+  const telegramNote = () => {
+    if (account.user) {
+      return account.user.notify ? (
+        <p className="tg-note ok" role="status">
+          <Icon name="bell" size={15} /> Ответ деканата придёт вам в Telegram.
+        </p>
+      ) : (
+        <p className="tg-note">Уведомления в Telegram выключены — статус видно на странице «Статус обращения» и в аккаунте.</p>
+      );
+    }
+    if (account.telegram.login && !account.miniApp) {
+      return (
+        <div className="tg-note">
+          <span>Хотите получить ответ деканата в Telegram? Обращение привяжется к аккаунту само.</span>
+          <button type="button" className="btn small" onClick={account.openLogin}>
+            <Icon name="telegram" size={14} /> Получать ответ в Telegram
+          </button>
+        </div>
+      );
+    }
+    return null;
+  };
+
   if (done) {
     return (
       <>
@@ -81,6 +107,7 @@ export function SubmitPanel({ delivery, onSent }: { delivery: Delivery | null; o
           </span>
         </p>
         {done.ticket_id && done.code ? statusCode(done.ticket_id, done.code) : null}
+        {done.ticket_id ? telegramNote() : null}
       </>
     );
   }
@@ -128,6 +155,7 @@ export function SubmitPanel({ delivery, onSent }: { delivery: Delivery | null; o
       {preview && !preview.delivery.available && <p className="faint">Автоматическая отправка пока недоступна: {preview.delivery.reason}. Скачайте документ и передайте его лично.</p>}
       {preview?.already_sent && <p className="faint">Обращение уже отправлено (№ {preview.already_sent}).</p>}
       {preview?.already_sent && preview.ticket_code ? statusCode(preview.already_sent, preview.ticket_code) : null}
+      {preview?.already_sent ? telegramNote() : null}
       {ready && (
         <>
           <dl className="submit-fields">

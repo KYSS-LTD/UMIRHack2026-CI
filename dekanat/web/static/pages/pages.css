@@ -439,7 +439,13 @@ button.tail { margin-top: 12px; }
 .confirm-body .form-actions { justify-content: flex-end; margin-top: 8px; }
 button.danger.solid { background: var(--danger); border-color: var(--danger); color: #fff; }
 button.danger.solid:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 88%, #000); }
-.reveal { float: right; font-size: 12px; font-weight: 600; }
+.pw-box { position: relative; }
+.pw-box input { padding-right: 46px; }
+.pw-eye { position: absolute; top: 50%; right: 6px; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; margin: 0; transform: translateY(-50%); border: 0; border-radius: 10px; background: transparent; color: var(--ink-3); box-shadow: none; }
+.pw-eye:hover:not(:disabled) { transform: translateY(-50%); background: var(--surface-3); color: var(--ink); box-shadow: none; }
+.pw-eye:active:not(:disabled) { transform: translateY(-50%) scale(.94); }
+.pw-eye .icon { width: 18px; height: 18px; }
+.caps-hint { margin: 6px 2px 0; font-size: 12.5px; color: var(--warn); }
 
 /* ====================================================================== обращения: рабочее место */
 /* Одна «бумага»: слева спокойный список, справа карточка, между ними тонкая линия. Цвет — только у точки статуса;
@@ -608,7 +614,7 @@ button.danger.solid:hover:not(:disabled) { background: color-mix(in srgb, var(--
 .login .seal img { width: 56px; height: 56px; animation: logo-stamp 1100ms 200ms var(--spring) both; }
 .login h1 { margin: 4px 0 6px; font-size: 26px; }
 .login form { text-align: left; }
-.login form button { width: 100%; margin-top: 18px; padding: 11px 16px; }
+.login form button[type=submit] { width: 100%; margin-top: 18px; padding: 11px 16px; }
 .login-note { margin-top: 14px; color: var(--ink-3); font-size: 12.5px; }
 
 /* ====================================================================== адаптивность и доступность */

@@ -19,7 +19,7 @@ export interface AccountApi {
   loginOpen: boolean;
   openLogin: () => void;
   closeLogin: () => void;
-  signedIn: (user: AccountUser, moved?: { dialog: boolean; document: boolean }) => void;
+  signedIn: (user: AccountUser, moved?: { dialog: boolean; document: boolean; ticket?: number | null }) => void;
   logout: () => Promise<void>;
   setUser: (user: AccountUser | null) => void;
   refresh: () => Promise<void>;
@@ -91,10 +91,15 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   }, [miniApp, refresh]);
 
   const signedIn = useCallback(
-    (user: AccountUser, moved?: { dialog: boolean; document: boolean }) => {
+    (user: AccountUser, moved?: { dialog: boolean; document: boolean; ticket?: number | null }) => {
       setMe((m) => ({ user, telegram: m?.telegram ?? OFF }));
       setLoginOpen(false);
-      toast.show(moved?.dialog || moved?.document ? `Вы вошли, ${user.name}. Начатое на сайте перенесено в аккаунт.` : `Вы вошли, ${user.name}. Анкета и документы теперь общие с ботом.`, "ok");
+      const text = moved?.ticket
+        ? `Вы вошли, ${user.name}. Обращение № ${moved.ticket} привязано к аккаунту — ответ придёт в Telegram.`
+        : moved?.dialog || moved?.document
+          ? `Вы вошли, ${user.name}. Начатое на сайте перенесено в аккаунт.`
+          : `Вы вошли, ${user.name}. Анкета и документы теперь общие с ботом.`;
+      toast.show(text, "ok");
       emit("account", "in");
     },
     [toast],

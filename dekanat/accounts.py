@@ -116,17 +116,27 @@ class Accounts:
         user, _ = self.upsert_tg(profile)
         data_sid = self.ensure_data_session(user)
         old = self.storage.sessions.get(cookie) if cookie else None
-        moved = {"dialog": False, "document": False, "files": 0}
+        moved: dict = {"dialog": False, "document": False, "files": 0, "ticket": None}
         if old and old["user_id"] == user["id"]:
             return user, cookie, moved  # уже вошёл этим же аккаунтом
         if old and old["user_id"] is None:
-            moved = self.storage.sessions.move_data(cookie, data_sid)  # данные анонимной сессии не пропадают
+            moved["ticket"] = self._claim_ticket(cookie, user["id"])  # обращение, отправленное из этого браузера до входа, становится обращением аккаунта
+            moved.update(self.storage.sessions.move_data(cookie, data_sid))  # данные анонимной сессии не пропадают
         new_sid = self.storage.sessions.create(self.user_ttl, user_id=user["id"])
         if old:
             self._remove(self.storage.sessions.delete(cookie))
         self.storage.users.mark_web_linked(user["id"])
         log.info("Вход на сайте через Telegram: аккаунт %s (перенесено: %s)", user["id"], moved)
         return user, new_sid, moved
+
+    def _claim_ticket(self, cookie: str, user_id: int) -> Optional[int]:
+        """Обращение из анкеты этой анонимной сессии привязывается к аккаунту: ответ деканата придёт в Telegram и без ввода номера и кода.
+        Доказательство владения — сама сессия: номер обращения лежит в её анкете. Чужое (уже привязанное) обращение не отбирается."""
+        state = self.storage.sessions.load_state(cookie) or {}
+        ticket_id = state.get("ticket_id")
+        if isinstance(ticket_id, int) and self.storage.tickets.attach_user(ticket_id, user_id):
+            return ticket_id
+        return None
 
     def logout(self, cookie: str) -> None:
         """Выход с этого устройства: cookie-сессия закрывается, данные аккаунта остаются."""
