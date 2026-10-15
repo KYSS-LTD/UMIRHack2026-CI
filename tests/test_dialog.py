@@ -402,11 +402,22 @@ def test_model_resolves_a_hedged_answer_only_when_it_is_clear():
     assert ctx.data["has_debts"] is False and r.question == "target_specialty" and len(fake.calls) == 1
 
 
-def test_model_doubt_turns_into_a_clarifying_question():
-    m, fake = llm_machine('{"status": "ambiguous", "value": null, "details": null, "clarification": "Вы точно закрыли все долги?"}')
+def test_model_doubt_on_a_yes_no_question_keeps_the_neutral_wording():
+    """Свободный вопрос модели мог бы исходить из ответа, которого человек не давал («Уточните предметы с задолженностями» на «долгов вроде нет»):
+    у вопроса «да / нет» остаётся наша формулировка, а значение не записывается."""
+    m, fake = llm_machine('{"status": "ambiguous", "value": null, "details": null, "clarification": "Уточните предметы с академическими задолженностями."}')
     ctx = at_debts(m)
     r = talk(m, ctx, "Да не, долгов вроде нет, всё закрыл")
-    assert r.kind == "clarify" and "Вы точно закрыли все долги?" in r.text and "has_debts" not in ctx.data
+    assert r.kind == "clarify" and "предметы" not in r.text and "«да» или «нет»" in r.text and "has_debts" not in ctx.data and len(fake.calls) == 1
+
+
+def test_model_doubt_on_a_non_yes_no_question_still_becomes_a_clarifying_question():
+    m, fake = llm_machine('{"status": "ambiguous", "value": null, "details": null, "clarification": "Какой именно курс вы имеете в виду?"}')
+    ctx = DialogContext()
+    talk(m, ctx, "Я хочу перевестись", "да", *ANSWERS[:2])
+    assert ctx.current == "current_course"
+    r = talk(m, ctx, "ну где-то между вторым и третьим")
+    assert r.kind == "clarify" and "Какой именно курс" in r.text
 
 
 def test_rule_results_are_not_overridden_by_the_model():

@@ -61,9 +61,18 @@ class Judgement:
     clause_number: Optional[str] = None
 
 
+def _as_bool(value: Any) -> Optional[bool]:
+    """true / false. Небольшие модели часто берут значение в кавычки ("true"): строка ровно «true» или «false» принимается, всё остальное («да», 1, «возможно») — нет."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.strip().lower() in ("true", "false"):
+        return value.strip().lower() == "true"
+    return None
+
+
 def validate_judgement(data: dict, valid_numbers: Iterable[str]) -> Judgement:
-    answerable = data.get("answerable")
-    if not isinstance(answerable, bool):
+    answerable = _as_bool(data.get("answerable"))
+    if answerable is None:
         raise SchemaError("answerable должен быть true или false")
     number = data.get("clause")
     number = None if number is None else str(number).strip()
@@ -112,7 +121,8 @@ def validate_normalized(data: dict, kind: str, choices: Sequence[str] = ()) -> N
         return NormalizedAnswer(status, None, None, clarification)
     value = data.get("value")
     if kind == "bool":
-        if not isinstance(value, bool):
+        value = _as_bool(value)
+        if value is None:
             raise SchemaError("value должен быть true или false")
     elif kind == "int":
         if isinstance(value, bool) or not isinstance(value, int):

@@ -244,7 +244,9 @@ class DialogMachine:
         if res is None:
             return rule
         if res.status != "clear":
-            if res.status == "ambiguous" and res.clarification:
+            # вопрос «да / нет» уточняется нашей фиксированной формулировкой: свободный вопрос модели мог исходить из ответа, которого человек не давал
+            # (на живом прогоне на «долгов вроде нет» Qwen2.5-3B переспросила «Уточните предметы с задолженностями»); для остальных типов вопрос модели остаётся
+            if res.status == "ambiguous" and res.clarification and q.kind != "bool":
                 return ambiguous(res.clarification)
             return rule
         value = res.value

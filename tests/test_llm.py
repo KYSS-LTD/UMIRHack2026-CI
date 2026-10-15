@@ -354,3 +354,26 @@ def test_status_reports_model_and_cpu_mode(ollama):
     cfg = LLMConfig(enabled=True, url=ollama)
     st = LLMService(cfg, OllamaBackend(cfg)).status()
     assert st["enabled"] and st["available"] and st["cpu_only"] and st["model"] == "qwen2.5:3b-instruct"
+
+
+# ---- небольшие модели берут true/false в кавычки: строка ровно «true» / «false» принимается, всё прочее — нет
+def test_judgement_accepts_quoted_booleans_but_nothing_vague():
+    from dekanat.llm.schemas import SchemaError, validate_judgement
+
+    got = validate_judgement({"answerable": "true", "clause": "3.5"}, ["3.5", "6.1"])  # ровно так ответила Qwen2.5-3B на живом прогоне
+    assert got.answerable is True and got.clause_number == "3.5"
+    assert validate_judgement({"answerable": "False", "clause": "3.5"}, ["3.5"]).clause_number is None
+    assert validate_judgement({"answerable": True, "clause": None}, ["3.5"]).answerable is True
+    for bad in ("да", 1, "возможно", None, ""):
+        with pytest.raises(SchemaError):
+            validate_judgement({"answerable": bad, "clause": "3.5"}, ["3.5"])
+    assert validate_judgement({"answerable": "true", "clause": "99"}, ["3.5"]).clause_number is None  # выдуманный номер по-прежнему отбрасывается
+
+
+def test_normalized_bool_accepts_quoted_booleans():
+    from dekanat.llm.schemas import SchemaError, validate_normalized
+
+    assert validate_normalized({"status": "clear", "value": "false"}, "bool").value is False
+    assert validate_normalized({"status": "clear", "value": True}, "bool").value is True
+    with pytest.raises(SchemaError):
+        validate_normalized({"status": "clear", "value": "нет"}, "bool")
