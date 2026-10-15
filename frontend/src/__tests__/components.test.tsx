@@ -182,6 +182,18 @@ describe("ChatBar", () => {
     expect(screen.getByRole("button", { name: /Очистить чат/ })).toBeInTheDocument();
   });
 
+  it("shows who is on the line and which document is on the desk", () => {
+    const { rerender } = render(<ChatBar {...bar({ count: 1, docName: "sample_02.png", typeTitle: "Справка об обучении" })} />);
+    expect(screen.getByText("на связи")).toBeInTheDocument();
+    expect(screen.getByText("1 обмен")).toBeInTheDocument();
+    expect(screen.getByTitle("sample_02.png · Справка об обучении")).toBeInTheDocument();
+    rerender(<ChatBar {...bar({ busy: true, docName: "sample_02.png" })} />);
+    expect(screen.queryByText("на связи")).not.toBeInTheDocument(); // пока секретарь отвечает, «на связи» не пишем
+    expect(screen.getByText("секретарь отвечает…")).toBeInTheDocument();
+    rerender(<ChatBar {...bar()} />);
+    expect(document.querySelector(".cb-doc")).toBeNull(); // без документа плашки нет
+  });
+
   it("shows the strip while the questionnaire is running; the header keeps its own status", () => {
     render(<ChatBar {...bar({ quiz: true })} />);
     expect(screen.getByText("Идёт анкета")).toBeInTheDocument();

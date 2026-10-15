@@ -8,7 +8,7 @@ import { SnippetCrop } from "../components/desk/SnippetCrop";
 import { FieldsCard } from "../components/desk/FieldsCard";
 import { Thread } from "../components/desk/Thread";
 import { NavBar } from "../components/NavBar";
-import { cardOwners, trimTurns, type Turn, useDesk } from "../hooks/useDesk";
+import { cardOwners, stageTurnOf, trimTurns, type Turn, useDesk } from "../hooks/useDesk";
 import { isQuizState, markCorrected, mergeCorrection, optionText, parseReview, splitQuestion } from "../lib/dialog";
 import { useBus } from "../lib/bus";
 import { followUps } from "../lib/followups";
@@ -408,6 +408,26 @@ describe("NavBar without a separate assistant page", () => {
 describe("document card is shown once per file", () => {
   const file = new File(["x"], "s.png", { type: "image/png" });
   const check = (id: string, over: Partial<Turn> = {}): Turn => ({ ...chatTurn(reply()), id, chat: false, reply: undefined, file, fileName: "s.png", result: result(), ...over });
+
+  it("does not put a placeholder on the desk for a question about the regulation", () => {
+    const rules = check("rules", { file: null, fileName: "", result: result({ images: [] }) });
+    expect(stageTurnOf([rules], rules)).toBeNull(); // пустой стол остаётся пустым: показывать нечего
+    const doc = check("doc");
+    expect(stageTurnOf([doc, rules], rules)?.id).toBe("doc"); // документ, лежавший на столе, остаётся
+    expect(stageTurnOf([doc, rules], doc)?.id).toBe("doc");
+    const other = check("other", { file: new File(["z"], "z.png", { type: "image/png" }) });
+    expect(stageTurnOf([doc, other, rules], rules)?.id).toBe("other"); // последний из положенных
+    expect(stageTurnOf([doc, other, rules], doc)?.id).toBe("doc"); // выбранный в ленте документ — на столе
+  });
+
+  it("shows a running check of a document on the desk, but not a running question about the regulation", () => {
+    const doc = check("doc");
+    const runningDoc = check("run", { phase: "running", result: undefined, file: new File(["q"], "q.png", { type: "image/png" }) });
+    const runningRules = check("rules", { phase: "running", result: undefined, file: null, fileName: "" });
+    expect(stageTurnOf([doc, runningDoc], doc)?.id).toBe("run");
+    expect(stageTurnOf([doc, runningRules], doc)?.id).toBe("doc");
+    expect(stageTurnOf([runningRules], runningRules)).toBeNull();
+  });
 
   it("gives follow-up questions about the same file only the answer", () => {
     const other = new File(["y"], "b.png", { type: "image/png" });

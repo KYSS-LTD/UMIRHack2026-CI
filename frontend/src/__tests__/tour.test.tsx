@@ -47,28 +47,32 @@ describe("tourSteps", () => {
     expect(targets).toContain(".verdict");
     expect(targets).not.toContain(".tray .tray-actions");
     expect(tourSteps("rules", empty).map((s) => s.target)).toContain(".reg .search");
-    expect(tourSteps("account", empty).every((s) => s.target.startsWith(".nav"))).toBe(true); // на остальных страницах — только общая панель
+    expect(tourSteps("account", empty).map((s) => s.target)).toEqual([".nav .switch"]); // на остальных страницах — один шаг про разделы
+  });
+
+  it("keeps only the main things: at most four steps on any screen", () => {
+    const doc = document.createElement("div");
+    doc.innerHTML = '<section class="viewer"></section>';
+    for (const route of ["check", "rules", "status", "account"] as const) {
+      expect(tourSteps(route, document.createElement("div")).length).toBeLessThanOrEqual(4);
+      expect(tourSteps(route, doc).length).toBeLessThanOrEqual(4);
+    }
   });
 });
 
 describe("Tour", () => {
-  const Page = ({ open = true, onClose = noop, hasPicker = true }: { open?: boolean; onClose?: () => void; hasPicker?: boolean }) => (
+  const Page = ({ open = true, onClose = noop, hasSend = true }: { open?: boolean; onClose?: () => void; hasSend?: boolean }) => (
     <>
       <div className="nav">
         <nav className="switch" />
-        <div className="tools">
-          <button type="button" className="round-btn tour-btn" />
-          <button type="button" className="round-btn" />
-        </div>
-        <div className="nav-menu">
-          <button type="button" className="menu-btn" />
-        </div>
       </div>
       <div className="tray">
         <div className="tray-actions" />
       </div>
-      <div className="dock-field" />
-      {hasPicker && <div className="picker" />}
+      <div className="dock">
+        <div className="dock-field" />
+        {hasSend && <button type="button" className="send" />}
+      </div>
       <Tour open={open} route="check" onClose={onClose} isVisible={() => true} />
     </>
   );
@@ -76,16 +80,16 @@ describe("Tour", () => {
   it("starts with the first visible step, with a counter, text and an arrow", () => {
     const { container } = render(<Page />);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Сюда кладём документ" })).toBeInTheDocument();
-    expect(screen.getByText(/Подсказка 1 из 7/)).toBeInTheDocument(); // стол: 3 шага + 4 из панели + кнопка подсказок (нет скрепки, «Проверить», списка)
+    expect(screen.getByRole("heading", { name: "Положите документ" })).toBeInTheDocument();
+    expect(screen.getByText(/Подсказка 1 из 4/)).toBeInTheDocument(); // файл, вопрос, «Проверить», «Положение»
     expect(document.querySelector(".tour-arrow path")).not.toBeNull();
     expect(document.querySelector(".tour-spot")).not.toBeNull();
     expect(container).toBeTruthy();
   });
 
   it("skips steps whose element is not on the screen", () => {
-    render(<Page hasPicker={false} />);
-    expect(screen.getByText(/Подсказка 1 из 6/)).toBeInTheDocument();
+    render(<Page hasSend={false} />);
+    expect(screen.getByText(/Подсказка 1 из 3/)).toBeInTheDocument();
   });
 
   it("walks forward and back, and finishes with «Готово»", async () => {
@@ -93,10 +97,10 @@ describe("Tour", () => {
     render(<Page onClose={onClose} />);
     expect(screen.getByRole("button", { name: /Назад/ })).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: /Далее/ }));
-    expect(screen.getByRole("heading", { name: "Вопрос" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Задайте вопрос" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Назад/ }));
-    expect(screen.getByRole("heading", { name: "Сюда кладём документ" })).toBeInTheDocument();
-    for (let i = 0; i < 7; i++) await userEvent.click(screen.getByRole("button", { name: /Далее|Готово/ }));
+    expect(screen.getByRole("heading", { name: "Положите документ" })).toBeInTheDocument();
+    for (let i = 0; i < 4; i++) await userEvent.click(screen.getByRole("button", { name: /Далее|Готово/ }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -104,9 +108,9 @@ describe("Tour", () => {
     const onClose = vi.fn();
     render(<Page onClose={onClose} />);
     fireEvent.keyDown(window, { key: "ArrowRight" });
-    expect(screen.getByRole("heading", { name: "Вопрос" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Задайте вопрос" })).toBeInTheDocument();
     fireEvent.keyDown(window, { key: "ArrowLeft" });
-    expect(screen.getByRole("heading", { name: "Сюда кладём документ" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Положите документ" })).toBeInTheDocument();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
   });

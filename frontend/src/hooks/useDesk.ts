@@ -79,6 +79,20 @@ export function cardOwners(turns: Turn[]): Map<string, string> {
   return out;
 }
 
+/** Есть ли у проверки документ: файл или страницы в ответе. У вопросов по Положению их нет — стол им показывать нечего. */
+export const hasDocument = (t: Turn): boolean => !!t.file || !!t.result?.images?.length;
+
+/**
+ * Чья проверка на столе: идущая с документом, иначе выбранная (если у неё есть документ), иначе последняя с документом.
+ * Вопрос по Положению стол не меняет: документ, лежавший там раньше, остаётся, а пустой стол остаётся пустым.
+ */
+export function stageTurnOf(turns: Turn[], active: Turn | null): Turn | null {
+  const running = turns.find((t) => t.phase === "running" && !t.chat && hasDocument(t));
+  if (running) return running;
+  if (active && !active.chat && hasDocument(active)) return active;
+  return [...turns].reverse().find((t) => !t.chat && hasDocument(t)) ?? null;
+}
+
 const queued = (): JobSnapshot => ({ id: "", status: "queued", stage: "queued", label: "Отправляю на сервер", fraction: 0.02, elapsed: 0 });
 const failure = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 

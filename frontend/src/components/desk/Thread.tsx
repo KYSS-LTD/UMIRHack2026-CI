@@ -119,7 +119,7 @@ export function Thread(p: Props) {
               <button type="button" className="start-line" disabled={p.busy} onClick={() => p.onSay(FEATURED[0])}>
                 <span className="start-q">
                   <Icon name="question" size={18} className="start-q-icon" />
-                  {FEATURED[0]}
+                  <span className="start-q-text">{FEATURED[0]}</span>
                 </span>
                 <span className="start-hint">{FEATURED[1]}</span>
                 <Icon name="arrowRight" size={14} className="start-arrow" />

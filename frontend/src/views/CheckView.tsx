@@ -8,7 +8,7 @@ import { PaperViewer } from "../components/desk/PaperViewer";
 import { Thread } from "../components/desk/Thread";
 import { Tray } from "../components/desk/Tray";
 import { useAssistant } from "../hooks/useAssistant";
-import { cardOwners, type RunInput, type Turn, useDesk } from "../hooks/useDesk";
+import { cardOwners, type RunInput, stageTurnOf, type Turn, useDesk } from "../hooks/useDesk";
 import { useFetch } from "../hooks/useFetch";
 import { useHistory } from "../hooks/useHistory";
 import { useObjectUrl } from "../hooks/useObjectUrl";
@@ -395,7 +395,7 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
   };
 
   // что показывать на столе: идущая или выбранная проверка, иначе файл из поля ввода, иначе пустой лоток
-  const stageTurn = turns.find((t) => t.phase === "running" && !t.chat) ?? deskTurn;
+  const stageTurn = stageTurnOf(turns, deskTurn);
   const composerFileIsNew = !!file && (!stageTurn || stageTurn.file !== file);
   const subjectFile: Blob | null = composerFileIsNew ? file : (stageTurn?.file ?? null);
   const subjectName = composerFileIsNew ? (file?.name ?? "") : (stageTurn?.fileName ?? "");
@@ -447,7 +447,7 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
   return (
     <div className="desk">
       <section className="desk-chat" aria-label="Диалог">
-        {turns.length > 0 && <ChatBar count={turns.filter((t) => !t.botOnly).length} busy={busy} quiz={quiz} onClear={clearChat} onStop={() => say("Прекратить анкету")} />}
+        {turns.length > 0 && <ChatBar count={turns.filter((t) => !t.botOnly).length} busy={busy} quiz={quiz} onClear={clearChat} onStop={() => say("Прекратить анкету")} docName={deskTurn?.fileName || undefined} typeTitle={deskTurn?.result?.doc_type.title} />}
         <div
           className="chat-scroll"
           ref={scrollRef}
