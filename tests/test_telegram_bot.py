@@ -705,3 +705,61 @@ def test_document_check_offers_quick_questions_and_a_clean_card(bot, api, sample
     again = callbacks(api)
     assert "q:0" not in again and "q:1" in again and "doc:img" in again  # заданный вопрос из кнопок убран, остальное осталось
     assert api.of("answer_callback")[0]["text"] == "Ищу ответ…"  # нажатие подтверждено сразу, пока бот ищет ответ
+
+
+# ------------------------------------------------------------------ «покажи …»: снимок идёт сразу, без кнопки
+def test_which_phrases_ask_to_see_the_place():
+    from dekanat.qa.docqa import wants_to_see
+
+    for q in ("покажи слово Главам", "Покажи ФИО", "где подпись?", "Найди печать", "выдели дату", "Подсвети номер"):
+        assert wants_to_see(q), q
+    for q in ("Чего не хватает в документе?", "Хватит ли справки для перевода?", "Сколько дней рассматривается заявление?", "Кто руководитель практики?", ""):
+        assert not wants_to_see(q), q
+
+
+def test_zoom_enlarges_small_places_and_skips_big_ones():
+    import numpy as np
+
+    from dekanat.models import Box
+
+    page = np.full((2000, 1400, 3), 255, np.uint8)
+    small = Box(600, 900, 700, 940, 0)
+    data = bot_zoom(page, [small])
+    assert data and data[:2] == b"\xff\xd8"
+    import cv2
+
+    img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    assert img.shape[1] >= 900  # крупный план увеличен до читаемого размера
+    assert bot_zoom(page, [Box(100, 100, 1300, 1900, 0)]) is None  # место и так занимает почти весь лист
+    assert bot_zoom(page, [Box(0, 0, 40, 30, 0)]) is not None  # у края листа рамка не выходит за границы
+
+
+def bot_zoom(page, boxes):
+    from dekanat.telegram.bot import TelegramBot
+
+    return TelegramBot._zoom(page, boxes)
+
+
+@needs_ocr
+def test_show_request_sends_text_and_snapshot_at_once(bot, api, samples):
+    sample = next(p for p in sorted(samples.glob("*.png")) + sorted(samples.glob("*.jpg")))
+    api.files["p1"] = sample.read_bytes()
+    bot.handle_update(msg(None, photo=[{"file_id": "p1", "width": 800, "height": 1000, "file_size": len(api.files["p1"])}]))
+    api.clear()
+    bot.handle_update(msg("Покажи ФИО"))
+    assert api.texts and api.of("send_photo"), "текст ответа и снимок должны прийти без нажатия кнопки"
+    assert api.of("send_photo")[0]["data"][:2] == b"\xff\xd8" and "подсвечено" in api.of("send_photo")[0]["caption"]
+    answer_markup = next(kw["markup"] for n, kw in api.calls if n == "send_message")
+    assert "doc:img" not in str(answer_markup)  # кнопка «Показать на снимке» не нужна — снимок уже здесь
+    # порядок: сначала текст, потом снимок
+    names = [n for n, _ in api.calls if n in ("send_message", "send_photo")]
+    assert names[0] == "send_message" and "send_photo" in names
+    api.clear()
+    bot.handle_update(msg("Чего не хватает в документе?"))  # обычный вопрос — без снимка, кнопка осталась
+    assert api.texts and not api.of("send_photo")
+    assert "doc:img" in str(next(kw["markup"] for n, kw in api.calls if n == "send_message"))
+
+
+def test_show_request_without_a_document_does_not_pretend(bot, api):
+    bot.handle_update(msg("Покажи ФИО"))
+    assert api.texts and not api.of("send_photo")

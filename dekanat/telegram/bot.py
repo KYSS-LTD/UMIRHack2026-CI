@@ -23,6 +23,7 @@ from ..accounts import Accounts, display_name
 from ..highlight import draw_overlay, overlay_items
 from ..ocr.engine import OcrUnavailable
 from ..ocr.preprocess import UnsupportedFile
+from ..qa.docqa import wants_to_see
 from ..storage.topics import classify_topic
 from ..web.assistant import AssistantCore, remember_document
 from .api import TelegramAPI, TelegramError
@@ -375,11 +376,32 @@ class TelegramBot:
         if last:
             self._files.pop(last.get("id"), None)
 
-    def _show_on_photo(self, u: dict) -> None:
+    @staticmethod
+    def _zoom(img, boxes) -> Optional[bytes]:
+        """Крупный план найденного места: у маленького слова на целой странице подсветка в чате почти не видна. None — место и так крупное."""
+        h, w = img.shape[:2]
+        x0, y0 = min(b.x0 for b in boxes), min(b.y0 for b in boxes)
+        x1, y1 = max(b.x1 for b in boxes), max(b.y1 for b in boxes)
+        if (x1 - x0) * (y1 - y0) > 0.10 * w * h:
+            return None
+        padx, pady = max(120.0, 0.15 * (x1 - x0)), max(110.0, 2.5 * (y1 - y0))  # вокруг — соседние слова и строки: по одному слову не понять, где оно
+        cx0, cy0, cx1, cy1 = int(max(0, x0 - padx)), int(max(0, y0 - pady)), int(min(w, x1 + padx)), int(min(h, y1 + pady))
+        crop = img[cy0:cy1, cx0:cx1]
+        if crop.size == 0:
+            return None
+        if crop.shape[1] < 1000:
+            k = min(4.0, 1000 / crop.shape[1])
+            crop = cv2.resize(crop, None, fx=k, fy=k, interpolation=cv2.INTER_CUBIC)
+        ok, buf = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 88])
+        return buf.tobytes() if ok else None
+
+    def _show_on_photo(self, u: dict, auto: bool = False) -> None:
+        """Снимок с подсветкой найденного (и крупный план, если место маленькое). auto — вызвано просьбой «покажи …»: молча ничего не делает, если показывать нечего."""
         state = self.storage.users.bot_state(u["id"])
         last = state.get("last_file")
         if not last:
-            self._send(u, "Сначала пришлите документ — тогда я смогу показать найденное на снимке.")
+            if not auto:
+                self._send(u, "Сначала пришлите документ — тогда я смогу показать найденное на снимке.")
             return
         sid = self.accounts.ensure_data_session(u)
         record = self.core.doc_record(sid)
@@ -389,17 +411,25 @@ class TelegramBot:
             with self.ocr_slots:
                 res = self.svc.analyze(data, last["name"], state.get("last_question", ""), (record or {}).get("doc_type", {}).get("id") or "auto", document_first=True)
         except (UnsupportedFile, OcrUnavailable, TelegramError):
-            self._send(u, "Не удалось показать подсветку: файл больше недоступен. Пришлите документ ещё раз.")
+            if not auto:
+                self._send(u, "Не удалось показать подсветку: файл больше недоступен. Пришлите документ ещё раз.")
             return
         items = overlay_items(res.fields, res.answer)
         pages = sorted({box.page for box, _, _ in items if 0 <= box.page < len(res.original_pages)})[:3]
         if not pages:
-            self._send(u, "На снимке нечего подсвечивать: найденных полей нет. Попробуйте задать вопрос, например «Покажи ФИО».")
+            if not auto:
+                self._send(u, "На снимке нечего подсвечивать: найденных полей нет. Попробуйте задать вопрос, например «Покажи ФИО».")
             return
         for p in pages:
-            ok, buf = cv2.imencode(".jpg", draw_overlay(res.original_pages[p], [it for it in items if it[0].page == p], p), [cv2.IMWRITE_JPEG_QUALITY, 85])
+            page_items = [it for it in items if it[0].page == p]
+            drawn = draw_overlay(res.original_pages[p], page_items, p)
+            ok, buf = cv2.imencode(".jpg", drawn, [cv2.IMWRITE_JPEG_QUALITY, 85])
             if ok:
                 self.api.send_photo(u["tg_id"], buf.tobytes(), "Найденное подсвечено: зелёным — поля карточки, оранжевым — источник ответа.", "highlight.jpg")
+            asked = [b for s in res.answer.sources for b in s.boxes if b.page == p] or [b for b, _, _ in page_items]  # крупно — то, о чём спросили
+            zoom = self._zoom(drawn, asked) if asked else None
+            if zoom:
+                self.api.send_photo(u["tg_id"], zoom, "Крупно", "zoom.jpg")
 
     # ------------------------------------------------------------------ вопросы вне анкеты
     def _question(self, u: dict, sid: str, text: str) -> None:
@@ -420,10 +450,13 @@ class TelegramBot:
             ans = self.core.answer_question(sid, text, None)
         state["last_question"] = text
         self.storage.users.save_bot_state(u["id"], state)
+        show = bool(record and last and wants_to_see(text))  # «покажи …», «найди …», «где …»: снимок идёт сразу, кнопка не нужна
         markup = None
         if record and last:
-            markup = kb(self._quick_row(text), [btn("🖼 Показать на снимке", "doc:img")])
+            markup = kb(self._quick_row(text), [] if show else [btn("🖼 Показать на снимке", "doc:img")])
         self._send(u, render_answer(ans), markup)
+        if show:
+            self._show_on_photo(u, auto=True)
 
     # ------------------------------------------------------------------ анкета
     def _dialog(self, u: dict, sid: str, res: dict) -> None:
