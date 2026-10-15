@@ -7,6 +7,7 @@ import type { DeskDoc, Highlight } from "../components/desk/highlight";
 import { PaperViewer } from "../components/desk/PaperViewer";
 import { Thread } from "../components/desk/Thread";
 import { Tray } from "../components/desk/Tray";
+import { useAccount } from "../hooks/useAccount";
 import { useAssistant } from "../hooks/useAssistant";
 import { cardOwners, type RunInput, stageTurnOf, type Turn, useDesk } from "../hooks/useDesk";
 import { useFetch } from "../hooks/useFetch";
@@ -41,6 +42,7 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
   const toast = useToast();
   const desk = useDesk();
   const assistant = useAssistant();
+  const account = useAccount();
   const history = useHistory();
   const rules = useFetch(api.ruleSuggestions);
   const composer = useRef<ComposerHandle>(null);
@@ -499,6 +501,7 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
             editableId={busy ? null : editableId}
             onCorrect={correct}
             sweeping={sweeping}
+            onLogin={account.ready && !account.user && !account.miniApp && account.telegram.login ? account.openLogin : undefined}
             onTrySample={
               samples.length
                 ? () => {

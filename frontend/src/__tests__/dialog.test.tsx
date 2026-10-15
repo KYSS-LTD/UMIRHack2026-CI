@@ -345,6 +345,16 @@ describe("Thread empty state", () => {
     expect(location.hash).toBe("#/status");
   });
 
+  it("offers «Войти через Telegram» in the same row, only when signing in is possible", async () => {
+    const onLogin = vi.fn();
+    const { rerender } = render(<Thread {...props} onLogin={onLogin} />);
+    const actions = screen.getByRole("group", { name: "Или сразу" });
+    await userEvent.click(within(actions).getByRole("button", { name: /Войти через Telegram/ }));
+    expect(onLogin).toHaveBeenCalledTimes(1);
+    rerender(<Thread {...props} />);
+    expect(screen.queryByRole("button", { name: /Войти через Telegram/ })).not.toBeInTheDocument(); // бот выключен, человек уже вошёл или внутри Telegram
+  });
+
   it("hides «Попробовать на примере» when there are no examples", () => {
     render(<Thread {...props} />);
     expect(screen.queryByRole("button", { name: /Попробовать на примере/ })).not.toBeInTheDocument();

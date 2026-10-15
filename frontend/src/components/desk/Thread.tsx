@@ -46,6 +46,8 @@ interface Props {
   sweeping?: boolean;
   /** «Попробовать на примере»: проверка готового документа со стола (кнопки нет, если примеров нет) */
   onTrySample?: () => void;
+  /** «Войти через Telegram»: есть, только пока вход возможен (бот включён, человек не вошёл и не в Mini App) */
+  onLogin?: () => void;
 }
 
 /** Что умеет секретарь — как опись в деле: римская нумерация на полях, тонкие линейки, без плашек. */
@@ -147,6 +149,11 @@ export function Thread(p: Props) {
             <button type="button" className="start-act" onClick={() => (location.hash = "#/status")}>
               <Icon name="inbox" size={15} /> Статус обращения
             </button>
+            {p.onLogin && (
+              <button type="button" className="start-act" onClick={p.onLogin}>
+                <Icon name="telegram" size={15} /> Войти через Telegram
+              </button>
+            )}
           </div>
         </section>
         {p.history.length > 0 && (
