@@ -158,9 +158,8 @@ class FieldExtractor:
         return out
 
     def _label_cands(self, ctx: PageCtx, field_id: str, part_id: Optional[str], kind: str, choices: dict, multiline: bool) -> Iterator[Cand]:
-        for hit in ctx.hits:
-            if hit.field_id != field_id or hit.part_id != part_id:
-                continue
+        mine = [h for h in ctx.hits if h.field_id == field_id and h.part_id == part_id]
+        for hit in sorted(mine, key=lambda h: (-h.n_tokens, h.row, h.w0)):
             words = self._remainder(ctx, hit)
             text, offs = _join(words)
             parsed = parse_value(kind, text, choices) if words else None
@@ -343,6 +342,35 @@ class FieldExtractor:
             {p.id: p.normalized for p in found_parts} or None, min(confs) if confs else 0.0, all_boxes, method, evidence, parts,
         )
 
+    def _period_by_labels(self, f: FieldSpec, ctxs: dict[int, PageCtx]) -> Optional[FieldResult]:
+        """Период, у которого начало и окончание подписаны отдельно («Начало периода обучения: …», «Окончание периода обучения: …»).
+        Каждая дата берётся только по своей подписи: пустая подпись начала не подменяется датой окончания. Найден период, если есть обе даты;
+        одна дата остаётся в normalized (start или end), поле при этом считается ненайденным."""
+        got: dict[str, Cand] = {}
+        for ctx in ctxs.values():
+            for hit in ctx.hits:
+                if hit.field_id != f.id or hit.part_id not in ("start", "end") or hit.part_id in got:
+                    continue
+                words = self._remainder(ctx, hit) or self._below(ctx, hit)
+                if not words:
+                    continue
+                text, offs = _join(words)
+                parsed = parse_value("date", text)
+                if parsed is None:
+                    continue
+                span = parsed.span or (0, len(text))
+                used = [w for w, o in zip(words, offs) if o < span[1] and o + len(w.text) > span[0]] or words
+                got[hit.part_id] = Cand(parsed.value, parsed.normalized, used, ctx.page.index, "label", 1.0, ctx.rows[hit.row].text)
+        if not got:
+            return None
+        cands = [got[k] for k in ("start", "end") if k in got]
+        words = [w for c in cands for w in c.words]
+        conf = statistics.fmean(w.conf for w in words) / 100.0 if words else 0.5
+        boxes = [b for c in cands for b in self._boxes(ctxs, c.words, c.page)]
+        value = " – ".join(c.value for c in cands)
+        norm = {k: got[k].normalized for k in got}
+        return FieldResult(f.id, f.title, f.kind, len(got) == 2, value, norm, min(conf, 0.99), boxes, "label", cands[0].evidence)
+
     # ------------------------------------------------------------------ подпись и печать
     @staticmethod
     def _marks(ctx: PageCtx) -> dict[str, MarkDetection]:
@@ -401,6 +429,11 @@ class FieldExtractor:
             if f.kind == "composite":
                 out[f.id] = self._composite(f, ctxs, claimed)
                 continue
+            if f.kind == "period" and (f.start_labels or f.end_labels):
+                labeled = self._period_by_labels(f, ctxs)
+                if labeled is not None:
+                    out[f.id] = labeled
+                    continue
             cand = None
             for ctx in ctxs.values():
                 cand = next(self._label_cands(ctx, f.id, None, f.kind, f.choices, f.multiline), None)

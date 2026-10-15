@@ -242,7 +242,7 @@ def parse_period(text: str) -> Optional[Parsed]:
     return None
 
 
-_GROUP_RE = re.compile(r"(?<![A-Za-zА-Яа-яЁё0-9])([A-Za-zА-ЯЁа-яё]{1,8})\s*[-–—]?\s*(\d{1,4}[A-Za-zА-Яа-я]?)(?![\dA-Za-zА-Яа-я])")
+_GROUP_RE = re.compile(r"(?<![A-Za-zА-Яа-яЁё0-9])([A-Za-zА-ЯЁа-яё]{1,8})\s*[-–—]?\s*(\d{1,4}[A-Za-zА-Яа-я]?(?:-\d{1,2})?)(?![\dA-Za-zА-Яа-я])")
 _GROUP_DIGIT_RE = re.compile(r"(?<![A-Za-zА-Яа-яЁё0-9.])(\d{1,3})\s*[-–—]\s*(\d{1,4})(?![\dA-Za-zА-Яа-я.])")
 
 _LAT_TO_CYR_UP = str.maketrans("ABCEHKMOPTXY", "АВСЕНКМОРТХУ")

@@ -69,6 +69,9 @@ class FieldSpec:
     missing_phrase: str = ""
     format: str = ""
     export_title: str = ""  # название поля в results.json (по умолчанию title)
+    # только для kind=period: подписи, по которым дата начала и дата окончания стоят отдельными строками («Начало периода обучения: …»)
+    start_labels: list[str] = field(default_factory=list)
+    end_labels: list[str] = field(default_factory=list)
 
     def part(self, part_id: str) -> Optional[PartSpec]:
         return next((p for p in self.parts if p.id == part_id), None)
@@ -87,6 +90,8 @@ class DocTypeSpec:
     required_fallback: list[str] = field(default_factory=list)
     checks: list[dict] = field(default_factory=list)
     source: str = ""
+    # соответствие формату results.json организаторов (необязательно): {"type": id типа у организаторов, "fields": [{unit, key, title, part?, mark?}]}
+    official: dict = field(default_factory=dict)
 
     def field_by_id(self, field_id: str) -> Optional[FieldSpec]:
         return next((f for f in self.fields if f.id == field_id), None)
@@ -180,7 +185,11 @@ def _parse_field(raw: dict, where: str) -> FieldSpec:
         missing_phrase=str(raw.get("missing_phrase", "")),
         format=str(raw.get("format", "")),
         export_title=str(raw.get("export_title", "")),
+        start_labels=[str(x) for x in _as_list(raw.get("start_labels"))],
+        end_labels=[str(x) for x in _as_list(raw.get("end_labels"))],
     )
+    if (spec.start_labels or spec.end_labels) and kind != "period":
+        raise ConfigError(f"{where}/{fid}: start_labels и end_labels есть только у kind=period")
     if kind in ("composite", "marks") and not spec.parts:
         raise ConfigError(f"{where}/{fid}: для kind={kind} нужно описать parts")
     if kind == "choice" and not spec.choices:
@@ -193,6 +202,34 @@ def _parse_field(raw: dict, where: str) -> FieldSpec:
     for pat in spec.patterns:
         _compile_check(pat, f"{where}/{fid}")
     return spec
+
+
+def _parse_official(raw: Any, where: str) -> dict:
+    """Блок official: как поля этого типа называются в results.json организаторов.
+
+        official:
+          type: study_certificate        # id типа у организаторов (по умолчанию — id этого типа)
+          fields:
+            - {unit: student_name, key: student_name, title: ФИО студента}
+            - {unit: study_period, part: start, key: study_start, title: Начало периода обучения}   # период -> start / end
+            - {unit: seal_signature.stamp, key: seal_present, title: Печать вуза, mark: true}        # отметка -> true / false
+    """
+    if not raw:
+        return {}
+    if not isinstance(raw, dict) or not isinstance(raw.get("fields"), list) or not raw["fields"]:
+        raise ConfigError(f"{where}: official должен быть словарём с непустым списком fields")
+    fields = []
+    for i, item in enumerate(raw["fields"], 1):
+        if not isinstance(item, dict) or not {"unit", "key", "title"} <= set(item):
+            raise ConfigError(f"{where}: official.fields[{i}] должен содержать unit, key и title")
+        part = item.get("part")
+        if part not in (None, "start", "end"):
+            raise ConfigError(f"{where}: official.fields[{i}].part — start или end")
+        fields.append({"unit": str(item["unit"]), "key": str(item["key"]), "title": str(item["title"]), "part": part, "mark": bool(item.get("mark", False))})
+    keys = [f["key"] for f in fields]
+    if len(keys) != len(set(keys)):
+        raise ConfigError(f"{where}: official.fields — повторяющиеся key")
+    return {"type": str(raw.get("type") or ""), "fields": fields}
 
 
 def parse_doc_type(raw: dict, source: str = "") -> DocTypeSpec:
@@ -217,6 +254,7 @@ def parse_doc_type(raw: dict, source: str = "") -> DocTypeSpec:
         required_fallback=[str(x) for x in _as_list(raw.get("required_fallback"))],
         checks=[dict(c) for c in _as_list(raw.get("checks"))],
         source=source,
+        official=_parse_official(raw.get("official"), where),
     )
     if not spec.fields:
         raise ConfigError(f"{where}: пустой список полей")
@@ -228,6 +266,9 @@ def parse_doc_type(raw: dict, source: str = "") -> DocTypeSpec:
     for ref in spec.required_fallback:
         if ref not in units and ref not in ids:
             raise ConfigError(f"{where}: required_fallback ссылается на неизвестное поле «{ref}»")
+    for item in spec.official.get("fields", []):
+        if item["unit"] not in units:
+            raise ConfigError(f"{where}: official ссылается на неизвестную единицу «{item['unit']}»")
     for chk in spec.checks:
         if chk.get("type") != "date_order" or not {"before", "after"} <= set(chk):
             raise ConfigError(f"{where}: проверка должна иметь вид {{type: date_order, before: <поле>, after: <поле>, message: ...}}")

@@ -1,4 +1,4 @@
-"""Командная строка: serve | bot | ask | batch | ocr | doctor | fetch-lang | validate-config | synth | eval | create-admin | reset-admin-password | template-add | template-sample | purge."""
+"""Командная строка: serve | bot | results | ask | batch | ocr | doctor | fetch-lang | validate-config | synth | eval | create-admin | reset-admin-password | template-add | template-sample | purge."""
 
 from __future__ import annotations
 
@@ -66,6 +66,38 @@ def cmd_bot(args) -> int:
     except KeyboardInterrupt:
         pass
     tg.stop()
+    return 0
+
+
+def cmd_results(args) -> int:
+    """results.json в формате организаторов (version 1.0): поля, предварительная проверка и ответы на вопросы набора."""
+    import copy
+
+    from .config import Settings, load_settings
+    from .official import OfficialExporter, check_report, write_results
+    from .pipeline import Dekanat
+
+    data = Path(args.data)
+    manifest_path, questions_path = data / "documents.json", data / "questions.json"
+    for need in (manifest_path, questions_path):
+        if not need.exists():
+            print(f"Не найден {need}. Укажите папку набора данных организаторов (--data): в ней documents.json, questions.json и documents/.", file=sys.stderr)
+            return 1
+    base = load_settings()
+    raw = copy.deepcopy(base.raw)
+    rules = Path(args.rules) if args.rules else data / "rules.md"
+    if rules.exists():
+        raw.setdefault("regulation", {})["path"] = str(rules.resolve())  # Положение набора вместо учебного: только на время этой команды
+    app = Dekanat(Settings(raw=raw, root=base.root))
+    print(f"Положение: {app.regulation_name} ({len(app.clauses)} пунктов). Документов в наборе: {len(json.loads(manifest_path.read_text(encoding='utf-8')))}")
+    exp = OfficialExporter(app)
+    t = time.time()
+    report = exp.build(json.loads(manifest_path.read_text(encoding="utf-8")), json.loads(questions_path.read_text(encoding="utf-8")), data, args.pdf, args.limit)
+    write_results(Path(args.out), report)
+    for problem in check_report(report)[:10]:
+        print("  замечание к формату:", problem)
+    n_ans = sum(len(d["answers"]) for d in report["documents"])
+    print(f"Готово: {args.out} — документов {len(report['documents'])}, ответов {n_ans}, {time.time() - t:.0f} с")
     return 0
 
 
@@ -374,6 +406,14 @@ def build_parser() -> argparse.ArgumentParser:
     bt = sub.add_parser("bot", help="запустить Telegram-бота отдельным процессом или настроить его (--setup)")
     bt.add_argument("--setup", action="store_true", help="только записать команды, описание и кнопку меню бота и выйти")
     bt.set_defaults(func=cmd_bot)
+
+    rs = sub.add_parser("results", help="results.json в формате организаторов кейса по набору данных (documents.json, questions.json, rules.md)")
+    rs.add_argument("--data", required=True, help="папка набора данных организаторов")
+    rs.add_argument("--out", default="results.json")
+    rs.add_argument("--rules", help="Положение (по умолчанию <data>/rules.md)")
+    rs.add_argument("--pdf", action="store_true", help="брать PDF-версии документов вместо PNG")
+    rs.add_argument("--limit", type=int, help="только первые N документов (для быстрой проверки)")
+    rs.set_defaults(func=cmd_results)
 
     a = sub.add_parser("ask", help="проверить документ и ответить на вопрос")
     a.add_argument("image", help="JPG/PNG/PDF")

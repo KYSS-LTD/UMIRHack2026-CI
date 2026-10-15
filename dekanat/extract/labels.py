@@ -76,6 +76,10 @@ def compile_labels(doctype: DocTypeSpec) -> list[LabelDef]:
         for p in f.parts:
             for lab in [*p.labels]:
                 add(f.id, p.id, lab)
+        for lab in f.start_labels:  # период с датами на отдельных строках: части «start» / «end»
+            add(f.id, "start", lab)
+        for lab in f.end_labels:
+            add(f.id, "end", lab)
     defs.sort(key=lambda d: -len(d.stems))
     return defs
 

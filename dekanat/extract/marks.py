@@ -187,14 +187,16 @@ def detect_marks(page: OcrPage) -> dict[str, MarkDetection]:
         zone[~dark_than_stamp[ya:yb, xa:xb]] = 0
         if disc and disc[0] == "circle" and stamp.details.get("how") == "circle/ink":
             cv2.circle(sig_src, (int(disc[1]), int(disc[2])), int(disc[3] + 10), 0, -1)  # чёрная печать: убираем диск целиком
-    wordish = [(w.x0 * scale, w.y0 * scale, w.x1 * scale, w.y1 * scale) for w in page.words if w.conf >= 25 and _CYR_WORD.match(w.text.strip())]
+    wordish = [(w.x0 * scale, w.y0 * scale, w.x1 * scale, w.y1 * scale, w.conf) for w in page.words if w.conf >= 25 and _CYR_WORD.match(w.text.strip())]
 
-    def is_printed_text(x: int, y: int, w: int, h: int) -> bool:
+    def is_printed_text(x: int, y: int, w: int, h: int, px: int = 0) -> bool:
+        """Рамка почти целиком занята распознанным словом. Слово с невысокой уверенностью (25–45) считается печатным только при небольшом количестве
+        чернил: у росчерка подписи пикселей на порядок больше, чем у слова."""
         area = float(max(1, w * h))
-        for wx0, wy0, wx1, wy1 in wordish:
+        for wx0, wy0, wx1, wy1, conf in wordish:
             ox = max(0.0, min(x + w, wx1) - max(x, wx0))
             oy = max(0.0, min(y + h, wy1) - max(y, wy0))
-            if ox * oy / area >= 0.5:
+            if ox * oy / area >= 0.5 and (conf >= 45 or px < 700):
                 return True
         return False
 
@@ -215,11 +217,18 @@ def detect_marks(page: OcrPage) -> dict[str, MarkDetection]:
     else:
         region[int(0.58 * H):, :] = 255
     sig_src &= region
+    # на бланке с подписанной строкой («Подпись сотрудника:») подпись ищется у этой строки, а не где-то ниже по листу
+    label_bands = []
+    for row in page.rows:
+        low = row.text.strip().lower()
+        if low.startswith("подпись") and "являются" not in low and "макет" not in low:
+            label_bands.append((int((row.y0 - 3.0 * rh_page) * scale), int((row.y1 + 3.0 * rh_page) * scale)))
     merged = cv2.dilate(sig_src, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9)))
     n, labels, stats, _ = cv2.connectedComponentsWithStats(merged, connectivity=8)
     sig = MarkDetection(False, 0.0)
     best = None
     seen = []
+    rejected: list[tuple] = []  # кандидаты, отклонённые как печатный текст: нужны для отладки
     for i in range(1, n):
         x, y, w, h, area = stats[i]
         px = int(np.count_nonzero(sig_src[labels == i]))
@@ -232,9 +241,19 @@ def detect_marks(page: OcrPage) -> dict[str, MarkDetection]:
         m, _, st, cen = cv2.connectedComponentsWithStats(sub, connectivity=8)
         letters = [(t, c) for t, c in zip(st[1:], cen[1:]) if t[4] >= 12 and 0.35 * rh_work <= t[3] <= 1.3 * rh_work and t[2] <= 1.4 * rh_work]
         if len(letters) >= 3 and float(np.std([c[1] for _, c in letters])) <= 0.25 * rh_work and h < 2.2 * rh_work:
+            rejected.append(("строка-текст", int(x), int(y), int(w), int(h), px))
             continue
-        if is_printed_text(int(x), int(y), int(w), int(h)):
+        if is_printed_text(int(x), int(y), int(w), int(h), px):
+            rejected.append(("распознанный текст", int(x), int(y), int(w), int(h), px))
             continue
+        if label_bands and not any(ya <= y + h / 2 <= yb for ya, yb in label_bands):
+            rejected.append(("не у строки подписи", int(x), int(y), int(w), int(h), px))
+            continue
+        if stamp.present and stamp.box:
+            sx0, sy0, sx1, sy1 = (v * scale for v in stamp.box)
+            if sx0 <= x + w / 2 <= sx1 and sy0 <= y + h / 2 <= sy1 and px < 350:
+                rejected.append(("внутри печати", int(x), int(y), int(w), int(h), px))  # буквы и кольцо оттиска, а не подпись
+                continue
         score = px * min(1.0, w / (0.08 * W))
         if best is None or score > best[0]:
             best = (score, x, y, w, h, px)
@@ -243,6 +262,7 @@ def detect_marks(page: OcrPage) -> dict[str, MarkDetection]:
         conf = float(np.clip(0.55 + min(px, 700) / 1800.0, 0, 0.95))
         sig = MarkDetection(True, conf, (x / scale, y / scale, (x + w) / scale, (y + h) / scale), {"ink": px})
     sig.details["candidates"] = sorted(seen, reverse=True)[:4]
+    sig.details["rejected"] = rejected[:4]
     sig.details["scale"] = round(scale, 3)
     sig.details["size"] = (W, H)
     absent_conf = 0.85
@@ -250,4 +270,11 @@ def detect_marks(page: OcrPage) -> dict[str, MarkDetection]:
         stamp.confidence = absent_conf
     if not sig.present:
         sig.confidence = absent_conf
+    if stamp.present and stamp.box:
+        mp_rows = [r for r in page.rows if re.fullmatch(r"м\.?\s?п\.?", r.text.strip().lower().replace(" ", ""))]
+        if mp_rows:
+            cx, cy = (stamp.box[0] + stamp.box[2]) / 2, (stamp.box[1] + stamp.box[3]) / 2
+            near = any(abs(cy - (r.y0 + r.y1) / 2) <= 8.0 * rh_page and abs(cx - (r.x0 + r.x1) / 2) <= 0.4 * (W / scale) for r in mp_rows)
+            if not near:
+                stamp = MarkDetection(False, 0.8, None, {"how": "misplaced", "was": stamp.details})
     return {"signature": sig, "stamp": stamp}

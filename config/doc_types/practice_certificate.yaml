@@ -45,6 +45,9 @@ fields:
   - id: period
     title: Сроки практики
     kind: period
+    mention: [сроки практики, период практики, дата начала практики, дата окончания практики, начало практики, окончание практики]
+    start_labels: [Дата начала практики, Начало практики, Практика с, Начало прохождения практики]
+    end_labels: [Дата окончания практики, Окончание практики, Практика по, Окончание прохождения практики]
     labels: [Сроки практики, Срок практики, Сроки прохождения практики, Период практики, Период прохождения практики, Сроки, Срок, Период]
     patterns:
       - '(?P<value>с\s+{DATE}\s*(?:г\.?|года)?\s*по\s+{DATE}(?:\s*(?:г\.?|года))?)'
@@ -118,3 +121,18 @@ required_fallback:
   - issue.date
   - seal_signature.signature
   - seal_signature.stamp
+
+# Соответствие формату results.json организаторов кейса (см. dekanat/official.py и раздел README «Выгрузка results.json»)
+official:
+  type: internship_certificate
+  fields:
+    - {unit: student_name, key: student_name, title: ФИО студента}
+    - {unit: organization, key: organization, title: Название организации}
+    - {unit: period, part: start, key: internship_start, title: Дата начала практики}
+    - {unit: period, part: end, key: internship_end, title: Дата окончания практики}
+    - {unit: supervisor, key: supervisor_name, title: ФИО руководителя практики}
+    - {unit: grade, key: grade, title: Оценка}
+    - {unit: issue.number, key: document_number, title: Номер справки}
+    - {unit: issue.date, key: issue_date, title: Дата выдачи}
+    - {unit: seal_signature.signature, key: signature_present, title: Подпись руководителя, mark: true}
+    - {unit: seal_signature.stamp, key: seal_present, title: Печать организации, mark: true}

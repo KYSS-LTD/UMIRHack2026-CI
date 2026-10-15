@@ -72,6 +72,8 @@ fields:
   - id: study_period
     title: Период обучения
     kind: period
+    start_labels: [Начало периода обучения, Начало обучения, Дата начала обучения, Обучается с]
+    end_labels: [Окончание периода обучения, Окончание обучения, Дата окончания обучения, Обучается по]
     labels: [Период обучения, Срок обучения, Период, Обучается с, Обучение с]
     patterns:
       - '(?i:(?:обучается|обучался|обучалась|период\s+обучения)\s*[:\-–—]?\s*)(?P<value>(?:с\s+)?{DATE}\s*(?:г\.?|года)?\s*(?:по|до|[-–—])\s*{DATE}(?:\s*(?:г\.?|года))?)'
@@ -133,3 +135,18 @@ required_fallback:
   - issue.date
   - seal_signature.signature
   - seal_signature.stamp
+
+# Соответствие формату results.json организаторов кейса (см. dekanat/official.py и раздел README «Выгрузка results.json»)
+official:
+  type: study_certificate
+  fields:
+    - {unit: student_name, key: student_name, title: ФИО студента}
+    - {unit: university, key: university, title: Название вуза}
+    - {unit: direction, key: program, title: Направление подготовки}
+    - {unit: study_form, key: study_form, title: Форма обучения}
+    - {unit: study_period, part: start, key: study_start, title: Начало периода обучения}
+    - {unit: study_period, part: end, key: study_end, title: Окончание периода обучения}
+    - {unit: issue.number, key: document_number, title: Номер справки}
+    - {unit: issue.date, key: issue_date, title: Дата выдачи}
+    - {unit: seal_signature.signature, key: signature_present, title: Подпись сотрудника, mark: true}
+    - {unit: seal_signature.stamp, key: seal_present, title: Печать вуза, mark: true}

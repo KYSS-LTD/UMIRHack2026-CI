@@ -110,3 +110,16 @@ required_fallback:
   - student_signature.signature
 checks:
   - {type: date_order, before: start_date, after: end_date, message: "Дата окончания отпуска раньше даты начала — проверьте даты в документе (п. 4.5 Положения)."}
+
+# Соответствие формату results.json организаторов кейса (см. dekanat/official.py и раздел README «Выгрузка results.json»)
+official:
+  type: academic_leave_application
+  fields:
+    - {unit: student_name, key: student_name, title: ФИО студента}
+    - {unit: group_course.group, key: group, title: Учебная группа}
+    - {unit: group_course.course, key: course, title: Курс}
+    - {unit: reason, key: leave_reason, title: Причина отпуска}
+    - {unit: start_date, key: leave_start, title: Дата начала отпуска}
+    - {unit: end_date, key: leave_end, title: Дата окончания отпуска}
+    - {unit: application_date, key: application_date, title: Дата заявления}
+    - {unit: student_signature.signature, key: signature_present, title: Подпись студента, mark: true}
