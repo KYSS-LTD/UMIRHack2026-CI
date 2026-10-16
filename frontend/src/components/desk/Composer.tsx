@@ -70,7 +70,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(p, r
 
   // подсказка под текущий шаг: что делать сейчас, а не перечень клавиш
   const typing = p.question.trim().length > 0;
-  const step = p.busy ? "Идёт проверка — остановить можно кнопкой справа" : !p.file && !typing ? "Приложите документ или задайте вопрос" : p.file && !typing ? (p.checked ? "Документ проверен — можно уточнить вопросом" : "Вопрос необязателен — нажмите «Проверить»") : null;
+  const step = p.busy ? "Идёт проверка — остановить можно кнопкой справа" : !p.file && !typing ? "Приложите документ или задайте вопрос" : p.file && !typing && p.checked ? "Документ проверен — можно уточнить вопросом" : null;
   const placeholder = p.placeholder ?? (p.suggestions.length ? p.suggestions[ph % p.suggestions.length]!.text : "Задайте вопрос по документу или по Положению");
 
   return (

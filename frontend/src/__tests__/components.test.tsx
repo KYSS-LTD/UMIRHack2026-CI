@@ -133,7 +133,8 @@ describe("Composer", () => {
     const { rerender } = render(<Composer {...base} />);
     expect(screen.getByText("Приложите документ или задайте вопрос")).toBeInTheDocument();
     rerender(<Composer {...base} file={new File(["x"], "a.png", { type: "image/png" })} />);
-    expect(screen.getByText(/Вопрос необязателен/)).toBeInTheDocument();
+    expect(screen.queryByText(/Вопрос необязателен/)).not.toBeInTheDocument(); // у приложенного файла лишней подсказки нет, остаётся привычная про Enter
+    expect(screen.getByText(/отправить/)).toBeInTheDocument();
     const checked = new File(["x"], "a.png", { type: "image/png" });
     rerender(<Composer {...base} file={checked} checked />);
     expect(screen.getByText("Документ проверен — можно уточнить вопросом")).toBeInTheDocument(); // «нажмите Проверить» после проверки не нужно
