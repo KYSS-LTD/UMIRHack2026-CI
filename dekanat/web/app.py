@@ -18,7 +18,7 @@ from .. import __version__
 from ..accounts import Accounts
 from ..admin import AdminAuth
 from ..admin.routes import build_admin_router
-from ..assistant import AssistantCore, ServiceError, SessionLocks
+from ..assistant import OCR_DOWN_TEXT, AssistantCore, ServiceError, SessionLocks
 from ..config import load_settings, Settings
 from ..doctypes import DocTypeManager
 from ..knowledge_base.manager import KnowledgeBaseManager
@@ -31,7 +31,7 @@ from ..telegram.service import TelegramService
 from ..templates import TemplateStore
 from .account import build_account_router
 from .assistant import build_assistant_router
-from .context import OCR_DOWN_TEXT, WebContext
+from .context import WebContext
 from .routes import catalog, checks, content
 from .session import COOKIE_SID, WebSessions
 

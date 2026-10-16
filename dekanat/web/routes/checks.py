@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from starlette.concurrency import run_in_threadpool
 
-from ...assistant import remember_document
+from ...assistant import OCR_DOWN_TEXT, remember_document
 from ...export import result_record
 from ...ocr import photo as photo_quality
 from ...ocr.engine import OcrUnavailable
@@ -18,7 +18,7 @@ from ...ocr.formats import check_format
 from ...ocr.preprocess import load_pages, UnsupportedFile
 from ...pipeline import page_preview
 from ...storage.topics import classify_topic
-from ..context import OCR_DOWN_TEXT, WebContext
+from ..context import WebContext
 from ..jobs import JobManager
 
 

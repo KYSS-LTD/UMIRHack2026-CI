@@ -667,7 +667,7 @@ def test_progress_updates_are_throttled_and_never_break_the_check(bot, api):
 
 
 def test_buttons_answer_instantly_with_a_toast(bot, api):
-    from dekanat.telegram.bot import toast_for
+    from dekanat.telegram.callbacks import toast_for
 
     assert toast_for("sub:ok") == "Отправляю в деканат…" and toast_for("lg:y:abc") == "Подтверждаю вход…" and toast_for("o:3") == ""
     bot.handle_update(msg("/start"))

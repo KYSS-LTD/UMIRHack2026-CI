@@ -133,3 +133,8 @@ class TelegramAPI:
 
     def delete_webhook(self) -> Any:
         return self.call("deleteWebhook", {"drop_pending_updates": False})
+
+
+def profile_of(frm: dict) -> dict:
+    """Профиль пользователя из поля `from` обновления Telegram: ровно то, что хранит аккаунт."""
+    return {"id": int(frm["id"]), "username": frm.get("username"), "first_name": frm.get("first_name"), "last_name": frm.get("last_name"), "language": frm.get("language_code")}

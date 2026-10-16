@@ -3,24 +3,23 @@ import { api, ApiError } from "../api";
 import { ClauseDrawer } from "../components/ClauseDrawer";
 import { ChatBar } from "../components/desk/ChatBar";
 import { Composer, type ComposerHandle } from "../components/desk/Composer";
-import type { DeskDoc, Highlight } from "../components/desk/highlight";
+import type { Highlight } from "../components/desk/highlight";
 import { PaperViewer } from "../components/desk/PaperViewer";
 import { Thread } from "../components/desk/Thread";
 import { Tray } from "../components/desk/Tray";
 import { useAccount } from "../hooks/useAccount";
 import { useAssistant } from "../hooks/useAssistant";
-import { cardOwners, type RunInput, stageTurnOf, type Turn, useDesk } from "../hooks/useDesk";
+import { cardOwners, type RunInput, type Turn, useDesk } from "../hooks/useDesk";
+import { useDeskActivity } from "../hooks/useDeskActivity";
+import { useDeskEvents } from "../hooks/useDeskEvents";
 import { useFetch } from "../hooks/useFetch";
 import { useHistory } from "../hooks/useHistory";
-import { useObjectUrl } from "../hooks/useObjectUrl";
-import { usePagePreview } from "../hooks/usePagePreview";
-import { resetActivity, setActivity } from "../lib/activity";
+import { useStage } from "../hooks/useStage";
 import { useBus } from "../lib/bus";
 import { readDraft, saveDraft } from "../lib/draft";
 import { isQuizState, mergeCorrection, OPEN_STATUS, optionText, statusOfferText } from "../lib/dialog";
-import { fileFromClipboard, isPdf, validateFile } from "../lib/files";
+import { isPdf } from "../lib/files";
 import { fieldBoxes } from "../lib/format";
-import { STAGES, stageIndex } from "../lib/stages";
 import { aboutRegulation, suggestionsFor } from "../lib/suggestions";
 import { AUTO_TYPE, type Box, type DialogState, type DocTypeSummary, type FieldResult, GENERIC_TYPE, type Health, type PartResult, type SampleItem, type Source, type SubmitResult } from "../types";
 import { ConfirmDialog } from "../ui/Dialog";
@@ -59,7 +58,6 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
   const [activeField, setActiveField] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [drawer, setDrawer] = useState<{ ref: string; quote: string } | null>(null);
-  const [dragging, setDragging] = useState(false);
   const [forgetting, setForgetting] = useState(false);
   const [sweeping, setSweeping] = useState(false);
   const [away, setAway] = useState(false);
@@ -77,21 +75,7 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
   const editableId = sessionDocTurn ? (cardOwners(turns).get(sessionDocTurn.id) ?? sessionDocTurn.id) : null;
   const quiz = isQuizState(assistant.dialog?.state);
 
-  // ход проверки виден в верхней панели и в заголовке вкладки
-  const wasBusy = useRef(false);
-  const running = turns.find((t) => t.phase === "running" && !t.chat); // ответ анкеты — не проверка: панель и вкладка его не показывают
-  const runFraction = running?.progress?.fraction ?? 0;
-  const runLabel = running?.progress ? (STAGES[Math.min(stageIndex(running.progress.stage), STAGES.length - 1)]?.title ?? "Проверяю") : "";
-  useEffect(() => {
-    if (running) {
-      wasBusy.current = true;
-      setActivity({ busy: true, fraction: runFraction, label: runLabel });
-    } else if (wasBusy.current) {
-      wasBusy.current = false;
-      setActivity({ busy: false, fraction: 1, label: "", finishedAt: Date.now() });
-    }
-  }, [!!running, runFraction, runLabel]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => resetActivity(), []);
+  useDeskActivity(turns); // ход проверки — в верхней панели и в заголовке вкладки
 
   // новая реплика становится активной
   useEffect(() => {
@@ -327,47 +311,7 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
   });
 
   // файл можно бросить на любое место стола, вставить из буфера; Esc отменяет проверку; «/» — к вопросу
-  useEffect(() => {
-    let depth = 0;
-    const hasFiles = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
-    const onEnter = (e: DragEvent) => hasFiles(e) && (depth++, setDragging(true));
-    const onLeave = (e: DragEvent) => hasFiles(e) && (depth = Math.max(0, depth - 1)) === 0 && setDragging(false);
-    const onOver = (e: DragEvent) => hasFiles(e) && e.preventDefault();
-    const onDrop = (e: DragEvent) => {
-      if (!hasFiles(e)) return;
-      e.preventDefault();
-      depth = 0;
-      setDragging(false);
-      const f = e.dataTransfer?.files[0];
-      if (!f || busy) return;
-      const problem = validateFile(f, maxMb);
-      problem ? toast.show(problem, "error") : setFile(f);
-    };
-    const onPaste = (e: ClipboardEvent) => {
-      const f = fileFromClipboard(e);
-      if (f && !busy) (setFile(f), toast.show(`Вставлено из буфера: ${f.name}`, "info"));
-    };
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
-      if (e.key === "Escape" && busy) desk.cancel();
-      if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey) (e.preventDefault(), composer.current?.focusQuestion());
-    };
-    window.addEventListener("dragenter", onEnter);
-    window.addEventListener("dragleave", onLeave);
-    window.addEventListener("dragover", onOver);
-    window.addEventListener("drop", onDrop);
-    window.addEventListener("paste", onPaste);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("dragenter", onEnter);
-      window.removeEventListener("dragleave", onLeave);
-      window.removeEventListener("dragover", onOver);
-      window.removeEventListener("drop", onDrop);
-      window.removeEventListener("paste", onPaste);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [busy, maxMb, toast, desk]);
+  const dragging = useDeskEvents({ busy, maxMb, onFile: setFile, onCancel: desk.cancel, onFocusQuestion: () => composer.current?.focusQuestion() });
 
   const typeTitle = (id: string) => (id === GENERIC_TYPE ? "Другой документ" : (types.find((t) => t.id === id)?.title ?? id));
 
@@ -396,37 +340,8 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
       .then((done) => done?.result && history.add({ id: done.id, at: done.at, question: turn.question, fileName: turn.fileName, docType: typeId, typeTitle: done.result.doc_type.title ?? "", verdict: done.result.answer.verdict, answer: done.result.answer.text.slice(0, 160) }));
   };
 
-  // что показывать на столе: идущая или выбранная проверка, иначе файл из поля ввода, иначе пустой лоток
-  const stageTurn = stageTurnOf(turns, deskTurn);
-  const composerFileIsNew = !!file && (!stageTurn || stageTurn.file !== file);
-  const subjectFile: Blob | null = composerFileIsNew ? file : (stageTurn?.file ?? null);
-  const subjectName = composerFileIsNew ? (file?.name ?? "") : (stageTurn?.fileName ?? "");
-  const subjectResult = composerFileIsNew ? null : (stageTurn?.phase === "done" ? stageTurn.result : null);
-  const subjectUrl = useObjectUrl(subjectFile, subjectName);
-  const pdfPreview = usePagePreview(subjectFile, subjectName);
-  // пока идёт повторная проверка того же файла, на столе остаётся страница из прошлого результата, а не заглушка (рамки при этом не показываются)
-  const lastPages = useMemo(() => (subjectFile ? ([...turns].reverse().find((t) => t.file === subjectFile && t.phase === "done" && t.result?.images?.length)?.result?.images ?? null) : null), [turns, subjectFile]);
-  const hasSubject = !!subjectFile || !!subjectResult;
-  const scanning = !composerFileIsNew && stageTurn?.phase === "running";
-  const progress = stageTurn?.progress?.fraction ?? 0;
-  const stageLabel = stageTurn?.progress ? (STAGES[Math.min(stageIndex(stageTurn.progress.stage), STAGES.length - 1)]?.title ?? "") : "";
-
-  const allBoxes = useMemo(() => (subjectResult ? subjectResult.fields.flatMap(fieldBoxes) : []), [subjectResult]);
-
-  // все документы, которые клали на стол в этой сессии, плюс файл из поля ввода
-  const docs = useMemo<DeskDoc[]>(() => {
-    const list: DeskDoc[] = [];
-    const seen = new Set<Blob>();
-    for (const t of turns) {
-      if (t.file && !seen.has(t.file)) {
-        seen.add(t.file);
-        list.push({ key: t.id, file: t.file, name: t.fileName });
-      }
-    }
-    if (file && !seen.has(file)) list.push({ key: "new", file, name: file.name });
-    return list;
-  }, [turns, file]);
-  const activeDoc = docs.findIndex((d) => d.file === subjectFile);
+  // что лежит на столе: идущая или выбранная проверка, иначе файл из поля ввода, иначе пустой лоток
+  const { stageTurn, composerFileIsNew, subjectFile, subjectName, subjectResult, subjectUrl, pdfPreview, lastPages, hasSubject, scanning, progress, stageLabel, allBoxes, docs, activeDoc } = useStage(turns, deskTurn, file);
 
   const selectDocByFile = (f: Blob) => {
     const i = docs.findIndex((d) => d.file === f);

@@ -8,8 +8,6 @@ from typing import Any, Callable
 
 from ..config import Settings
 
-OCR_DOWN_TEXT = "Распознавание текста сейчас недоступно. Попробуйте позже; вопросы по Положению работают и без документа."
-
 
 @dataclass
 class WebContext:
