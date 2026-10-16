@@ -734,10 +734,30 @@ def test_zoom_enlarges_small_places_and_skips_big_ones():
     assert bot_zoom(page, [Box(0, 0, 40, 30, 0)]) is not None  # у края листа рамка не выходит за границы
 
 
-def bot_zoom(page, boxes):
+def bot_zoom(page, boxes, items=None):
     from dekanat.telegram.bot import TelegramBot
 
-    return TelegramBot._zoom(page, boxes)
+    return TelegramBot._zoom(page, boxes, items)
+
+
+def test_zoom_is_a_landscape_crop_of_the_clean_page_with_only_the_asked_place_outlined():
+    import cv2
+    import numpy as np
+
+    from dekanat.highlight import PALETTE
+    from dekanat.models import Box
+
+    page = np.full((2000, 1400, 3), 255, np.uint8)
+    cv2.rectangle(page, (500, 1100), (620, 1130), (0, 0, 0), -1)  # «соседняя» строка рядом: на крупном плане остаётся как есть
+    stamp = Box(600, 900, 860, 1160, 0, quad=((600, 910), (850, 900), (860, 1150), (610, 1160)))
+    data = bot_zoom(page, [stamp], [(stamp, "печать вуза", PALETTE["answer"])])
+    img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    h, w = img.shape[:2]
+    assert w >= 900 and h <= w * 0.9, (w, h)  # не узкая высокая лента: окно около 4:3
+    orange = np.all(np.abs(img.astype(int) - np.array(PALETTE["answer"][::-1])) < 40, axis=2)
+    assert orange.sum() > 200  # рамка и подпись нарисованы на самом увеличенном фрагменте
+    plain = bot_zoom(page, [stamp])
+    assert np.all(cv2.imdecode(np.frombuffer(plain, np.uint8), cv2.IMREAD_COLOR)[:5, :5] == 255)  # без рамок — чистая страница
 
 
 @needs_ocr
@@ -783,3 +803,15 @@ def test_photo_with_an_ordinary_caption_keeps_the_button(bot, api, samples):
     api.files["g2"] = (samples / "sample_09.jpg").read_bytes()
     bot.handle_update(msg(None, photo=[{"file_id": "g2", "width": 900, "height": 1200, "file_size": 1000}], caption="Что приказано?"))
     assert not api.of("send_photo") and "doc:img" in callbacks(api)
+
+
+@needs_ocr
+def test_show_stamp_highlights_only_the_stamp_and_sends_a_clean_zoom(bot, api, samples):
+    api.files["s1"] = (samples / "sample_01.png").read_bytes()
+    bot.handle_update(msg(None, photo=[{"file_id": "s1", "width": 800, "height": 1000, "file_size": len(api.files["s1"])}]))
+    api.clear()
+    bot.handle_update(msg("Покажи печать"))
+    photos = api.of("send_photo")
+    assert photos and "оранжевой рамкой" in photos[0]["caption"]  # одна рамка по запросу, а не все поля карточки
+    assert len(photos) == 2 and photos[1]["caption"] == "Крупно"
+

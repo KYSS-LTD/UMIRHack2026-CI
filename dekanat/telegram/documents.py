@@ -13,7 +13,7 @@ from typing import Optional
 import cv2
 
 from ..assistant import OCR_DOWN_TEXT, remember_document
-from ..highlight import draw_overlay, overlay_items
+from ..highlight import answer_items, draw_overlay, overlay_items, shift_box
 from ..ocr.engine import OcrUnavailable
 from ..ocr.preprocess import UnsupportedFile
 from ..qa.docqa import wants_to_see
@@ -118,21 +118,29 @@ class DocumentsMixin:
             self._files.pop(last.get("id"), None)
 
     @staticmethod
-    def _zoom(img, boxes) -> Optional[bytes]:
-        """Крупный план найденного места: у маленького слова на целой странице подсветка в чате почти не видна. None — место и так крупное."""
+    def _zoom(img, boxes, items=None) -> Optional[bytes]:
+        """Крупный план найденного места: у маленького слова на целой странице подсветка в чате почти не видна. None — место и так крупное.
+        Вырезается из чистой страницы, а рамки (items) рисуются уже на увеличенном фрагменте: подписи остаются мелкими и не закрывают текст."""
         h, w = img.shape[:2]
         x0, y0 = min(b.x0 for b in boxes), min(b.y0 for b in boxes)
         x1, y1 = max(b.x1 for b in boxes), max(b.y1 for b in boxes)
         if (x1 - x0) * (y1 - y0) > 0.10 * w * h:
             return None
-        padx, pady = max(120.0, 0.15 * (x1 - x0)), max(110.0, 2.5 * (y1 - y0))  # вокруг — соседние слова и строки: по одному слову не понять, где оно
-        cx0, cy0, cx1, cy1 = int(max(0, x0 - padx)), int(max(0, y0 - pady)), int(min(w, x1 + padx)), int(min(h, y1 + pady))
+        # окно примерно 4:3 вокруг места: по бокам — соседние слова, сверху и снизу — соседние строки (по одному слову не понять, где оно)
+        cw = min(float(w), (x1 - x0) + 2 * max(120.0, 0.35 * (x1 - x0)))
+        ch = min(float(h), max(cw * 0.75, (y1 - y0) + 120.0))
+        cx0 = int(min(max((x0 + x1) / 2 - cw / 2, 0), w - cw))
+        cy0 = int(min(max((y0 + y1) / 2 - ch / 2, 0), h - ch))
+        cx1, cy1 = int(cx0 + cw), int(cy0 + ch)
         crop = img[cy0:cy1, cx0:cx1]
         if crop.size == 0:
             return None
+        k = 1.0
         if crop.shape[1] < 1000:
             k = min(4.0, 1000 / crop.shape[1])
             crop = cv2.resize(crop, None, fx=k, fy=k, interpolation=cv2.INTER_CUBIC)
+        if items:
+            crop = draw_overlay(crop, [(shift_box(b, cx0, cy0, k), label, color) for b, label, color in items], 0, boost=1.7)
         ok, buf = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 88])
         return buf.tobytes() if ok else None
 
@@ -158,8 +166,10 @@ class DocumentsMixin:
         self._send_overlay(u, res, auto)
 
     def _send_overlay(self, u: dict, res, auto: bool = False) -> None:
-        """Отправляет снимок(и) с подсветкой по готовому результату проверки (и крупный план, если место маленькое)."""
-        items = overlay_items(res.fields, res.answer)
+        """Отправляет снимок(и) с подсветкой по готовому результату проверки (и крупный план, если место маленькое).
+        Если ответ опирается на конкретные места («покажи печать»), подсвечиваются только они; иначе — все найденные поля."""
+        focus = answer_items(res.answer) if res.answer is not None else []
+        items = focus or overlay_items(res.fields, res.answer)
         pages = sorted({box.page for box, _, _ in items if 0 <= box.page < len(res.original_pages)})[:3]
         if not pages:
             if not auto:
@@ -171,10 +181,16 @@ class DocumentsMixin:
             ok, buf = cv2.imencode(".jpg", drawn, [cv2.IMWRITE_JPEG_QUALITY, 85])
             if ok:
                 found = sum(len(s.boxes) for s in res.answer.sources)
-                caption = (f"Найдено мест: {found} — они пронумерованы." if found > 1 else "Найденное подсвечено: зелёным — поля карточки, оранжевым — источник ответа.")
+                if found > 1:
+                    caption = f"Найдено мест: {found} — они пронумерованы."
+                elif focus:
+                    caption = "Найденное подсвечено оранжевой рамкой."
+                else:
+                    caption = "Найденное подсвечено: зелёным — поля карточки, оранжевым — источник ответа."
                 self.api.send_photo(u["tg_id"], buf.tobytes(), caption, "highlight.jpg")
-            asked = [b for s in res.answer.sources for b in s.boxes if b.page == p] or [b for b, _, _ in page_items]  # крупно — то, о чём спросили
-            zoom = self._zoom(drawn, asked) if 0 < len(asked) <= 3 else None  # крупный план — для одного-двух мест; разбросанные вхождения в один кадр не собрать
+            asked_items = [it for it in focus if it[0].page == p] or page_items  # крупно — то, о чём спросили
+            asked = [b for b, _, _ in asked_items]
+            zoom = self._zoom(res.original_pages[p], asked, asked_items) if 0 < len(asked) <= 3 else None  # для одного-двух мест; разбросанные вхождения в один кадр не собрать
             if zoom:
                 self.api.send_photo(u["tg_id"], zoom, "Крупно", "zoom.jpg")
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import cv2
@@ -36,15 +37,15 @@ def _grow(quad, pad: float) -> list[tuple[float, float]]:
     return out
 
 
-def draw_overlay(image_bgr: np.ndarray, items: list[tuple[Box, str, tuple]], page: int = 0) -> np.ndarray:
-    """items: (рамка, подпись, цвет RGB). Рисует только рамки нужной страницы."""
+def draw_overlay(image_bgr: np.ndarray, items: list[tuple[Box, str, tuple]], page: int = 0, boost: float = 1.0) -> np.ndarray:
+    """items: (рамка, подпись, цвет RGB). Рисует только рамки нужной страницы. boost > 1 — крупнее подпись и линия (для фрагмента, который в чате показывают сжатым)."""
     h, w = image_bgr.shape[:2]
     pil = Image.fromarray(cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)).convert("RGBA")
     layer = Image.new("RGBA", pil.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
-    size = max(14, int(w / 70))
+    size = max(14, int(w / 70 * boost))
     font = _font(size)
-    lw = max(2, int(w / 400))
+    lw = max(2, int(w / 400 * boost))
     placed: list[tuple[float, float, float, float]] = []  # уже поставленные подписи: новая не должна ложиться на них
 
     def free(r: tuple[float, float, float, float]) -> bool:
@@ -95,3 +96,29 @@ def overlay_items(fields, answer=None) -> list[tuple[Box, str, tuple]]:
             # одно место — подпись «источник ответа»; несколько (все вхождения слова) — номера: одинаковые длинные подписи слипались бы
             items.append((b, "источник ответа" if len(found) == 1 else str(i), PALETTE["answer"]))
     return items
+
+
+def _short_label(label: str) -> str:
+    """«поле «Подпись и печать» (печать вуза)» -> «печать вуза»; «поле «Дата выдачи»» -> «дата выдачи»: на снимке подпись должна быть короткой."""
+    m = re.search(r"\(([^)]+)\)\s*$", label)
+    if m:
+        return m.group(1).strip()
+    m = re.search(r"«([^»]+)»", label)
+    return (m.group(1) if m else label).strip().lower()
+
+
+def answer_items(answer) -> list[tuple[Box, str, tuple]]:
+    """Только места, на которые опирается ответ: на «покажи печать» — одна рамка, а не все поля сразу.
+    Подпись одного места — название поля; нескольких вхождений — номера."""
+    found = [(s, b) for s in answer.sources for b in s.boxes]
+    items = []
+    for i, (s, b) in enumerate(found, 1):
+        label = str(i) if len(found) > 1 else (_short_label(s.label) if s.kind == "field" and s.label else "источник ответа")
+        items.append((b, label, PALETTE["answer"]))
+    return items
+
+
+def shift_box(box: Box, dx: float, dy: float, k: float = 1.0, page: int = 0) -> Box:
+    """Рамка в координатах вырезанного и увеличенного фрагмента: сдвиг начала на (dx, dy), затем масштаб k."""
+    quad = tuple(((x - dx) * k, (y - dy) * k) for x, y in box.quad) if box.quad else None
+    return Box((box.x0 - dx) * k, (box.y0 - dy) * k, (box.x1 - dx) * k, (box.y1 - dy) * k, page, quad)

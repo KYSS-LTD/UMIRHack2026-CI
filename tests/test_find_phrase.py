@@ -246,3 +246,18 @@ def test_show_field_questions_on_known_documents_still_mean_the_field(samples):
     from dekanat.qa.engine import QAEngine
 
     assert DocumentQA.phrase_of("покажи ФИО") is None  # явной фразы нет — маршрутизация по полю не меняется
+
+
+def test_answer_items_are_only_the_asked_places_with_short_labels():
+    from dekanat.highlight import PALETTE, answer_items
+    from dekanat.models import Answer, Box, Source
+
+    stamp = Box(300, 600, 560, 860, 0)
+    one = answer_items(Answer("ok", "x", "document", [Source("field", "signature_seal.seal", "поле «Подпись и печать» (печать вуза)", "", [stamp])]))
+    assert [(b, label, color) for b, label, color in one] == [(stamp, "печать вуза", PALETTE["answer"])]  # короткая подпись, только то, о чём спросили
+    named = answer_items(Answer("ok", "x", "document", [Source("field", "issue_date", "поле «Дата выдачи»", "", [stamp])]))
+    assert [label for _, label, _ in named] == ["дата выдачи"]
+    many = answer_items(Answer("ok", "x", "document", [Source("document", "found", "найденное место", "", [Box(10, 10, 60, 30, 0), Box(100, 10, 150, 30, 0)])]))
+    assert [label for _, label, _ in many] == ["1", "2"]
+    assert answer_items(Answer("ok", "x", "document", [Source("clause", "3.4", "п. 3.4", "", [])])) == []  # пункт Положения на снимке не рисуется
+
