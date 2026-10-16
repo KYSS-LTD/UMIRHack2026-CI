@@ -162,8 +162,8 @@ export function Thread(p: Props) {
               <h2 id="hist-title">
                 <Icon name="history" size={16} /> Недавние вопросы
               </h2>
-              <button type="button" className="link" onClick={p.onClearHistory}>
-                Очистить
+              <button type="button" className="hist-clear" onClick={p.onClearHistory} title="Стереть историю вопросов в этом браузере">
+                <Icon name="broom" size={14} /> Очистить
               </button>
             </div>
             <ul role="list">

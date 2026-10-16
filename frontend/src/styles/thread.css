@@ -56,6 +56,10 @@
   .hist { display: grid; gap: 8px; }
   .hist-head { display: flex; justify-content: space-between; align-items: baseline; }
   .hist-head h2 { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font); font-size: var(--fs-sm); font-weight: 700; color: var(--ink-2); }
+  .hist-clear { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-size: var(--fs-xs, 12px); font-weight: 600; transition: border-color var(--t-fast), color var(--t-fast), background var(--t-fast), transform var(--t-base) var(--spring); }
+  .hist-clear:hover { border-color: color-mix(in srgb, var(--stamp) 45%, var(--line)); color: var(--stamp); transform: translateY(-1px); }
+  .hist-clear:hover svg { animation: sweep-wiggle 620ms var(--ease); transform-origin: 80% 20%; }
+  .hist-clear:active { transform: scale(.96); }
   .hist ul { display: grid; gap: 6px; padding: 0; list-style: none; }
   .hist-card { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface); text-align: left; animation: chip-in 500ms var(--spring) both; animation-delay: calc(700ms + var(--i) * 70ms); transition: transform var(--t-base) var(--spring), border-color var(--t-fast); }
   .hist-card:hover { transform: translateX(4px); border-color: var(--line-strong); }
