@@ -23,6 +23,7 @@ from .config import DocTypeSpec, Settings, load_doc_types, load_settings
 from .extract import FieldExtractor
 from .ocr.formats import check_format
 from .extract.validation import validate_fields
+from .extract.labels import field_label_texts
 from .extract.locate import boxes_for_words, locate_fragment
 from .extract.values import parse_value
 from .knowledge_base import ClauseIndex, RequirementModel, load_regulation, load_synonym_groups, parse_regulation_text
@@ -398,16 +399,18 @@ class Dekanat:
     # ------------------------------------------------------------------ необязательные возможности локальной модели (USE_LOCAL_LLM=True)
     def _llm_fill_missing(self, spec: DocTypeSpec, pages: list[OcrPage], fields: list[FieldResult], notes: list[str]) -> list[FieldResult]:
         """Дозаполняет ТОЛЬКО поля, которые правила не нашли. Значение принимается, если его исходный фрагмент реально есть в OCR-тексте
-        и значение проходит те же проверки формата, что и у правил. Найденное моделью помечается и считается неуверенным."""
+        и значение проходит те же проверки формата, что и у правил; соседняя подпись («Форма обучения»), строка другого поля и «М.П.» значением не считаются.
+        Найденное моделью помечается и считается неуверенным. Частично найденный правилами период (одна дата из двух) не передаётся:
+        модель не должна заменять найденную дату своей, взятой с чужой строки."""
         if not self.llm.enabled:
             return fields
         by_id = {f.id: f for f in fields}
-        wanted = [f for f in spec.fields if f.kind not in ("marks", "composite") and not f.parts and not by_id[f.id].found]
+        wanted = [f for f in spec.fields if f.kind not in ("marks", "composite") and not f.parts and not by_id[f.id].found and not by_id[f.id].normalized]
         if not wanted:
             return fields
         text = "\n".join(p.text for p in pages)
         try:
-            got = self.llm.extract_fields(text, spec.title, [(f.id, f.title) for f in wanted])
+            got = self.llm.extract_fields(text, spec.title, [(f.id, f.title) for f in wanted], field_label_texts(self.doc_types.values()))
         except Exception as exc:  # модель не должна ронять проверку документа
             log.warning("LLM-извлечение полей не удалось: %s", exc)
             return fields

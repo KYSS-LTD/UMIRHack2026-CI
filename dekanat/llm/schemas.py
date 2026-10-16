@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Iterable, Optional, Sequence
 
-from rapidfuzz import fuzz
+from rapidfuzz import fuzz, process
 
 
 class SchemaError(ValueError):
@@ -178,6 +178,42 @@ def validate_extraction(data: dict, allowed_ids: Iterable[str]) -> dict[str, Ext
             raise SchemaError(f"поле {fid}: для found нужны value и source_text")
         out[fid] = ExtractedField(fid, value, status, src)
     return out
+
+
+# служебные пометки подписной части («М.П.», «(подпись)», «место печати», «расшифровка подписи»): место для подписи, а не значение поля
+_SERVICE_WORD = r"(?:мп|лс|подпис[ьи]|печат[ьи]|расшифровка|место)"
+_SERVICE_MARK = re.compile(rf"^{_SERVICE_WORD}(?:и?{_SERVICE_WORD})*$")
+LABEL_MATCH = 90.0  # сходство (0–100) со знаками подписи, начиная с которого значение считается этой подписью
+
+
+def _compact(text: str) -> str:
+    """Только буквы и цифры в нижнем регистре: регистр, двоеточия, точки, пробелы и скобки не мешают сравнению."""
+    return re.sub(r"[\W_]+", "", norm(text))
+
+
+def label_keys(labels: Iterable[str]) -> frozenset[str]:
+    """Подписи полей в виде, удобном для сравнения с ответом модели (пустые отбрасываются: «№» не оставляет ни одного знака)."""
+    return frozenset(key for key in map(_compact, labels) if key)
+
+
+def _is_label(key: str, labels: frozenset[str]) -> bool:
+    """Подпись совпала точно или с опечаткой OCR / другой формой слова («Формат обучения» вместо «Форма обучения»)."""
+    if key in labels:
+        return True
+    return len(key) >= 8 and process.extractOne(key, labels, scorer=fuzz.ratio, score_cutoff=LABEL_MATCH) is not None
+
+
+def is_label_or_mark(value: str, labels: frozenset[str]) -> bool:
+    """Ответ модели — не значение поля, а соседняя подпись или служебная пометка.
+
+    Отклоняется значение, которое: совпадает с подписью какого-либо поля любого типа документа; начинается с такой подписи и двоеточия
+    («Форма обучения: очная» — это строка другого поля); состоит только из служебных пометок или вовсе не содержит букв и цифр.
+    Исходный фрагмент в тексте при этом есть, поэтому проверка ground_extraction такую «догадку» пропустила бы."""
+    key = _compact(value)
+    if not key or _SERVICE_MARK.match(key) or _is_label(key, labels):
+        return True
+    head, colon, _ = value.partition(":")
+    return bool(colon) and _is_label(_compact(head), labels)
 
 
 def ground_extraction(item: ExtractedField, ocr_text: str, min_ratio: float = 92.0) -> bool:

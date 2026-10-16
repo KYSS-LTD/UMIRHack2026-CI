@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import statistics
 from dataclasses import dataclass
-from typing import Iterator, Optional
+from typing import Iterable, Iterator, Optional
 
 from ..config import DocTypeSpec
 from ..models import Row, Word
@@ -82,6 +82,18 @@ def compile_labels(doctype: DocTypeSpec) -> list[LabelDef]:
             add(f.id, "end", lab)
     defs.sort(key=lambda d: -len(d.stems))
     return defs
+
+
+def field_label_texts(doctypes: Iterable[DocTypeSpec]) -> list[str]:
+    """Подписи всех полей всех типов документов (названия, подписи, подписи начала и конца периода, части составных полей).
+    Нужны, чтобы отличить значение поля от соседней подписи, которую модель приняла за значение."""
+    texts: list[str] = []
+    for doctype in doctypes:
+        for f in doctype.fields:
+            texts += [f.title, *f.labels, *f.start_labels, *f.end_labels]
+            for p in f.parts:
+                texts += [p.title, *p.labels]
+    return texts
 
 
 def row_median_height(row: Row) -> float:

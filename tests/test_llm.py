@@ -13,7 +13,8 @@ from conftest import ROOT, FakeBackend, make_llm
 from dekanat.config import Settings, load_settings
 from dekanat.tools.evaluate import fields_from_truth
 from dekanat.llm import LLMConfig, LLMService, LLMUnavailable, OllamaBackend, prompts
-from dekanat.llm.schemas import SchemaError, ground_extraction, validate_explanation, ExtractedField
+from dekanat.extract.labels import field_label_texts
+from dekanat.llm.schemas import SchemaError, ground_extraction, validate_explanation, ExtractedField, is_label_or_mark, label_keys
 from dekanat.models import Clause
 from dekanat.pipeline import Dekanat
 
@@ -249,6 +250,81 @@ def test_llm_value_must_pass_the_same_format_checks(tmp_settings):
     rules = svc._extractors["study_certificate"].extract([page])
     out = {f.id: f for f in svc._llm_fill_missing(spec, [page], rules, [])}
     assert not out["study_period"].found
+
+
+# --- модель «дозаполнила» поле соседней подписью: исходный фрагмент в тексте есть, но это не значение (набор организаторов, 5 документов из 30)
+STUDY_NO_UNIVERSITY = "СПРАВКА\nФИО студента: Иванов Иван Иванович\nНаправление подготовки: 38.03.01 Экономика\nФорма обучения: очная"
+STUDY_NO_DIRECTION = "СПРАВКА\nУниверситет Тестовск\nФИО студента: Иванов Иван Иванович\nФорма обучения: очная"
+LEAVE_NO_REASON = "Заявление\nПрошу предоставить академический отпуск\nПричина отпуска:\nДата начала отпуска: 01.09.2026"
+PRACTICE_NO_ORG = "СПРАВКА О ПРАКТИКЕ\nФИО студента: Иванов Иван Иванович\nДата окончания практики: 15 июля 2026 года"
+PRACTICE_NO_SUPERVISOR = "СПРАВКА О ПРАКТИКЕ\nФИО студента: Иванов Иван Иванович\nПодпись ____________ М.П."
+
+
+def _model_fills(type_id, text, field_id, value, source):
+    """Правила не нашли поле, модель предложила value со ссылкой на source. Возвращает (поле после дозаполнения, backend)."""
+    backend = FakeBackend([json.dumps({"fields": {field_id: {"value": value, "status": "found", "source_text": source}}})])
+    svc = Dekanat(settings_with(use_local_llm=True), llm=make_llm(backend))
+    page = cc.page_from_text(text)
+    rules = svc._extractors[type_id].extract([page])
+    assert not next(f for f in rules if f.id == field_id).found  # без этого модель не спрашивали бы
+    out = {f.id: f for f in svc._llm_fill_missing(svc.doc_types[type_id], [page], rules, [])}
+    return out[field_id], backend
+
+
+@pytest.mark.parametrize("type_id, text, field_id, value, source", [
+    pytest.param("study_certificate", STUDY_NO_UNIVERSITY, "university", "Направление подготовки: 38.03.01 Экономика",
+                 "Направление подготовки: 38.03.01 Экономика", id="строка другого поля «подпись: значение»"),
+    pytest.param("study_certificate", STUDY_NO_DIRECTION, "direction", "Форма обучения", "Форма обучения: очная", id="подпись другого поля"),
+    pytest.param("study_certificate", STUDY_NO_DIRECTION, "direction", "Формат обучения", "Форма обучения: очная", id="подпись с искажённым словом"),
+    pytest.param("academic_leave", LEAVE_NO_REASON, "reason", "Причина отпуска", "Причина отпуска:", id="подпись самого поля"),
+    pytest.param("practice_certificate", PRACTICE_NO_ORG, "organization", "Дата окончания практики: 15 июля 2026 года",
+                 "Дата окончания практики: 15 июля 2026 года", id="подпись другого типа документа с двоеточием"),
+    pytest.param("practice_certificate", PRACTICE_NO_SUPERVISOR, "supervisor", "М.П.", "М.П.", id="служебная пометка"),
+])
+def test_model_cannot_fill_a_field_with_a_neighbouring_label_or_service_mark(type_id, text, field_id, value, source):
+    field, backend = _model_fills(type_id, text, field_id, value, source)
+    assert len(backend.calls) == 1  # модель вызывалась и ответила, но ответ не принят
+    assert not field.found and field.value in (None, "") and field.method != "llm"
+
+
+def test_model_value_that_is_not_a_label_is_still_accepted():
+    """Отсев не мешает обычной работе: настоящее значение из строки «подпись: значение» принимается и помечается как найденное моделью."""
+    field, backend = _model_fills("study_certificate", TEXT, "direction", "Прикладная информатика", "Профиль подготовки: Прикладная информатика")
+    assert len(backend.calls) == 1
+    assert field.found and field.value == "Прикладная информатика" and field.method == "llm" and field.confidence < 0.5
+
+
+def test_model_does_not_replace_a_period_the_rules_found_partially():
+    """Правила нашли только дату окончания практики (период неполный). Модель не получает это поле: иначе она записала бы эту же дату как начало."""
+    reply = json.dumps({"fields": {"period": {"value": "15 июля 2026 года", "status": "found", "source_text": "Дата окончания практики: 15 июля 2026 года"}}})
+    backend = FakeBackend([reply])
+    svc = Dekanat(settings_with(use_local_llm=True), llm=make_llm(backend))
+    page = cc.page_from_text("СПРАВКА О ПРАКТИКЕ\nФИО студента: Иванов Иван Иванович\nНазвание организации:\nДата начала практики:\nДата окончания практики: 15 июля 2026 года")
+    rules = svc._extractors["practice_certificate"].extract([page])
+    before = next(f for f in rules if f.id == "period")
+    assert not before.found and before.normalized == {"end": "2026-07-15"}
+    out = {f.id: f for f in svc._llm_fill_missing(svc.doc_types["practice_certificate"], [page], rules, [])}
+    assert out["period"].normalized == {"end": "2026-07-15"} and out["period"].method != "llm" and not out["period"].found
+    assert backend.calls and '"period"' not in backend.calls[0][1]  # поле модели не передавалось
+
+
+def test_label_or_mark_filter_unit():
+    keys = label_keys(["Форма обучения", "Дата окончания практики", "М.П.", "Ф.И.О.", "№", ""])
+    assert "" not in keys  # «№» и пустая строка не оставляют ни одного знака и не должны отклонять всё подряд
+    for rejected in ["Форма обучения", "форма  ОБУЧЕНИЯ:", "Форма обучения:", "ФОРМА ОБУЧЕНИЯ: очная", "Дата окончания практики: 15 июля 2026 года",
+                     "Формат обучения", "Формат обучения: очная", "Дата окончания практик", "ФИО", "М.П.", "МП", "(подпись)", "Подпись", "_______ (подпись)", "Подпись и печать", "место печати", "расшифровка подписи", "____", " : "]:
+        assert is_label_or_mark(rejected, keys), rejected
+    for accepted in ["очная", "Иванов Иван Иванович", "ООО «Ромашка»", "38.03.01 Экономика", "15 июля 2026 года", "заочная форма обучения", "Подписано электронно", "№ 458",
+                     "с 01.09.2022 по 30.06.2026", "Печатников Пётр", "Метод обучения: очный", "Прикладная информатика", "Экономика и управление",
+                     "Соколова Анна Викторовна", "Учебный университет «Меридиан»"]:
+        assert not is_label_or_mark(accepted, keys), accepted
+
+
+def test_model_labels_come_from_all_document_types():
+    app = Dekanat(settings_with(use_local_llm=False))
+    keys = label_keys(field_label_texts(app.doc_types.values()))
+    # подписи из трёх разных типов документов: справка об обучении, заявление, справка о практике
+    assert {"формаобучения", "причинаотпуска", "датаокончанияпрактики", "мп"} <= keys
 
 
 def test_model_failure_does_not_break_field_extraction():

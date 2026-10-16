@@ -12,7 +12,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Sequence, TypeVar
+from typing import Any, Callable, Iterable, Optional, Sequence, TypeVar
 
 from . import prompts
 from .backend import CircuitBreaker, LLMBackend, LLMConfig, LLMError, LLMUnavailable, make_backend
@@ -23,6 +23,8 @@ from .schemas import (
     NormalizedAnswer,
     SchemaError,
     ground_extraction,
+    is_label_or_mark,
+    label_keys,
     parse_json_object,
     validate_explanation,
     validate_extraction,
@@ -177,8 +179,10 @@ class LLMService:
         return self._ask("normalize_answer", prompt, lambda d: validate_normalized(d, kind, choices), max_tokens=150)
 
     # ------------------------------------------------------------------ задача 4: извлечение полей из OCR-текста
-    def extract_fields(self, ocr_text: str, doc_title: str, fields: Sequence[tuple[str, str]]) -> dict[str, ExtractedField]:
-        """fields: [(id, название)] — только те, что правила не нашли. Возвращает лишь подтверждённые текстом поля."""
+    def extract_fields(self, ocr_text: str, doc_title: str, fields: Sequence[tuple[str, str]], labels: Iterable[str] = ()) -> dict[str, ExtractedField]:
+        """fields: [(id, название)] — только те, что правила не нашли. Возвращает лишь подтверждённые текстом поля.
+        labels: подписи полей документов («Форма обучения», «Дата окончания практики»...): ответ, который оказался такой подписью,
+        строкой «подпись: значение» или пометкой вроде «М.П.», отбрасывается — поле остаётся «не найдено»."""
         if not self.enabled or not fields or not ocr_text.strip():
             return {}
         ids = [fid for fid, _ in fields]
@@ -186,7 +190,14 @@ class LLMService:
         got = self._ask("extract_fields", prompt, lambda d: validate_extraction(d, ids), max_tokens=self.cfg.max_output_tokens + 200)
         if not got:
             return {}
-        return {fid: item for fid, item in got.items() if ground_extraction(item, ocr_text)}
+        keys = label_keys(labels)
+        accepted: dict[str, ExtractedField] = {}
+        for fid, item in got.items():
+            if item.value and is_label_or_mark(item.value, keys):
+                log.info("LLM [extract_fields]: ответ для поля %s отклонён — это подпись или пометка документа, а не значение", fid)
+            elif ground_extraction(item, ocr_text):
+                accepted[fid] = item
+        return accepted
 
     # ------------------------------------------------------------------ задача 5: пересказ проверенного ответа
     def explain_answer(self, question: str, verdict: str, answer_text: str, facts: Sequence[str], clauses: Sequence[tuple[str, str]]) -> Optional[str]:
