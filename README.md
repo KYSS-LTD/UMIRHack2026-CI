@@ -67,7 +67,7 @@
 | Диалог-ассистент: конечный автомат и анкета перевода/зачисления | `dekanat/dialog/`, главная страница «Стол декана» |
 | DOCX-шаблоны и автозаполнение | `dekanat/templates/` |
 | Аккаунт администратора, шаблоны, документы базы знаний, обращения, статистика, история изменений | `dekanat/admin/`, `dekanat/storage/`, страница `/admin` |
-| Сессии без регистрации, срок хранения и удаление данных | `dekanat/web/assistant.py`, раздел `privacy` в настройках |
+| Сессии без регистрации, срок хранения и удаление данных | `dekanat/assistant/`, раздел `privacy` в настройках |
 | Несколько документов в базе знаний с версиями и переиндексацией | `dekanat/knowledge_base/manager.py` |
 | Telegram-бот и Mini App, необязательные аккаунты (вход через Telegram), общие данные сайта и бота, уведомления об ответах деканата — **выключено по умолчанию** | `dekanat/telegram/`, `dekanat/accounts.py`, `dekanat/web/account.py` |
 
@@ -277,9 +277,20 @@ python -m dekanat bot --setup    # один раз: команды, описан
 
 ## Быстрый старт
 
+Нужны **Python 3.10+** и **Tesseract 5 с русским языком**. Node.js, Docker, облачные ключи и интернет при работе не требуются (интернет — только чтобы поставить пакеты).
+
+```bash
+git clone https://github.com/KYSS-LTD/UMIRHack2026-CI.git
+cd UMIRHack2026-CI
+```
+
 ### 1. Установите Tesseract с русским языком
 
+Проверено на Tesseract 5.4.
+
 * **Windows:** установщик [UB Mannheim](https://github.com/UB-Mannheim/tesseract/wiki) — при установке отметьте язык **Russian**. Сервис сам найдёт `C:\Program Files\Tesseract-OCR\tesseract.exe` (можно задать путь в `config/settings.yaml` → `ocr.tesseract_cmd` или переменной `TESSERACT_CMD`).
+* **Linux:** `sudo apt install tesseract-ocr tesseract-ocr-rus tesseract-ocr-osd`
+* **macOS:** `brew install tesseract tesseract-lang`
 
 **Если сверху плашка «Проверка документов сейчас недоступна».** Это значит, что сервер не смог запустить Tesseract. Причину называет команда `python -m dekanat doctor`; сотрудник видит её же с готовыми шагами в кабинете («Кабинет сотрудника» → верх страницы). Частые случаи:
 
@@ -288,9 +299,6 @@ python -m dekanat bot --setup    # один раз: команды, описан
 * **Tesseract поставлен в другую папку.** Сервис смотрит в `C:\Program Files\Tesseract-OCR`, в папку пользователя и в реестр Windows (туда установщик записывает свою папку); если не нашёл — укажите путь к `tesseract.exe` в `config/settings.yaml` → `ocr.tesseract_cmd` или в переменной `TESSERACT_CMD`.
 * **В окружении осталась неверная `TESSDATA_PREFIX`** (от старых инструкций). Сервис сам пробует без неё и с папкой `tessdata` рядом с `tesseract.exe` и запоминает рабочий вариант; переменную всё равно лучше удалить.
 * **Сервис запущен в Docker.** В образе свой Tesseract с русским; Tesseract, установленный в Windows, контейнеру не виден и ему не нужен.
-
-* **Linux:** `sudo apt install tesseract-ocr tesseract-ocr-rus tesseract-ocr-osd`
-* **macOS:** `brew install tesseract tesseract-lang`
 
 ### 2. Поставьте зависимости
 
@@ -301,7 +309,7 @@ pip install -r requirements.txt
 python -m dekanat doctor        # проверка окружения
 ```
 
-Нужен Python 3.10 или новее (проверено на 3.14).
+Нужен Python 3.10 или новее (проверено на 3.12 и 3.14).
 
 ### 3. Запустите
 
@@ -323,12 +331,18 @@ python -m dekanat create-admin --username dean      # по желанию: уч�
 
 Откройте страницу, кликните по примеру на столе (или перетащите своё фото) и задайте вопрос; анкета запускается там же — напишите «Я хочу перевестись». Панель сотрудников — `/admin` (пункт «Вход для сотрудников» в меню верхней панели). Включение локальной модели — в разделе «Гибридный режим».
 
+**Быстрая проверка без браузера.** Команда ниже должна напечатать карточку полей справки и вердикт «не хватает даты выдачи и печати вуза» со ссылкой на п. 3.4 Положения (занимает несколько секунд):
+
+```bash
+python -m dekanat ask data/samples/sample_02.png "Хватит ли этой справки для перевода?"
+```
+
 Готовый интерфейс (React) уже собран и лежит в `dekanat/web/static/app/` — **Node.js для запуска не нужен**. Он нужен только тем, кто хочет править интерфейс (см. «Интерфейс на React»).
 
 ### Google Colab (если нет локальной установки)
 
 ```python
-!apt-get -qq install -y tesseract-ocr tesseract-ocr-rus
+!apt-get -qq install -y tesseract-ocr tesseract-ocr-rus tesseract-ocr-osd
 !git clone https://github.com/KYSS-LTD/UMIRHack2026-CI.git dekanat && cd dekanat && pip -q install -r requirements.txt
 !cd dekanat && python -m dekanat doctor                                   # проверка окружения
 !cd dekanat && python -m dekanat results --data /content/online-dean-participants-v1 --out /content/results.json   # набор организаторов, распакованный в /content
@@ -426,7 +440,7 @@ python evaluate.py --reference reference_results.json --predictions results.json
 
 Что попадает в файл: у каждого документа `fields` — **все** ключи его типа (пропуск текстового поля — «не найдено», подпись и печать — `true`/`false`, даты — `ГГГГ-ММ-ДД`, курс — строка с числом),
 `validation` — `document_ok` / `missing_fields`, список пропусков и пункты Положения (`rule:3.1` …), `answers` — по ответу на каждый вопрос (`answerable`, `value`, `answer`, `sources`).
-Источники не прописаны в коде: требования к полям выводятся из **текста загруженного Положения** (`dekanat/kb/requirements.py`), поэтому «rule:3.3» — настоящий пункт того `rules.md`, который загружен.
+Источники не прописаны в коде: требования к полям выводятся из **текста загруженного Положения** (`dekanat/knowledge_base/requirements.py`), поэтому «rule:3.3» — настоящий пункт того `rules.md`, который загружен.
 Соответствие наших полей ключам организаторов задаётся блоком `official:` в `config/doc_types/*.yaml` (код при новом типе менять не нужно). Команда сама проверяет формат по правилам README и печатает замечания.
 
 **Результат на открытом наборе (30 документов, 120 вопросов), проверка `evaluate.py` организаторов:** `field_accuracy_macro` 1.0, `validation_exact_match` 1.0, `question_exact_match` 1.0 — и для PNG, и для PDF.
@@ -645,7 +659,7 @@ python scripts/eval_mws_vision.py --root D:/datasets/MWS-Vision-Bench --limit 30
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                    # ≈ 2 минуты, часть тестов гоняет настоящий Tesseract
+python -m pytest                    # ≈ 7 минут, часть тестов гоняет настоящий Tesseract
 cd frontend && npm install && npm test   # тесты интерфейса «Стол декана»
 ```
 

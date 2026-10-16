@@ -471,7 +471,7 @@ def build_parser() -> argparse.ArgumentParser:
     pg = sub.add_parser("purge", help="удалить просроченные данные (сессии, готовые документы, старые обращения) по настройкам privacy.*")
     pg.set_defaults(func=cmd_purge)
 
-    y = sub.add_parser("synth", help="сгенерировать синтетические документы (см. dekanat/synth.py)")
+    y = sub.add_parser("synth", help="сгенерировать синтетические документы (см. dekanat/tools/synth.py)")
     y.add_argument("rest", nargs=argparse.REMAINDER)
     y.set_defaults(func=cmd_synth)
 
