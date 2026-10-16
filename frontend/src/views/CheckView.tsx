@@ -16,6 +16,7 @@ import { useFetch } from "../hooks/useFetch";
 import { useHistory } from "../hooks/useHistory";
 import { useStage } from "../hooks/useStage";
 import { useBus } from "../lib/bus";
+import { pickDemo } from "../lib/demo";
 import { readDraft, saveDraft } from "../lib/draft";
 import { isQuizState, mergeCorrection, OPEN_STATUS, optionText, statusOfferText } from "../lib/dialog";
 import { isPdf } from "../lib/files";
@@ -342,6 +343,8 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
 
   // что лежит на столе: идущая или выбранная проверка, иначе файл из поля ввода, иначе пустой лоток
   const { stageTurn, composerFileIsNew, subjectFile, subjectName, subjectResult, subjectUrl, pdfPreview, lastPages, hasSubject, scanning, progress, stageLabel, allBoxes, docs, activeDoc } = useStage(turns, deskTurn, file);
+  // вопрос из подсказок «?»: то же, что набрать его и нажать Enter; с документом на столе — вопрос по этому документу
+  useBus<string>("ask", (q) => void submit({ file: (stageTurn?.file as File | null | undefined) ?? file, question: q, docType: stageTurn?.docType ?? docType, direct: true }));
 
   const selectDocByFile = (f: Blob) => {
     const i = docs.findIndex((d) => d.file === f);
@@ -420,8 +423,8 @@ export function CheckView({ types, samples, health, onOpenClause }: Props) {
             onTrySample={
               samples.length
                 ? () => {
-                    const demo = samples.find((s) => /нет|не хватает/i.test(s.title)) ?? samples[0]!; // лучше всего показывает ценность: «чего не хватает»
-                    void loadSample(demo);
+                    const demo = pickDemo(samples);
+                    if (demo) void loadSample(demo);
                   }
                 : undefined
             }

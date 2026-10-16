@@ -8,6 +8,7 @@ import { AccountProvider, useAccount } from "./hooks/useAccount";
 import { useFetch } from "./hooks/useFetch";
 import { useTheme } from "./hooks/useTheme";
 import { useBus } from "./lib/bus";
+import { pickDemo } from "./lib/demo";
 import { useActivity } from "./lib/activity";
 import { pct } from "./lib/format";
 import { getWebApp } from "./lib/telegram";
@@ -188,7 +189,7 @@ function Shell() {
 
       <CommandPalette open={palette} onClose={() => setPalette(false)} samples={samples.data ?? []} onNavigate={navigate} onTheme={theme.cycle} account={account.telegram.login || account.user ? nav : undefined} />
       <LoginDialog />
-      <Tour open={tour} route={hash.route} onClose={closeTour} />
+      <Tour open={tour} route={hash.route} onClose={closeTour} demo={pickDemo(samples.data ?? [])} />
 
       <Dialog open={help} title="Горячие клавиши" onClose={() => setHelp(false)}>
         <dl className="shortcuts">

@@ -1,39 +1,122 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type BusEvent, emit } from "../lib/bus";
+import type { SampleItem } from "../types";
 import { Icon } from "../ui/Icon";
 import { Portal } from "../ui/Portal";
 import type { Route } from "./NavBar";
 
+/** Кнопка в карточке подсказки: закрывает подсказки и сразу делает то, о чём шаг (шлёт событие столу). */
+export interface TourAction {
+  label: string;
+  event: BusEvent;
+  detail?: unknown;
+}
+
 export interface TourStep {
+  /** устойчивый ключ шага: цель у соседних шагов может совпадать */
+  id: string;
   /** CSS-селектор элемента, на который указывает стрелка */
   target: string;
   title: string;
   text: string;
+  actions?: TourAction[];
 }
 
-const DESK_EMPTY: TourStep[] = [
-  { target: ".tray .tray-actions", title: "Положите документ", text: "Выберите файл, перетащите снимок на стол или вставьте из буфера (Ctrl+V). Подойдут JPG, PNG и PDF." },
-  { target: ".dock-field", title: "Задайте вопрос", text: "Например: «Чего не хватает в документе?». Вопрос можно не писать — тогда проверю документ целиком." },
-  { target: ".dock .send", title: "Нажмите «Проверить»", text: "Через несколько секунд появится ответ со ссылкой на пункт Положения." },
-  { target: ".nav .switch", title: "Положение", text: "Все пункты правил с поиском. На них ссылаются ответы." },
+export interface TourContext {
+  /** пример для «Попробовать на примере»; нет примеров — нет и кнопки */
+  demo?: SampleItem | null;
+}
+
+const ask = (text: string): TourAction => ({ label: text, event: "ask", detail: text });
+const say = (text: string): TourAction => ({ label: text, event: "say", detail: text });
+
+const emptyDesk = ({ demo }: TourContext): TourStep[] => [
+  {
+    id: "doc",
+    target: ".tray .tray-actions",
+    title: "Положите документ",
+    text: "Фото, скан или PDF (JPG, PNG). Снимайте целиком, при дневном свете и без бликов — так надёжнее читается.",
+    actions: demo ? [{ label: "Попробовать на примере", event: "sample", detail: demo }] : undefined,
+  },
+  {
+    id: "ask",
+    target: ".dock-field",
+    title: "Спросите по делу",
+    text: "Вопрос можно не писать — тогда проверю документ целиком. Без документа отвечу по Положению.",
+    actions: [ask("Какие документы нужны для перевода из другого вуза?"), ask("Сколько дней рассматривается заявление?")],
+  },
+  {
+    id: "form",
+    target: ".dock-field",
+    title: "Нужно заявление?",
+    text: "Скажите, что оформляем, — задам несколько вопросов и подготовлю заявление в DOCX.",
+    actions: [say("Я хочу перевестись"), say("Хочу поступить")],
+  },
+  { id: "rules", target: ".nav .switch", title: "Положение под рукой", text: "Все пункты с поиском. Из любого ответа можно открыть пункт, на котором он основан." },
 ];
 
-const DESK_DOC: TourStep[] = [
-  { target: ".verdict", title: "Ответ", text: "Документ в порядке, чего-то не хватает или ответа нет — и пункт Положения, на котором это основано." },
-  { target: ".fields", title: "Карточка полей", text: "Что найдено в документе. Нажмите на поле — оно подсветится на снимке." },
-  { target: ".viewer", title: "Снимок", text: "Колесо мыши — масштаб, двойной щелчок — приблизить место." },
-];
+/** Что сказать о выводе: зависит от вердикта, а не просто описывает рамку. */
+const VERDICT_STEPS: Record<string, Pick<TourStep, "title" | "text" | "actions">> = {
+  ok: {
+    title: "Ответ и его источник",
+    text: "Под ответом — на что он опирается: нажмите на пункт Положения или поле, чтобы прочитать или увидеть на снимке. Нужно заявление — подготовлю здесь же.",
+    actions: [say("Я хочу перевестись")],
+  },
+  missing: {
+    title: "Чего не хватает",
+    text: "Список — под выводом, у каждого пункта есть ссылка на Положение. Запросите документ с этими данными и положите на стол снова.",
+    actions: [{ label: "Положить другой документ", event: "pick-file" }],
+  },
+  no_answer: {
+    title: "Ответа нет",
+    text: "Ни в документе, ни в Положении этого не нашлось. Переформулируйте вопрос или спросите в деканате.",
+    actions: [{ label: "Задать другой вопрос", event: "focus-question" }],
+  },
+};
+
+const deskWithDocument = (root: ParentNode): TourStep[] => {
+  const verdict = VERDICT_STEPS[root.querySelector(".verdict")?.getAttribute("data-verdict") ?? ""] ?? VERDICT_STEPS.no_answer!;
+  const editable = !!root.querySelector(".f-fix");
+  return [
+    { id: "verdict", target: ".verdict", ...verdict },
+    {
+      id: "fields",
+      target: ".fields",
+      title: "Проверьте поля",
+      text: "Нажмите на поле — оно подсветится на снимке." + (editable ? " Прочитано неверно? Наведите на поле и нажмите карандаш — ответ пересчитается." : ""),
+    },
+    { id: "viewer", target: ".viewer", title: "Снимок", text: "Колесо мыши — масштаб, перетаскивание — сдвиг. «Текст» — распознанный текст: его можно найти, скопировать и скачать." },
+    {
+      id: "followup",
+      target: ".dock-field",
+      title: "Уточните по этому документу",
+      text: "Спросите о нём ещё — отвечу по тому же снимку.",
+      actions: [ask("Хватит ли этого документа для перевода?"), ask("По Положению: сколько дней рассматривается заявление?")],
+    },
+  ];
+};
 
 const RULES: TourStep[] = [
-  { target: ".reg .search", title: "Поиск", text: "Введите слово или номер пункта." },
-  { target: ".reg-grid", title: "Пункты", text: "Сгруппированы по разделам. Ответы секретаря ссылаются на них." },
+  { id: "search", target: ".reg .search", title: "Найдите пункт", text: "Введите слово или номер: «перевод», «справка», «3.4»." },
+  { id: "grid", target: ".reg-grid", title: "Откуда берутся ответы", text: "Секретарь отвечает по этим пунктам и называет номер. Загляните сюда, чтобы проверить формулировку самому." },
 ];
 
-const OTHER: TourStep[] = [{ target: ".nav .switch", title: "Разделы", text: "«Стол» — проверка документа, «Положение» — правила." }];
+const STATUS: TourStep[] = [
+  { id: "status", target: ".status-form", title: "Что с обращением", text: "Введите номер и код, которые показали при отправке, — увидите этап и ответ деканата. Входить не нужно." },
+];
 
-/** Шаги для текущего экрана — только основное: у стола с документом они свои, у пустого стола — свои. */
-export function tourSteps(route: Route, root: ParentNode = document): TourStep[] {
-  if (route === "check") return root.querySelector(".viewer") ? DESK_DOC : DESK_EMPTY;
-  return route === "rules" ? RULES : OTHER;
+const accountSteps = (root: ParentNode): TourStep[] =>
+  root.querySelector(".acc-card")
+    ? [{ id: "notify", target: ".acc-card", title: "Ответы придут в Telegram", text: "Включите уведомления — ответ деканата по вашему обращению придёт в чат. Анкета и документы общие для сайта и бота." }]
+    : [{ id: "login", target: ".account-view .btn.primary", title: "Войдите через Telegram", text: "Необязательно, но тогда анкета и документы общие для сайта и бота, а ответ деканата придёт в чат." }];
+
+const BACK_TO_DESK: TourStep = { id: "sections", target: ".nav .switch", title: "Вернуться к делу", text: "«Стол» — проверка документа и анкета, «Положение» — правила." };
+
+/** Шаги для текущего экрана — только основное; у стола с документом, пустого стола и других страниц они свои. */
+export function tourSteps(route: Route, root: ParentNode = document, ctx: TourContext = {}): TourStep[] {
+  if (route === "check") return root.querySelector(".viewer") ? deskWithDocument(root) : emptyDesk(ctx);
+  if (route === "rules") return RULES;
+  return [...(route === "status" ? STATUS : accountSteps(root)), BACK_TO_DESK];
 }
 
 // ------------------------------------------------------------------ геометрия
@@ -119,6 +202,8 @@ interface Props {
   open: boolean;
   route: Route;
   onClose: () => void;
+  /** пример для кнопки «Попробовать на примере» */
+  demo?: SampleItem | null;
   /** для тестов: в jsdom у элементов нет геометрии */
   isVisible?: (el: Element) => boolean;
 }
@@ -127,7 +212,7 @@ interface Props {
  * Пошаговые подсказки: затемнение, «окно» вокруг нужного элемента, поясняющая карточка и стрелка от неё к элементу.
  * Стрелки ←/→ листают, Esc закрывает. Показываются только те шаги, чьи элементы сейчас есть на экране.
  */
-export function Tour({ open, route, onClose, isVisible = shown }: Props) {
+export function Tour({ open, route, onClose, demo = null, isVisible = shown }: Props) {
   const [steps, setSteps] = useState<TourStep[]>([]);
   const [index, setIndex] = useState(0);
   const [box, setBox] = useState<Box | null>(null);
@@ -141,13 +226,13 @@ export function Tour({ open, route, onClose, isVisible = shown }: Props) {
   // при открытии собираем шаги, у которых есть видимая цель
   useEffect(() => {
     if (!open) return;
-    setSteps(tourSteps(route).filter((s) => {
+    setSteps(tourSteps(route, document, { demo }).filter((s) => {
       const el = document.querySelector(s.target);
       return !!el && isVisible(el);
     }));
     setIndex(0);
     setBox(null);
-  }, [open, route, isVisible]);
+  }, [open, route, demo, isVisible]);
 
   // следим за рамкой цели: страница может прокручиваться и менять размер, пока идёт тур
   useEffect(() => {
@@ -189,6 +274,10 @@ export function Tour({ open, route, onClose, isVisible = shown }: Props) {
 
   const go = useCallback((d: number) => setIndex((i) => clamp(i + d, 0, Math.max(0, steps.length - 1))), [steps.length]);
   const next = () => (last ? onClose() : go(1));
+  const run = (a: TourAction) => {
+    onClose();
+    emit(a.event, a.detail);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -238,6 +327,16 @@ export function Tour({ open, route, onClose, isVisible = shown }: Props) {
           <p id="tour-text" className="tour-text">
             {step.text}
           </p>
+          {step.actions && step.actions.length > 0 && (
+            <div className="tour-actions" role="group" aria-label="Попробовать сразу">
+              {step.actions.map((a) => (
+                <button key={a.label} type="button" className="tour-chip" onClick={() => run(a)}>
+                  {a.label}
+                  <Icon name="arrowRight" size={13} />
+                </button>
+              ))}
+            </div>
+          )}
           <div className="tour-foot">
             <button type="button" className="link tour-skip" onClick={onClose}>
               {last ? "Закрыть" : "Пропустить"}
@@ -253,7 +352,7 @@ export function Tour({ open, route, onClose, isVisible = shown }: Props) {
           </div>
           <div className="tour-dots" aria-hidden="true">
             {steps.map((s, k) => (
-              <i key={s.target} className={k === index ? "on" : k < index ? "done" : ""} />
+              <i key={s.id} className={k === index ? "on" : k < index ? "done" : ""} />
             ))}
           </div>
         </div>

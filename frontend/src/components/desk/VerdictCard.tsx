@@ -63,7 +63,7 @@ export function VerdictCard({ answer, warnings, images, resolveBoxes, onFocusSou
   };
 
   return (
-    <section className={`verdict tone-${meta.tone}`} aria-labelledby="verdict-title">
+    <section className={`verdict tone-${meta.tone}`} data-verdict={answer.verdict} aria-labelledby="verdict-title">
       <header className="verdict-head">
         <div>
           <p className="eyebrow">Заключение</p>

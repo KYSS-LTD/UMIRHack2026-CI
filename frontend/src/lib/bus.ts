@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 /** Крошечная шина событий: палитра команд и стол общаются без передачи пропсов через всё дерево. */
 const target = new EventTarget();
 
-export type BusEvent = "sample" | "new-desk" | "pick-file" | "focus-question" | "help" | "say" | "forget" | "account" | "tour";
+export type BusEvent = "sample" | "new-desk" | "pick-file" | "focus-question" | "help" | "say" | "ask" | "forget" | "account" | "tour";
 
 export function emit<T = undefined>(name: BusEvent, detail?: T): void {
   target.dispatchEvent(new CustomEvent(name, { detail }));
