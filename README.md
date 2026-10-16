@@ -353,10 +353,12 @@ python -m dekanat ask data/samples/sample_02.png "Хватит ли этой с�
 ### Docker (по желанию)
 
 ```bash
+cp .env.example .env            # впишите пароль администратора (и токен бота, если нужен бот); .env в репозиторий не попадает
 docker build -t online-dekanat .
-docker run -p 8000:8000 -v dekanat-data:/app/data/storage -v dekanat-out:/app/data/output -v dekanat-tpl:/app/templates \
-  -e DEKANAT_ADMIN_USERNAME=dean -e DEKANAT_ADMIN_PASSWORD='ваш-пароль-не-короче-10-символов' online-dekanat
+docker run -p 8000:8000 --env-file .env -v dekanat-data:/app/data/storage -v dekanat-out:/app/data/output -v dekanat-tpl:/app/templates online-dekanat
 ```
+
+Все переменные окружения для развёртывания описаны в [`.env.example`](.env.example): сервер, первый администратор, модель, Telegram, почта, OCR. Без Docker загрузите тот же файл в окружение процесса (systemd `EnvironmentFile=`, либо `set -a; . ./.env; set +a`).
 
 Тома нужны, чтобы база, шаблоны и готовые документы переживали пересоздание контейнера; пароль администратора из окружения используется только при первом запуске, потом уберите его. Локальная модель из контейнера доступна по `llm.ollama_url` (например, `DEKANAT_LLM_OLLAMA_URL=http://host.docker.internal:11434` и `USE_LOCAL_LLM=true`).
 
